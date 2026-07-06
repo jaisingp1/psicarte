@@ -4,8 +4,7 @@ import {
   Users, Calendar, Settings, Plus, X, Save, Trash2, Search, Lock, Unlock,
   Clock, Home, AlertCircle, CheckCircle2, UserPlus, List, Phone, Mail, Video, Building
 } from 'lucide-react';
-import { Appointment, User as UserType, Service, Room, WaitlistItem } from '../types';
-import { PROFESSIONALS } from '../data';
+import { Appointment, User as UserType, Service, Room, WaitlistItem, Professional } from '../types';
 import { AgendaGantt } from './AgendaGantt';
 import { SemanalPlanner } from './SemanalPlanner';
 
@@ -19,8 +18,9 @@ interface AdminDashboardProps {
 const API = '/api';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointments, onCancelAppointment, onLogout }) => {
-  const [tab, setTab] = useState<'agenda' | 'planificador' | 'usuarios' | 'servicios' | 'horarios' | 'salas' | 'espera'>('agenda');
+  const [tab, setTab] = useState<'agenda' | 'planificador' | 'usuarios' | 'profesionales' | 'servicios' | 'horarios' | 'salas' | 'espera'>('agenda');
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
+  const [allProfessionals, setAllProfessionals] = useState<Professional[]>([]);
   const [allServices, setAllServices] = useState<Service[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -37,6 +37,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
   // Load data
   const loadData = () => {
     fetch(`${API}/admin/users`).then(r => r.json()).then(setAllUsers);
+    fetch(`${API}/professionals`).then(r => r.json()).then(setAllProfessionals);
     fetch(`${API}/services`).then(r => r.json()).then((data: any[]) => {
       setAllServices(data.map((s: any) => ({
         id: s.id,
@@ -164,6 +165,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
     }
   };
 
+  // ===== Professional Management =====
+  const [showNewProfessional, setShowNewProfessional] = useState(false);
+  const [editingProfessional, setEditingProfessional] = useState<string | null>(null);
+  const [professionalForm, setProfessionalForm] = useState({ id: '', name: '', title: '', experience: '', bio: '', avatar_url: '' });
+
+  const handleSaveProfessional = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = { ...professionalForm };
+    if (editingProfessional) {
+      await fetch(`${API}/admin/professionals/${editingProfessional}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      setAllProfessionals(prev => prev.map(p => p.id === editingProfessional ? { ...p, ...payload } as Professional : p));
+      showMsg('Profesional actualizado');
+    } else {
+      const id = payload.id || `prof-${Date.now()}`;
+      payload.id = id;
+      const res = await fetch(`${API}/admin/professionals`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        setAllProfessionals(prev => [...prev, payload as Professional]);
+        showMsg('Profesional creado');
+      }
+    }
+    setShowNewProfessional(false);
+    setEditingProfessional(null);
+  };
+
+  const handleDeleteProfessional = async (id: string) => {
+    await fetch(`${API}/admin/professionals/${id}`, { method: 'DELETE' });
+    setAllProfessionals(prev => prev.filter(p => p.id !== id));
+    showMsg('Profesional eliminado');
+  };
+
   // ===== Service Management =====
   const [showNewService, setShowNewService] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
@@ -171,7 +207,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
 
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
-    const prof = PROFESSIONALS.find(p => p.id === serviceForm.professional_id);
+    const prof = allProfessionals.find(p => p.id === serviceForm.professional_id);
     const payload = { ...serviceForm, professional_name: prof?.name || '' };
 
     if (editingService) {
@@ -233,7 +269,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
   // ===== Room Management =====
   const [showNewRoom, setShowNewRoom] = useState(false);
   const [editingRoom, setEditingRoom] = useState<string | null>(null);
-  const [roomForm, setRoomForm] = useState({ name: '', description: '' });
+  const [roomForm, setRoomForm] = useState({ name: '', description: '', open_time: '08:00', close_time: '22:00' });
 
   const handleSaveRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,6 +300,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
     { id: 'agenda', label: 'Agenda', icon: Calendar },
     { id: 'planificador', label: 'Gestor Agenda', icon: Clock },
     { id: 'usuarios', label: 'Usuarios', icon: Users },
+    { id: 'profesionales', label: 'Profesionales', icon: UserPlus },
     { id: 'servicios', label: 'Servicios', icon: Settings },
     { id: 'horarios', label: 'Horarios', icon: Clock },
     { id: 'salas', label: 'Salas', icon: Home },
@@ -318,6 +355,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
                   onMoveAppointment={handleMoveAppointment}
                   onResizeAppointment={handleResizeAppointment}
                   onStatusChange={handleStatusChange}
+                  allProfessionals={allProfessionals}
                 />
               </motion.div>
             )}
@@ -325,7 +363,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
             {/* TAB: WEEKLY PLANNER */}
             {tab === 'planificador' && (
               <motion.div key="planificador" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <SemanalPlanner rooms={rooms} allServices={allServices} />
+                <SemanalPlanner rooms={rooms} allServices={allServices} allProfessionals={allProfessionals} />
               </motion.div>
             )}
 
@@ -364,7 +402,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
                         <select value={newUser.professional_id} onChange={e => setNewUser({ ...newUser, professional_id: e.target.value })}
                           className="px-3 py-2 text-xs border border-secondary/20 rounded-sm focus:border-primary focus:outline-none bg-white">
                           <option value="">Seleccionar profesional</option>
-                          {PROFESSIONALS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          {allProfessionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                       )}
                     </div>
@@ -421,6 +459,69 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
               </motion.div>
             )}
 
+            {/* TAB: PROFESIONALES */}
+            {tab === 'profesionales' && (
+              <motion.div key="profesionales" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="font-serif text-xl font-light text-secondary">Profesionales ({allProfessionals.length})</h3>
+                  <button onClick={() => { setShowNewProfessional(true); setEditingProfessional(null); setProfessionalForm({ id: '', name: '', title: '', experience: '', bio: '', avatar_url: '' }); }}
+                    className="bg-primary hover:bg-primary-dark text-white text-[10px] uppercase tracking-widest font-bold px-4 py-2.5 rounded-sm border border-primary transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Nuevo Profesional
+                  </button>
+                </div>
+
+                {(showNewProfessional || editingProfessional) && (
+                  <form onSubmit={handleSaveProfessional} className="bg-bg-base/30 border border-secondary/10 rounded-sm p-5 mb-6 space-y-4">
+                    <h4 className="font-serif text-base font-light text-secondary">{editingProfessional ? 'Editar Profesional' : 'Nuevo Profesional'}</h4>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <input required placeholder="ID Único (ej. juan-perez)" value={professionalForm.id} onChange={e => setProfessionalForm({ ...professionalForm, id: e.target.value })} disabled={!!editingProfessional}
+                        className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white disabled:bg-gray-100" />
+                      <input required placeholder="Nombre completo" value={professionalForm.name} onChange={e => setProfessionalForm({ ...professionalForm, name: e.target.value })}
+                        className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white" />
+                      <input required placeholder="Título" value={professionalForm.title} onChange={e => setProfessionalForm({ ...professionalForm, title: e.target.value })}
+                        className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white" />
+                      <input required placeholder="Experiencia (ej. 5 años)" value={professionalForm.experience} onChange={e => setProfessionalForm({ ...professionalForm, experience: e.target.value })}
+                        className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white" />
+                      <textarea required placeholder="Biografía" value={professionalForm.bio} onChange={e => setProfessionalForm({ ...professionalForm, bio: e.target.value })}
+                        className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white col-span-2" rows={3} />
+                    </div>
+                    <div className="flex gap-3 mt-4">
+                      <button type="submit" className="bg-primary text-white text-[10px] uppercase font-bold px-4 py-2.5 rounded-sm border border-primary cursor-pointer">Guardar</button>
+                      <button type="button" onClick={() => { setShowNewProfessional(false); setEditingProfessional(null); }} className="text-[10px] uppercase font-bold text-text-muted px-4 cursor-pointer">Cancelar</button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  {allProfessionals.map(p => (
+                    <div key={p.id} className="bg-white border border-secondary/10 rounded-sm p-5 hover:shadow-sm transition-all flex justify-between items-start">
+                      <div>
+                        <h4 className="font-semibold text-sm text-secondary">{p.name}</h4>
+                        <p className="text-[10px] uppercase text-primary font-bold">{p.title}</p>
+                        <p className="text-xs text-text-muted mt-2 line-clamp-2">{p.bio}</p>
+                      </div>
+                      <div className="flex gap-1 ml-4">
+                        <button onClick={() => { setEditingProfessional(p.id); setProfessionalForm({ id: p.id, name: p.name, title: p.title, experience: p.experience, bio: p.bio, avatar_url: p.avatar_url || '' }); setShowNewProfessional(true); }}
+                          className="p-1.5 border border-secondary/20 text-text-muted hover:text-primary rounded-sm cursor-pointer" title="Editar">
+                          <Save className="w-3 h-3" />
+                        </button>
+                        <button onClick={() => handleDeleteProfessional(p.id)} className="p-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-sm cursor-pointer" title="Eliminar">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {allProfessionals.length === 0 && (
+                    <div className="col-span-2 text-center py-12 text-text-muted text-sm italic border border-dashed border-secondary/10 rounded-sm">
+                      No hay profesionales registrados.
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
             {/* TAB: SERVICES */}
             {tab === 'servicios' && (
               <motion.div key="servicios" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -442,7 +543,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
                         className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white focus:border-primary focus:outline-none col-span-2" />
                       <select value={serviceForm.professional_id} onChange={e => setServiceForm({ ...serviceForm, professional_id: e.target.value })}
                         className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white">
-                        {PROFESSIONALS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        {allProfessionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                       <select value={serviceForm.category} onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })}
                         className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white">
@@ -512,7 +613,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
                   <div className="flex gap-3 flex-wrap">
                     <select value={newSchedule.professional_id} onChange={e => setNewSchedule({ ...newSchedule, professional_id: e.target.value })}
                       className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white">
-                      {PROFESSIONALS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {allProfessionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                     <select value={newSchedule.day} onChange={e => setNewSchedule({ ...newSchedule, day: e.target.value })}
                       className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white">
@@ -563,7 +664,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
               <motion.div key="salas" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="font-serif text-xl font-light text-secondary">Salas ({rooms.length})</h3>
-                  <button onClick={() => { setShowNewRoom(true); setEditingRoom(null); setRoomForm({ name: '', description: '' }); }}
+                  <button onClick={() => { setShowNewRoom(true); setEditingRoom(null); setRoomForm({ name: '', description: '', open_time: '08:00', close_time: '22:00' }); }}
                     className="bg-primary hover:bg-primary-dark text-white text-[10px] uppercase tracking-widest font-bold px-4 py-2.5 rounded-sm border border-primary transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -574,11 +675,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
                 {(showNewRoom || editingRoom) && (
                   <form onSubmit={handleSaveRoom} className="bg-bg-base/30 border border-secondary/10 rounded-sm p-5 mb-6 space-y-4">
                     <h4 className="font-serif text-base font-light text-secondary">{editingRoom ? 'Editar Sala' : 'Nueva Sala'}</h4>
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 flex-wrap">
                       <input required placeholder="Nombre de la sala" value={roomForm.name} onChange={e => setRoomForm({ ...roomForm, name: e.target.value })}
-                        className="flex-1 px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white focus:border-primary focus:outline-none" />
+                        className="flex-1 min-w-[200px] px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white focus:border-primary focus:outline-none" />
                       <input placeholder="Descripción (opcional)" value={roomForm.description} onChange={e => setRoomForm({ ...roomForm, description: e.target.value })}
-                        className="flex-1 px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white" />
+                        className="flex-1 min-w-[200px] px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white" />
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] uppercase font-bold text-text-muted">Apertura</label>
+                        <input type="time" required value={roomForm.open_time} onChange={e => setRoomForm({ ...roomForm, open_time: e.target.value })}
+                          className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] uppercase font-bold text-text-muted">Cierre</label>
+                        <input type="time" required value={roomForm.close_time} onChange={e => setRoomForm({ ...roomForm, close_time: e.target.value })}
+                          className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white" />
+                      </div>
                     </div>
                     <div className="flex gap-3">
                       <button type="submit" className="bg-primary text-white text-[10px] uppercase font-bold px-4 py-2.5 rounded-sm border border-primary cursor-pointer">Guardar</button>
@@ -594,10 +705,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
                         <div>
                           <h4 className="font-semibold text-sm text-secondary">{r.name}</h4>
                           {r.type && <p className="text-[9px] uppercase font-bold text-text-muted mt-1">{r.type === 'Virtual' ? <><Video className="w-3 h-3 inline mr-1" />Virtual</> : <><Building className="w-3 h-3 inline mr-1" />Física</>}</p>}
+                          <p className="text-[9px] uppercase font-bold text-text-muted mt-1"><Clock className="w-3 h-3 inline mr-1" /> {r.open_time || '08:00'} - {r.close_time || '22:00'}</p>
                           {r.description && <p className="text-xs text-text-muted mt-1">{r.description}</p>}
                         </div>
                         <div className="flex gap-1">
-                          <button onClick={() => { setEditingRoom(r.id); setRoomForm({ name: r.name, description: r.description || '' }); setShowNewRoom(true); }}
+                          <button onClick={() => { setEditingRoom(r.id); setRoomForm({ name: r.name, description: r.description || '', open_time: r.open_time || '08:00', close_time: r.close_time || '22:00' }); setShowNewRoom(true); }}
                             className="p-1.5 border border-secondary/20 text-text-muted hover:text-primary rounded-sm cursor-pointer" title="Editar">
                             <Save className="w-3 h-3" />
                           </button>
@@ -643,7 +755,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
                       <select value={waitlistForm.professional_id} onChange={e => setWaitlistForm({ ...waitlistForm, professional_id: e.target.value })}
                         className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white">
                         <option value="">Cualquier profesional</option>
-                        {PROFESSIONALS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        {allProfessionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                       <select value={waitlistForm.service_id} onChange={e => setWaitlistForm({ ...waitlistForm, service_id: e.target.value })}
                         className="px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white">

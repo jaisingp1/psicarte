@@ -189,6 +189,33 @@ app.post('/api/admin/users', (req, res) => {
   res.status(201).json(user);
 });
 
+// ===================== ADMIN: Professionals Management =====================
+
+app.post('/api/admin/professionals', (req, res) => {
+  const { id, name, title, experience, bio, avatar_url } = req.body;
+  const db = getDb();
+  db.run('INSERT INTO professionals (id, name, title, experience, bio, avatar_url) VALUES (?, ?, ?, ?, ?, ?)',
+    [id, name, title || '', experience || '', bio || '', avatar_url || null]);
+  saveAndClose(db);
+  res.status(201).json({ success: true });
+});
+
+app.put('/api/admin/professionals/:id', (req, res) => {
+  const { name, title, experience, bio, avatar_url } = req.body;
+  const db = getDb();
+  db.run('UPDATE professionals SET name=?, title=?, experience=?, bio=?, avatar_url=? WHERE id=?',
+    [name, title || '', experience || '', bio || '', avatar_url || null, req.params.id]);
+  saveAndClose(db);
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/professionals/:id', (req, res) => {
+  const db = getDb();
+  db.run('DELETE FROM professionals WHERE id = ?', [req.params.id]);
+  saveAndClose(db);
+  res.json({ success: true });
+});
+
 // ===================== ADMIN: Services Management =====================
 
 app.post('/api/admin/services', (req, res) => {

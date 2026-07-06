@@ -41,6 +41,7 @@ src/
 
 - Commits en español, imperativo, cortos: "Agrega validación de email"
 - No commitear archivos generados, `.env`, `node_modules/`, `*.db`
+- Usar `enlist` cada vez que se crea o modifica un archivo
 
 ---
 

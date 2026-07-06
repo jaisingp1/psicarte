@@ -3,8 +3,7 @@ import { motion } from 'motion/react';
 import {
   Plus, X, Trash2, ChevronLeft, ChevronRight, User, Clock, Save
 } from 'lucide-react';
-import { Room, Service } from '../types';
-import { PROFESSIONALS } from '../data';
+import { Room, Service, Professional } from '../types';
 
 interface ScheduleBlock {
   id: string;
@@ -54,9 +53,10 @@ const API = '/api';
 interface SemanalPlannerProps {
   rooms: Room[];
   allServices: Service[];
+  allProfessionals: Professional[];
 }
 
-export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServices }) => {
+export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServices, allProfessionals }) => {
   const [day, setDay] = useState('Lunes');
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [dragging, setDragging] = useState<{
@@ -124,15 +124,23 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
   };
 
   const profColorMap: Record<string, string> = {};
-  PROFESSIONALS.forEach((p, i) => { profColorMap[p.id] = PROF_COLORS[i % PROF_COLORS.length]; });
+  allProfessionals.forEach((p, i) => { profColorMap[p.id] = PROF_COLORS[i % PROF_COLORS.length]; });
 
   const handleGridClick = (e: React.MouseEvent, roomId: string) => {
     if (dragging) return;
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
     const rect = gridRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const y = e.clientY - rect.top + (gridRef.current?.scrollTop || 0);
+    const y = e.clientY - rect.top + (gridRef.current?.scrollTop || 0) - 40; // minus header height
     const time = pixelsToTime(y);
     const snapped = snapTo10(time);
+    
+    // Check constraints
+    if (snapped < (room.open_time || '08:00') || snapped >= (room.close_time || '22:00')) {
+      showMsg('Horario fuera del horario de la sala');
+      return;
+    }
     setModalPos({ top: y, roomId });
     setNewBlock({
       professional_id: '',
@@ -195,8 +203,7 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
       const newTime = pixelsToTime(newPixels);
       const snapped = snapTo10(newTime);
       // Find which room column we're over
-      const mouseY = e.clientY - rect.top + scrollTop;
-      const mouseX = e.clientX - rect.left;
+      const mouseX = e.clientX - rect.left + gridRef.current.scrollLeft - 48; // account for time label width
       let roomIdx = Math.floor(mouseX / COL_WIDTH);
       roomIdx = Math.max(0, Math.min(rooms.length - 1, roomIdx));
       const targetRoom = rooms[roomIdx]?.id || block.room_id;
@@ -226,13 +233,19 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
     if (dragging.type === 'move') {
       const newTime = pixelsToTime(newPixels);
       const snapped = snapTo10(newTime);
-      const mouseY = e.clientY - (rect?.top || 0) + scrollTop;
-      const mouseX = e.clientX - (rect?.left || 0);
+      const mouseX = e.clientX - (rect?.left || 0) + scrollTop - 48;
       let roomIdx = Math.floor(mouseX / COL_WIDTH);
       roomIdx = Math.max(0, Math.min(rooms.length - 1, roomIdx));
-      const targetRoom = rooms[roomIdx]?.id || block.room_id;
+      const targetRoomObj = rooms[roomIdx] || rooms.find(r => r.id === block.room_id);
+      const targetRoom = targetRoomObj?.id || block.room_id;
       const svc = allServices.find(s => s.id === block.service_id);
       const endT = svc ? calcEndTime(snapped, svc.duration) : block.end_time;
+
+      if (snapped < (targetRoomObj?.open_time || '08:00') || endT > (targetRoomObj?.close_time || '22:00')) {
+        showMsg('El bloque no cabe en el horario de la sala');
+        setDragging(null);
+        return;
+      }
 
       if (snapped !== block.start_time || targetRoom !== block.room_id) {
         const res = await fetch(`${API}/schedule/${dragging.id}`, {
@@ -315,55 +328,73 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
       </div>
 
       {/* Grid Container */}
-      <div className="relative">
-        {/* Time labels */}
-        <div className="absolute left-0 top-0 w-12 z-10 bg-white">
-          {Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i).map(h => (
-            <div key={h} className="border-b border-secondary/10" style={{ height: HOUR_HEIGHT }}>
-              <span className="text-[9px] text-text-muted block text-right pr-2 -mt-1.5">{String(h).padStart(2, '0')}:00</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Scrollable grid */}
-        <div
-          ref={gridRef}
-          className="overflow-auto ml-12"
-          style={{ maxHeight: 'calc(100vh - 320px)' }}
-        >
-          <div style={{ width: rooms.length * COL_WIDTH, minHeight: TOTAL_HOURS * HOUR_HEIGHT, position: 'relative' }}>
+      <div
+        ref={gridRef}
+        className="overflow-auto relative border border-secondary/10 rounded-b-sm bg-white"
+        style={{ maxHeight: 'calc(100vh - 320px)' }}
+      >
+        <div style={{ position: 'relative', width: rooms.length * COL_WIDTH + 48, minHeight: TOTAL_HOURS * HOUR_HEIGHT + 40 }}>
+          
+          {/* Header Row (Sticky Top) */}
+          <div className="flex sticky top-0 z-40 bg-white" style={{ height: 40 }}>
+            {/* Top-Left Corner (Sticky Left & Top) */}
+            <div className="sticky left-0 z-50 bg-white border-b border-r border-secondary/10 flex-shrink-0" style={{ width: 48, height: 40 }}></div>
+            
             {/* Room headers */}
-            <div className="flex sticky top-0 z-20 bg-white" style={{ height: 40 }}>
-              {rooms.map((r, i) => (
-                <div key={r.id} className="flex-shrink-0 flex items-center justify-center font-bold text-[9px] uppercase tracking-widest text-text-muted border-b border-secondary/10 bg-[#FAF8F5]"
-                  style={{ width: COL_WIDTH, left: i * COL_WIDTH }}
-                >
-                  {r.name}
+            {rooms.map((r) => (
+              <div key={r.id} className="flex-shrink-0 flex items-center justify-center font-bold text-[9px] uppercase tracking-widest text-text-muted border-b border-r border-secondary/10 bg-[#FAF8F5]"
+                style={{ width: COL_WIDTH }}
+              >
+                {r.name}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex relative">
+            {/* Time labels (Sticky Left) */}
+            <div className="sticky left-0 z-30 bg-white flex-shrink-0 border-r border-secondary/10" style={{ width: 48 }}>
+              {Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i).map(h => (
+                <div key={h} className="border-b border-secondary/10 relative" style={{ height: HOUR_HEIGHT }}>
+                  <span className="absolute -top-2 right-1 text-[9px] text-text-muted font-mono">{String(h).padStart(2, '0')}:00</span>
                 </div>
               ))}
             </div>
 
-            {/* Hour grid lines */}
-            {Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i).map(h => (
-              <div key={h} className="border-b border-secondary/5 absolute w-full" style={{ top: (h - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}>
-                <div className="border-t border-secondary/10" style={{ height: '50%' }} />
-              </div>
-            ))}
+            {/* Main Grid content */}
+            <div style={{ position: 'relative', width: rooms.length * COL_WIDTH }}>
+              {/* Hour grid lines */}
+              {Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i).map(h => (
+                <div key={h} className="border-b border-secondary/5 absolute w-full pointer-events-none" style={{ top: (h - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}>
+                  <div className="border-t border-secondary/5" style={{ height: '50%', marginTop: HOUR_HEIGHT / 2 }} />
+                </div>
+              ))}
 
-            {/* Room columns (clickable areas) */}
-            {rooms.map((r, i) => (
-              <div key={r.id}
-                className="absolute top-0 bottom-0 border-r border-secondary/5 cursor-pointer hover:bg-primary/5 transition-colors"
-                style={{ left: i * COL_WIDTH, width: COL_WIDTH }}
-                onMouseDown={(e) => {
-                  // Only on empty space click (not on a block)
-                  const target = e.target as HTMLElement;
-                  if (!target.closest('.sb-block') && !target.closest('.sb-block-handle')) {
-                    handleGridClick(e, r.id);
-                  }
-                }}
-              />
-            ))}
+              {/* Room columns (clickable areas) & Constraints */}
+              {rooms.map((r, i) => {
+                const openPixels = timeToPixels(r.open_time || '08:00');
+                const closePixels = timeToPixels(r.close_time || '22:00');
+                return (
+                  <div key={r.id}
+                    className="absolute top-0 bottom-0 border-r border-secondary/5"
+                    style={{ left: i * COL_WIDTH, width: COL_WIDTH }}
+                  >
+                    {/* Invalid top area */}
+                    <div className="absolute w-full bg-gray-100/50" style={{ top: 0, height: openPixels }} />
+                    {/* Valid area */}
+                    <div className="absolute w-full hover:bg-primary/5 transition-colors cursor-pointer"
+                      style={{ top: openPixels, height: closePixels - openPixels }}
+                      onMouseDown={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (!target.closest('.sb-block') && !target.closest('.sb-block-handle')) {
+                          handleGridClick(e, r.id);
+                        }
+                      }}
+                    />
+                    {/* Invalid bottom area */}
+                    <div className="absolute w-full bg-gray-100/50" style={{ top: closePixels, bottom: 0 }} />
+                  </div>
+                );
+              })}
 
             {/* Blocks */}
             {filteredBlocks.map(block => {
@@ -427,6 +458,8 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
               </div>
             )}
           </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -447,7 +480,7 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
                   className="w-full px-3 py-2 text-xs border border-secondary/20 rounded-sm bg-white"
                 >
                   <option value="">Seleccionar</option>
-                  {PROFESSIONALS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {allProfessionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               <div>

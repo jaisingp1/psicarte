@@ -1,0 +1,6 @@
+{
+  "name": "Centro Integral PsicArte",
+  "description": "Centro Integral de Psicología, Talleres, Capacitaciones y Artes Escénicas",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

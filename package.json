@@ -1,0 +1,21 @@
+{
+  "name": "psicarte",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "postinstall": "npm --prefix frontend install && npm --prefix backend install",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "build": "npm --prefix frontend run build",
+    "db:init": "npm --prefix backend run db:init",
+    "db:schema": "npm --prefix backend run db:schema",
+    "db:seed": "npm --prefix backend run db:seed",
+    "db:reset": "npm --prefix backend run db:reset",
+    "clean": "npm --prefix frontend run clean && npm --prefix backend run clean",
+    "clean:all": "node -e \"const {rmSync} = require('fs'); ['frontend/node_modules','backend/node_modules','node_modules'].forEach(d => { try { rmSync(d, {recursive:true, force:true}); console.log('removed', d) } catch(e){} });\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "psicarte-backend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "build": "tsc",
+    "clean": "node -e \"const{rmSync}=require('fs');['dist','src/database/psicarte.db','src/database/psicarte.db-wal','src/database/psicarte.db-shm'].forEach(f=>{try{rmSync(f,{recursive:true,force:true})}catch(e){}})\"",
+    "db:init": "tsx src/database/init.ts",
+    "db:schema": "tsx src/database/init.ts --schema-only",
+    "db:seed": "tsx src/database/init.ts --seed-only",
+    "db:reset": "tsx src/database/reset.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "sql.js": "^1.11.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.14.0",
+    "tsx": "^4.19.3",
+    "typescript": "~5.8.3"
+  }
+}

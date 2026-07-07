@@ -458,7 +458,6 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
               </div>
             )}
           </div>
-            </div>
           </div>
         </div>
       </div>

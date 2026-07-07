@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar as CalendarIcon, Clock, User, Sparkles, Mail, Phone, FileText, CheckCircle2, ChevronRight, AlertCircle, Award, Heart } from 'lucide-react';
 import { Professional, Service, Appointment } from '../types';
-import { PROFESSIONALS, SERVICES, WEEKLY_SCHEDULES, CLIENT_MOCKS } from '../data';
+import { SERVICES, WEEKLY_SCHEDULES, CLIENT_MOCKS } from '../data';
 
 interface BookingFormProps {
   onBookingSuccess: (appointment: Appointment) => void;
   presetServiceId?: string;
   onClearPresetService?: () => void;
   existingAppointments: Appointment[];
+  allProfessionals: Professional[];
 }
 
 export const BookingForm: React.FC<BookingFormProps> = ({
@@ -16,6 +17,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   presetServiceId,
   onClearPresetService,
   existingAppointments,
+  allProfessionals,
 }) => {
   const [step, setStep] = useState<number>(1);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
@@ -39,7 +41,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       const service = SERVICES.find(s => s.id === presetServiceId);
       if (service) {
         setSelectedService(service);
-        const prof = PROFESSIONALS.find(p => p.id === service.professionalId);
+        const prof = allProfessionals.find(p => p.id === service.professionalId);
         if (prof) {
           setSelectedProfessional(prof);
         } else if (service.professionalId === 'macarena') {
@@ -57,7 +59,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         setStep(3); // Skip directly to date/time selection
       }
     }
-  }, [presetServiceId]);
+  }, [presetServiceId, allProfessionals]);
 
   // Handle professional selection
   const handleSelectProfessional = (prof: Professional) => {
@@ -73,7 +75,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const handleSelectService = (service: Service) => {
     setSelectedService(service);
     if (!selectedProfessional) {
-      const prof = PROFESSIONALS.find(p => p.id === service.professionalId) || {
+      const prof = allProfessionals.find(p => p.id === service.professionalId) || {
         id: 'macarena',
         name: 'Macarena Méndez',
         title: 'Coordinadora de Artes Escénicas',
@@ -252,7 +254,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             </div>
 
             <div className="grid md:grid-cols-3 gap-6 pt-2">
-              {PROFESSIONALS.map((prof) => (
+              {allProfessionals.map((prof) => (
                 <div
                   key={prof.id}
                   onClick={() => handleSelectProfessional(prof)}

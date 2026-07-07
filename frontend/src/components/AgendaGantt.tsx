@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { Calendar, Filter, ChevronLeft, ChevronRight, Video, Building, User, Clock, AlertCircle } from 'lucide-react';
-import { Appointment, Room } from '../types';
-import { PROFESSIONALS } from '../data';
+import { Appointment, Room, Professional } from '../types';
 
 interface AgendaGanttProps {
   appointments: Appointment[];
@@ -13,6 +12,7 @@ interface AgendaGanttProps {
   onResizeAppointment: (id: string, startTime: string, endTime: string) => void;
   onStatusChange: (id: string, status: string) => void;
   onAppointmentClick?: (app: Appointment) => void;
+  allProfessionals: Professional[];
 }
 
 const HOUR_HEIGHT = 64;
@@ -57,6 +57,7 @@ function addDays(dateStr: string, days: number): string {
 export const AgendaGantt: React.FC<AgendaGanttProps> = ({
   appointments, rooms, date, onDateChange,
   onMoveAppointment, onResizeAppointment, onStatusChange, onAppointmentClick,
+  allProfessionals
 }) => {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterProf, setFilterProf] = useState<string>('all');
@@ -65,7 +66,7 @@ export const AgendaGantt: React.FC<AgendaGanttProps> = ({
 
   const filteredRooms = rooms.filter(r => filterType === 'all' || r.type === filterType);
   const profColorMap: Record<string, string> = {};
-  PROFESSIONALS.forEach((p, i) => { profColorMap[p.id] = PROF_COLORS[i % PROF_COLORS.length]; });
+  allProfessionals.forEach((p, i) => { profColorMap[p.id] = PROF_COLORS[i % PROF_COLORS.length]; });
 
   const handleMouseDown = (app: Appointment, type: 'move' | 'resize-start' | 'resize-end', e: React.MouseEvent) => {
     e.preventDefault();
@@ -212,7 +213,7 @@ export const AgendaGantt: React.FC<AgendaGanttProps> = ({
           <select value={filterProf} onChange={e => setFilterProf(e.target.value)}
             className="px-2 py-1 border border-secondary/20 rounded-sm text-xs bg-white focus:outline-none">
             <option value="all">Todos los profesionales</option>
-            {PROFESSIONALS.map(p => <option key={p.id} value={p.id}>{p.name.split(' ')[0]}</option>)}
+            {allProfessionals.map(p => <option key={p.id} value={p.id}>{p.name.split(' ')[0]}</option>)}
           </select>
         </div>
       </div>

@@ -11,8 +11,8 @@ import { TherapistDashboard } from './components/TherapistDashboard';
 import { LoginPage } from './components/LoginPage';
 import { UserDashboard } from './components/UserDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
-import { PRESENTACION_TEXT, MISION_TEXT, VISION_TEXT, PROFESSIONALS, SERVICES } from './data';
-import { Appointment, User as UserType } from './types';
+import { PRESENTACION_TEXT, MISION_TEXT, VISION_TEXT, SERVICES } from './data';
+import { Appointment, User as UserType, Professional } from './types';
 
 export default function App() {
   const [activeNav, setActiveNav] = useState<string>('inicio');
@@ -60,6 +60,14 @@ export default function App() {
 
   // Appointments State
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [allProfessionals, setAllProfessionals] = useState<Professional[]>([]);
+
+  useEffect(() => {
+    fetch('/api/professionals')
+      .then(r => r.json())
+      .then(setAllProfessionals)
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     const savedApps = localStorage.getItem('psicarte_appointments');
@@ -259,6 +267,7 @@ export default function App() {
                 appointments={appointments.filter(a => currentUser.professional_id ? a.professionalId === currentUser.professional_id : true)}
                 onCancelAppointment={handleCancelAppointment}
                 onAddAppointment={handleBookingSuccess}
+                allProfessionals={allProfessionals}
               />
             </div>
           </main>
@@ -424,7 +433,7 @@ export default function App() {
                 <div className="w-16 h-[1px] bg-gold mx-auto" />
               </div>
               <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-                {PROFESSIONALS.map((prof) => {
+                {allProfessionals.map((prof) => {
                   const isExpanded = expandedProf === prof.id;
                   return (
                     <div key={prof.id} className="bg-white border border-secondary/10 rounded-sm overflow-hidden flex flex-col justify-between transition-all duration-300 hover:shadow-md hover:border-secondary/20">
@@ -622,6 +631,7 @@ export default function App() {
                 presetServiceId={selectedServiceId}
                 onClearPresetService={() => setSelectedServiceId(undefined)}
                 existingAppointments={appointments}
+                allProfessionals={allProfessionals}
               />
             </div>
           </section>

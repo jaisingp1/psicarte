@@ -4,13 +4,14 @@ import {
   Users, Calendar as CalendarIcon, DollarSign, Clock, Search, FileText, Plus, 
   Trash2, Filter, Sparkles, Sliders, CheckCircle2, RefreshCw, X, ShieldAlert 
 } from 'lucide-react';
-import { Professional, Service, Appointment } from '../types';
-import { PROFESSIONALS, SERVICES, CLIENT_MOCKS } from '../data';
+import { Appointment, Professional } from '../types';
+import { SERVICES, CLIENT_MOCKS } from '../data';
 
 interface TherapistDashboardProps {
   appointments: Appointment[];
   onCancelAppointment: (id: string) => void;
   onAddAppointment: (appointment: Appointment) => void;
+  allProfessionals?: Professional[];
 }
 
 interface ClinicalNote {

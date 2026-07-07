@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+// @ts-ignore
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
@@ -39,7 +40,7 @@ function queryRows(db: SqlJsDatabase, sql: string, params?: unknown[]) {
   const cols = stmt.getColumnNames();
   const rows: Record<string, unknown>[] = [];
   while (stmt.step()) {
-    rows.push(Object.fromEntries(cols.map((c, i) => [c, stmt.get()[i]])));
+    rows.push(Object.fromEntries(cols.map((c: string, i: number) => [c, stmt.get()[i]])));
   }
   stmt.free();
   return rows;
@@ -52,7 +53,7 @@ function queryOne(db: SqlJsDatabase, sql: string, params?: unknown[]) {
 
 function seedTestUsers(db: SqlJsDatabase) {
   const existing = queryOne(db, 'SELECT COUNT(*) as cnt FROM users');
-  if (existing && existing.cnt > 0) return;
+  if (existing && (existing as any).cnt > 0) return;
 
   const users = [
     { id: 'admin-1', email: 'admin@psicarte.cl', password: 'admin123', name: 'Administrador', phone: '+56900000001', role: 'administrador' },
@@ -490,7 +491,7 @@ app.post('/api/schedule', (req, res) => {
   // Check conflict
   const conflict = queryOne(db, `SELECT COUNT(*) as cnt FROM schedule_blocks WHERE day = ? AND room_id = ? AND NOT (end_time <= ? OR start_time >= ?) AND id != ?`,
     [day, room_id, start_time, end_time, id]);
-  if (conflict && conflict.cnt > 0) {
+  if (conflict && (conflict as any).cnt > 0) {
     saveAndClose(db);
     return res.status(409).json({ error: 'Conflicto de horario con otro bloque en la misma sala' });
   }
@@ -506,7 +507,7 @@ app.put('/api/schedule/:id', (req, res) => {
   // Check conflict (exclude self)
   const conflict = queryOne(db, `SELECT COUNT(*) as cnt FROM schedule_blocks WHERE day = ? AND room_id = ? AND NOT (end_time <= ? OR start_time >= ?) AND id != ?`,
     [day || '', room_id || '', start_time, end_time, req.params.id]);
-  if (conflict && conflict.cnt > 0) {
+  if (conflict && (conflict as any).cnt > 0) {
     saveAndClose(db);
     return res.status(409).json({ error: 'Conflicto de horario con otro bloque en la misma sala' });
   }
@@ -529,8 +530,13 @@ app.delete('/api/schedule/:id', (req, res) => {
 app.get('/api/professionals', (_req, res) => {
   const db = getDb();
   const rows = queryRows(db, 'SELECT * FROM professionals');
+  const result = rows.map((prof: any) => {
+    const diplomas = queryRows(db, 'SELECT diploma FROM professional_diplomas WHERE professional_id = ?', [prof.id]);
+    const specialties = queryRows(db, 'SELECT specialty FROM professional_specialties WHERE professional_id = ?', [prof.id]);
+    return { ...prof, diplomas: diplomas.map((d: any) => d.diploma), specialties: specialties.map((s: any) => s.specialty) };
+  });
   saveAndClose(db);
-  res.json(rows);
+  res.json(result);
 });
 
 app.get('/api/professionals/:id', (req, res) => {

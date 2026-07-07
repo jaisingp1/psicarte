@@ -662,6 +662,109 @@ app.delete('/api/admin/news/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// ===================== PUBLIC & ADMIN: Events & Inscriptions =====================
+
+app.get('/api/events', (_req, res) => {
+  const db = getDb();
+  const events = queryRows(db, `
+    SELECT e.*, COUNT(ei.id) as registered_count
+    FROM events e
+    LEFT JOIN event_inscriptions ei ON ei.event_id = e.id
+    WHERE e.active = 1
+    GROUP BY e.id
+    ORDER BY e.date ASC, e.time ASC
+  `);
+  saveAndClose(db);
+  res.json(events);
+});
+
+app.get('/api/admin/events', (_req, res) => {
+  const db = getDb();
+  const events = queryRows(db, `
+    SELECT e.*, COUNT(ei.id) as registered_count
+    FROM events e
+    LEFT JOIN event_inscriptions ei ON ei.event_id = e.id
+    GROUP BY e.id
+    ORDER BY e.date DESC, e.time DESC
+  `);
+  saveAndClose(db);
+  res.json(events);
+});
+
+app.get('/api/admin/events/:id/inscriptions', (req, res) => {
+  const db = getDb();
+  const inscriptions = queryRows(db, 'SELECT * FROM event_inscriptions WHERE event_id = ? ORDER BY created_at DESC', [req.params.id]);
+  saveAndClose(db);
+  res.json(inscriptions);
+});
+
+app.post('/api/admin/events', (req, res) => {
+  const { id, title, description, date, time, capacity, active } = req.body;
+  if (!title || !description || !date || !time || capacity === undefined) {
+    return res.status(400).json({ error: 'Faltan campos requeridos' });
+  }
+  const db = getDb();
+  const eventId = id || `evt-${Date.now()}`;
+  const existing = queryOne(db, 'SELECT id FROM events WHERE id = ?', [eventId]);
+  if (existing) {
+    db.run('UPDATE events SET title = ?, description = ?, date = ?, time = ?, capacity = ?, active = ? WHERE id = ?',
+      [title, description, date, time, capacity, active ? 1 : 0, eventId]);
+  } else {
+    db.run('INSERT INTO events (id, title, description, date, time, capacity, active) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [eventId, title, description, date, time, capacity, active ? 1 : 0]);
+  }
+  saveAndClose(db);
+  res.json({ id: eventId, success: true });
+});
+
+app.delete('/api/admin/events/:id', (req, res) => {
+  const db = getDb();
+  db.run('DELETE FROM events WHERE id = ?', [req.params.id]);
+  saveAndClose(db);
+  res.json({ success: true });
+});
+
+app.post('/api/events/:id/inscribe', (req, res) => {
+  const { client_name, client_email, client_phone } = req.body;
+  if (!client_name || !client_email || !client_phone) {
+    return res.status(400).json({ error: 'Nombre, email y teléfono son requeridos' });
+  }
+
+  const db = getDb();
+  const event = queryOne(db, 'SELECT capacity, active FROM events WHERE id = ?', [req.params.id]);
+  if (!event) {
+    saveAndClose(db);
+    return res.status(404).json({ error: 'Evento no encontrado' });
+  }
+
+  if ((event as any).active !== 1) {
+    saveAndClose(db);
+    return res.status(400).json({ error: 'El evento no se encuentra activo' });
+  }
+
+  // Count existing inscriptions
+  const counts = queryOne(db, 'SELECT COUNT(*) as count FROM event_inscriptions WHERE event_id = ?', [req.params.id]);
+  const currentCount = counts ? (counts as any).count : 0;
+  if (currentCount >= (event as any).capacity) {
+    saveAndClose(db);
+    return res.status(400).json({ error: 'No quedan cupos disponibles para este evento' });
+  }
+
+  // Avoid duplicate inscription for the same email
+  const duplicate = queryOne(db, 'SELECT id FROM event_inscriptions WHERE event_id = ? AND client_email = ?', [req.params.id, client_email]);
+  if (duplicate) {
+    saveAndClose(db);
+    return res.status(400).json({ error: 'Ya estás inscrito en este evento con este correo electrónico' });
+  }
+
+  const inscriptionId = `ins-${Date.now()}`;
+  db.run('INSERT INTO event_inscriptions (id, event_id, client_name, client_email, client_phone) VALUES (?, ?, ?, ?, ?)',
+    [inscriptionId, req.params.id, client_name, client_email, client_phone]);
+
+  saveAndClose(db);
+  res.status(201).json({ id: inscriptionId, success: true });
+});
+
 // ===================== INIT =====================
 
 init().then(() => {

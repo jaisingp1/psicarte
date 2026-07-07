@@ -20,6 +20,10 @@ export default function App() {
   const [expandedProf, setExpandedProf] = useState<string | null>(null);
   const [showTerms, setShowTerms] = useState<boolean>(false);
 
+  // Services search and list/grid toggle state
+  const [serviceSearchQuery, setServiceSearchQuery] = useState<string>('');
+  const [serviceViewMode, setServiceViewMode] = useState<'grid' | 'list'>('grid');
+
   // Auth state
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const [page, setPage] = useState<'site' | 'login' | 'dashboard'>('site');
@@ -66,6 +70,15 @@ export default function App() {
   const [showNewsPopup, setShowNewsPopup] = useState<boolean>(false);
   const [currentNewsItem, setCurrentNewsItem] = useState<any | null>(null);
 
+  // Events State
+  const [allEvents, setAllEvents] = useState<any[]>([]);
+  const [showEventModal, setShowEventModal] = useState<boolean>(false);
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
+  const [eventForm, setEventForm] = useState({ client_name: '', client_email: '', client_phone: '' });
+  const [eventMsg, setEventMsg] = useState<string>('');
+  const [eventViewMode, setEventViewMode] = useState<'list' | 'calendar'>('list');
+  const [calendarDate, setCalendarDate] = useState(() => new Date());
+
   // Load professionals, services, and site content from API
   useEffect(() => {
     fetch('/api/professionals')
@@ -90,7 +103,28 @@ export default function App() {
         }
       })
       .catch(console.error);
+    loadEvents();
   }, []);
+
+  const loadEvents = () => {
+    fetch('/api/events')
+      .then(r => r.json())
+      .then(setAllEvents)
+      .catch(console.error);
+  };
+
+  const handleCloseNews = () => {
+    if (!currentNewsItem || activeNews.length === 0) {
+      setShowNewsPopup(false);
+      return;
+    }
+    const idx = activeNews.findIndex(n => n.id === currentNewsItem.id);
+    if (idx !== -1 && idx + 1 < activeNews.length) {
+      setCurrentNewsItem(activeNews[idx + 1]);
+    } else {
+      setShowNewsPopup(false);
+    }
+  };
 
   // Load appointments from API
   const loadAppointments = () => {
@@ -178,6 +212,28 @@ export default function App() {
       setContactPhone('');
       setContactMsg('');
     }, 5000);
+  };
+
+  const handleEventInscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEvent) return;
+    const res = await fetch(`/api/events/${selectedEvent.id}/inscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventForm)
+    });
+    if (res.ok) {
+      setEventMsg('¡Inscripción exitosa! Te esperamos.');
+      loadEvents();
+      setEventForm({ client_name: '', client_email: '', client_phone: '' });
+      setTimeout(() => {
+        setShowEventModal(false);
+        setEventMsg('');
+      }, 2500);
+    } else {
+      const err = await res.json();
+      setEventMsg(err.error || 'Error al inscribirse');
+    }
   };
 
   // Show login page
@@ -302,6 +358,10 @@ export default function App() {
                 className={`text-xs uppercase tracking-widest font-semibold transition-colors ${activeNav === 'servicios' ? 'text-primary' : 'text-secondary hover:text-primary'}`}>
                 Servicios
               </button>
+              <button onClick={() => { scrollToSection('eventos-seccion'); setActiveNav('eventos'); }}
+                className={`text-xs uppercase tracking-widest font-semibold transition-colors ${activeNav === 'eventos' ? 'text-primary' : 'text-secondary hover:text-primary'}`}>
+                Eventos
+              </button>
               <button onClick={() => { scrollToSection('contacto-seccion'); setActiveNav('contacto'); }}
                 className={`text-xs uppercase tracking-widest font-semibold transition-colors ${activeNav === 'contacto' ? 'text-primary' : 'text-secondary hover:text-primary'}`}>
                 Contacto
@@ -358,7 +418,7 @@ export default function App() {
               >
                 <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-primary via-gold to-secondary" />
                 <button 
-                  onClick={() => setShowNewsPopup(false)}
+                  onClick={handleCloseNews}
                   className="absolute top-4 right-4 text-text-muted hover:text-secondary p-1 rounded-full hover:bg-bg-alt/50 transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -372,7 +432,7 @@ export default function App() {
                 <h3 className="font-serif text-2xl font-light text-secondary mb-3 leading-tight">{currentNewsItem.title}</h3>
                 <p className="text-text-muted text-sm leading-relaxed whitespace-pre-wrap mb-6">{currentNewsItem.message}</p>
                 <button 
-                  onClick={() => setShowNewsPopup(false)}
+                  onClick={handleCloseNews}
                   className="w-full bg-secondary hover:bg-secondary-light text-white font-bold text-xs uppercase tracking-widest py-3.5 rounded-sm transition-colors border border-secondary shadow-none cursor-pointer"
                 >
                   Cerrar
@@ -538,7 +598,8 @@ export default function App() {
               <h2 className="font-serif text-4xl sm:text-5xl font-light tracking-tight text-secondary">Nuestros Servicios</h2>
               <div className="w-16 h-[1px] bg-gold mx-auto" />
             </div>
-            <div className="bg-bg-alt/10 border border-secondary/10 rounded-sm p-6 mb-16 flex flex-col md:flex-row items-center justify-between gap-6 max-w-4xl mx-auto">
+
+            <div className="bg-bg-alt/10 border border-secondary/10 rounded-sm p-6 mb-12 flex flex-col md:flex-row items-center justify-between gap-6 max-w-4xl mx-auto">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-primary/5 text-primary rounded-sm border border-primary/10">
                   <ShieldCheck className="w-5 h-5" />
@@ -550,106 +611,147 @@ export default function App() {
               </div>
               <span className="text-[10px] font-bold text-primary bg-primary/5 border border-primary/15 px-4 py-2.5 rounded-sm uppercase tracking-widest whitespace-nowrap">Aplica a todas las consultas</span>
             </div>
+
+            {/* Search and List/Grid toggle controls */}
+            <div className="max-w-4xl mx-auto mb-16 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+              <div className="relative flex-grow">
+                <input
+                  type="text"
+                  placeholder="Buscar servicios (ej. terapia, yoga, evaluación, valentina)..."
+                  value={serviceSearchQuery}
+                  onChange={(e) => setServiceSearchQuery(e.target.value)}
+                  className="w-full pl-4 pr-10 py-3 text-xs border border-secondary/20 rounded-sm bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 placeholder-[#9C9C9C] transition-all font-sans"
+                />
+                <span className="absolute right-3.5 top-3.5 text-text-muted">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </span>
+              </div>
+              
+              <div className="flex border border-secondary/20 rounded-sm overflow-hidden shrink-0 self-end sm:self-auto">
+                <button
+                  onClick={() => setServiceViewMode('grid')}
+                  className={`px-4 py-2.5 text-[9px] uppercase tracking-widest font-bold transition-all cursor-pointer ${serviceViewMode === 'grid' ? 'bg-secondary text-white' : 'bg-white text-secondary hover:bg-bg-alt/30'}`}
+                >
+                  Vista Cuadrícula
+                </button>
+                <button
+                  onClick={() => setServiceViewMode('list')}
+                  className={`px-4 py-2.5 text-[9px] uppercase tracking-widest font-bold transition-all cursor-pointer ${serviceViewMode === 'list' ? 'bg-secondary text-white' : 'bg-white text-secondary hover:bg-bg-alt/30'}`}
+                >
+                  Vista Lista
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-20">
-              <div>
-                <h3 className="font-serif text-2xl sm:text-3xl font-light text-secondary pb-4 border-b border-secondary/10 mb-8 flex items-center gap-3">
-                  <Heart className="w-5 h-5 text-primary shrink-0" />
-                  Psicoterapia, Evaluaciones & Pareja
-                </h3>
-                <div className="grid md:grid-cols-3 gap-6">
-                  {allServices.filter(s => s.category === 'psicoterapia' || s.category === 'evaluacion').map((service) => (
-                    <div key={service.id} className="bg-white border border-secondary/10 hover:border-gold/50 rounded-sm p-6 hover:shadow-md hover:translate-y-[-2px] transition-all duration-300 flex flex-col justify-between">
-                      <div>
-                        <div className="flex justify-between items-start gap-4 border-b border-secondary/10 pb-4 mb-4">
-                          <div>
-                            <h4 className="font-serif text-base font-medium text-secondary line-clamp-2 leading-snug">{service.name}</h4>
-                            <span className="text-[10px] uppercase tracking-wider text-text-muted mt-1.5 block">Especialista: {(service.professionalName || service.professional_name || '').split(' ')[0]}</span>
+              {/* Categories container */}
+              {[
+                { title: 'Psicoterapia, Evaluaciones & Pareja', categories: ['psicoterapia', 'evaluacion'] },
+                { title: 'Yoga, Clases & Bienestar Corporal', categories: ['yoga'] },
+                { title: 'Talleres de Teatro, Capacitaciones & Coaching', categories: ['coaching', 'taller', 'capacitacion', 'evento'] }
+              ].map((group, idx) => {
+                const groupServices = allServices.filter(s => {
+                  const matchesCategory = group.categories.includes(s.category);
+                  if (!matchesCategory) return false;
+                  
+                  if (!serviceSearchQuery) return true;
+                  const query = serviceSearchQuery.toLowerCase();
+                  const nameMatch = s.name.toLowerCase().includes(query);
+                  const descMatch = s.description.toLowerCase().includes(query);
+                  const profMatch = (s.professionalName || s.professional_name || '').toLowerCase().includes(query);
+                  const catMatch = s.category.toLowerCase().includes(query);
+                  return nameMatch || descMatch || profMatch || catMatch;
+                });
+
+                if (groupServices.length === 0) return null;
+
+                return (
+                  <div key={idx} className="space-y-8">
+                    <h3 className="font-serif text-2xl sm:text-3xl font-light text-secondary pb-4 border-b border-secondary/10 mb-8 flex items-center gap-3">
+                      {idx === 0 ? <Heart className="w-5 h-5 text-primary shrink-0" /> : idx === 1 ? <Sparkles className="w-5 h-5 text-gold shrink-0" /> : <Award className="w-5 h-5 text-secondary shrink-0" />}
+                      {group.title}
+                    </h3>
+                    
+                    {serviceViewMode === 'grid' ? (
+                      <div className="grid md:grid-cols-3 gap-6">
+                        {groupServices.map((service) => (
+                          <div key={service.id} className="bg-white border border-secondary/10 hover:border-gold/50 rounded-sm p-6 hover:shadow-md hover:translate-y-[-2px] transition-all duration-300 flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-start gap-4 border-b border-secondary/10 pb-4 mb-4">
+                                <div>
+                                  <h4 className="font-serif text-base font-medium text-secondary line-clamp-2 leading-snug">{service.name}</h4>
+                                  <span className="text-[10px] uppercase tracking-wider text-text-muted mt-1.5 block">Especialista: {(service.professionalName || service.professional_name || '').split(' ')[0]}</span>
+                                </div>
+                                <span className="text-xs font-bold text-primary bg-primary/5 border border-primary/10 px-2.5 py-1 rounded-sm whitespace-nowrap">{service.price === 0 ? 'Gratis' : `$${service.price.toLocaleString('es-CL')}`}</span>
+                              </div>
+                              <p className="text-xs text-text-muted leading-relaxed mb-6 min-h-[48px]">{service.description}</p>
+                            </div>
+                            <div className="flex items-center justify-between border-t border-secondary/10 pt-4">
+                              <span className="text-[9px] uppercase tracking-wider font-semibold text-text-muted flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-gold" />
+                                {service.duration} min
+                              </span>
+                              <button onClick={() => handlePresetService(service.id)}
+                                className="text-xs font-bold text-primary hover:text-primary-dark uppercase tracking-wider flex items-center gap-1 group transition-colors cursor-pointer">
+                                Reservar Hora
+                                <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                              </button>
+                            </div>
                           </div>
-                          <span className="text-xs font-bold text-primary bg-primary/5 border border-primary/10 px-2.5 py-1 rounded-sm whitespace-nowrap">{service.price === 0 ? 'Gratis' : `$${service.price.toLocaleString('es-CL')}`}</span>
-                        </div>
-                        <p className="text-xs text-text-muted leading-relaxed mb-6 min-h-[48px]">{service.description}</p>
+                        ))}
                       </div>
-                      <div className="flex items-center justify-between border-t border-secondary/10 pt-4">
-                        <span className="text-[9px] uppercase tracking-wider font-semibold text-text-muted flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-gold" />
-                          {service.duration} min
-                        </span>
-                        <button onClick={() => handlePresetService(service.id)}
-                          className="text-xs font-bold text-primary hover:text-primary-dark uppercase tracking-wider flex items-center gap-1 group transition-colors cursor-pointer">
-                          Reservar Hora
-                          <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <h3 className="font-serif text-2xl sm:text-3xl font-light text-secondary pb-4 border-b border-secondary/10 mb-8 flex items-center gap-3">
-                  <Sparkles className="w-5 h-5 text-gold shrink-0" />
-                  Yoga, Clases & Bienestar Corporal
-                </h3>
-                <div className="grid md:grid-cols-3 gap-6">
-                  {allServices.filter(s => s.category === 'yoga').map((service) => (
-                    <div key={service.id} className="bg-white border border-secondary/10 hover:border-gold/50 rounded-sm p-6 hover:shadow-md hover:translate-y-[-2px] transition-all duration-300 flex flex-col justify-between">
-                      <div>
-                        <div className="flex justify-between items-start gap-4 border-b border-secondary/10 pb-4 mb-4">
-                          <div>
-                            <h4 className="font-serif text-base font-medium text-secondary line-clamp-2 leading-snug">{service.name}</h4>
-                            <span className="text-[10px] uppercase tracking-wider text-text-muted mt-1.5 block">Especialista: {(service.professionalName || service.professional_name || '').split(' ')[0]}</span>
+                    ) : (
+                      <div className="space-y-4 max-w-4xl mx-auto">
+                        {groupServices.map((service) => (
+                          <div key={service.id} className="bg-white border border-secondary/10 hover:border-gold/50 rounded-sm p-6 hover:shadow-sm transition-all duration-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="space-y-2 flex-grow">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <h4 className="font-serif text-lg font-medium text-secondary">{service.name}</h4>
+                                <span className="text-xs font-bold text-primary bg-primary/5 border border-primary/10 px-2.5 py-0.5 rounded-sm">{service.price === 0 ? 'Gratis' : `$${service.price.toLocaleString('es-CL')}`}</span>
+                              </div>
+                              <p className="text-xs text-text-muted leading-relaxed max-w-2xl">{service.description}</p>
+                              <div className="flex flex-wrap gap-4 text-[9px] uppercase tracking-wider font-bold text-text-muted">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-gold" />
+                                  {service.duration} min
+                                </span>
+                                <span>•</span>
+                                <span>Especialista: {service.professionalName || service.professional_name}</span>
+                              </div>
+                            </div>
+                            
+                            <button
+                              onClick={() => handlePresetService(service.id)}
+                              className="self-start sm:self-center bg-secondary hover:bg-primary text-white text-[10px] uppercase tracking-widest font-bold py-3 px-5 rounded-sm transition-all duration-300 shrink-0 cursor-pointer"
+                            >
+                              Reservar Hora
+                            </button>
                           </div>
-                          <span className="text-xs font-bold text-primary bg-primary/5 border border-primary/10 px-2.5 py-1 rounded-sm whitespace-nowrap">{service.price === 0 ? 'Gratis' : `$${service.price.toLocaleString('es-CL')}`}</span>
-                        </div>
-                        <p className="text-xs text-text-muted leading-relaxed mb-6 min-h-[48px]">{service.description}</p>
+                        ))}
                       </div>
-                      <div className="flex items-center justify-between border-t border-secondary/10 pt-4">
-                        <span className="text-[9px] uppercase tracking-wider font-semibold text-text-muted flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-gold" />
-                          {service.duration} min
-                        </span>
-                        <button onClick={() => handlePresetService(service.id)}
-                          className="text-xs font-bold text-primary hover:text-primary-dark uppercase tracking-wider flex items-center gap-1 group transition-colors cursor-pointer">
-                          Reservar Hora
-                          <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* No results message */}
+              {allServices.filter(s => {
+                if (!serviceSearchQuery) return true;
+                const query = serviceSearchQuery.toLowerCase();
+                return s.name.toLowerCase().includes(query) ||
+                       s.description.toLowerCase().includes(query) ||
+                       (s.professionalName || s.professional_name || '').toLowerCase().includes(query) ||
+                       s.category.toLowerCase().includes(query);
+              }).length === 0 && (
+                <div className="text-center py-12 bg-white border border-secondary/10 rounded-sm max-w-lg mx-auto">
+                  <p className="text-sm text-text-muted italic">No se encontraron servicios que coincidan con la búsqueda.</p>
+                  <button onClick={() => setServiceSearchQuery('')} className="mt-4 text-xs font-bold text-primary hover:underline uppercase tracking-wider cursor-pointer">
+                    Limpiar Filtro
+                  </button>
                 </div>
-              </div>
-              <div>
-                <h3 className="font-serif text-2xl sm:text-3xl font-light text-secondary pb-4 border-b border-secondary/10 mb-8 flex items-center gap-3">
-                  <Award className="w-5 h-5 text-secondary shrink-0" />
-                  Talleres de Teatro, Capacitaciones & Coaching
-                </h3>
-                <div className="grid md:grid-cols-3 gap-6">
-                  {allServices.filter(s => s.category === 'coaching' || s.category === 'taller' || s.category === 'capacitacion' || s.category === 'evento').map((service) => (
-                    <div key={service.id} className="bg-white border border-secondary/10 hover:border-gold/50 rounded-sm p-6 hover:shadow-md hover:translate-y-[-2px] transition-all duration-300 flex flex-col justify-between">
-                      <div>
-                        <div className="flex justify-between items-start gap-4 border-b border-secondary/10 pb-4 mb-4">
-                          <div>
-                            <h4 className="font-serif text-base font-medium text-secondary line-clamp-2 leading-snug">{service.name}</h4>
-                            <span className="text-[10px] uppercase tracking-wider text-text-muted mt-1.5 block">Encargado: {(service.professionalName || service.professional_name || '').split(' ')[0]}</span>
-                          </div>
-                          <span className="text-xs font-bold text-primary bg-primary/5 border border-primary/10 px-2.5 py-1 rounded-sm whitespace-nowrap">{service.price === 0 ? 'Gratis' : `$${service.price.toLocaleString('es-CL')}`}</span>
-                        </div>
-                        <p className="text-xs text-text-muted leading-relaxed mb-6 min-h-[48px]">{service.description}</p>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-secondary/10 pt-4">
-                        <span className="text-[9px] uppercase tracking-wider font-semibold text-text-muted flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-gold" />
-                          {service.duration} min
-                        </span>
-                        <button onClick={() => handlePresetService(service.id)}
-                          className="text-xs font-bold text-primary hover:text-primary-dark uppercase tracking-wider flex items-center gap-1 group transition-colors cursor-pointer">
-                          Reservar Hora
-                          <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              )}
             </div>
           </section>
 
@@ -688,6 +790,167 @@ export default function App() {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </div>
+          </section>
+
+          {/* EVENTS */}
+          <section id="eventos-seccion" className="py-24 bg-bg-alt/20 border-t border-secondary/10">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center space-y-4 mb-12">
+                <span className="text-[10px] uppercase tracking-[0.25em] text-gold-dark font-bold block">Talleres Especiales y Espacios Colectivos</span>
+                <h2 className="font-serif text-4xl sm:text-5xl font-light tracking-tight text-secondary">Próximos Eventos</h2>
+                <div className="w-16 h-[1px] bg-gold mx-auto" />
+              </div>
+
+              {/* View Toggle controls */}
+              <div className="max-w-5xl mx-auto mb-10 flex justify-end">
+                <div className="flex border border-secondary/20 rounded-sm overflow-hidden bg-white">
+                  <button
+                    onClick={() => setEventViewMode('list')}
+                    className={`px-4 py-2 text-[9px] uppercase tracking-widest font-bold transition-all cursor-pointer ${eventViewMode === 'list' ? 'bg-secondary text-white' : 'bg-white text-secondary hover:bg-bg-alt/30'}`}
+                  >
+                    Vista Tarjetas
+                  </button>
+                  <button
+                    onClick={() => setEventViewMode('calendar')}
+                    className={`px-4 py-2 text-[9px] uppercase tracking-widest font-bold transition-all cursor-pointer ${eventViewMode === 'calendar' ? 'bg-secondary text-white' : 'bg-white text-secondary hover:bg-bg-alt/30'}`}
+                  >
+                    Calendario mensual
+                  </button>
+                </div>
+              </div>
+
+              {eventViewMode === 'list' ? (
+                <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+                  {allEvents.map((evt) => {
+                    const spotsLeft = Math.max(0, evt.capacity - (evt.registered_count || 0));
+                    const isFull = spotsLeft <= 0;
+                    const [year, month, dayStr] = evt.date.split('-');
+                    return (
+                      <div key={evt.id} className="bg-white border border-secondary/10 rounded-sm p-6 hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                        <div className="space-y-4">
+                          <div className="flex gap-4 items-center">
+                            <div className="bg-primary/5 text-primary border border-primary/10 rounded-sm p-3.5 text-center min-w-[70px]">
+                              <span className="block text-2xl font-serif font-light">{dayStr}</span>
+                              <span className="block text-[8px] uppercase tracking-wider font-bold">Mes {month}</span>
+                            </div>
+                            <div>
+                              <h4 className="font-serif text-xl font-medium text-secondary">{evt.title}</h4>
+                              <p className="text-xs text-text-muted mt-1.5 flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-gold shrink-0" />
+                                {evt.time} hrs • {evt.date}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-text-muted leading-relaxed text-justify">{evt.description}</p>
+                        </div>
+
+                        <div className="mt-8 pt-4 border-t border-secondary/10 flex justify-between items-center">
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-text-muted block">Cupos Disponibles</span>
+                            <span className={`text-xs font-semibold ${isFull ? 'text-red-600' : 'text-primary'}`}>
+                              {isFull ? 'Agotados' : `${spotsLeft} de ${evt.capacity} cupos`}
+                            </span>
+                          </div>
+
+                          <button
+                            disabled={isFull}
+                            onClick={() => { setSelectedEvent(evt); setShowEventModal(true); }}
+                            className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2.5 rounded-sm border transition-all duration-300 cursor-pointer ${
+                              isFull 
+                                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                : 'bg-primary text-white border-primary hover:bg-primary-dark'
+                            }`}
+                          >
+                            {isFull ? 'Sin Cupos' : 'Inscribirse'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {allEvents.length === 0 && (
+                    <div className="col-span-2 text-center py-12 bg-white border border-secondary/10 rounded-sm">
+                      <p className="text-sm text-text-muted italic">No hay eventos programados en este momento. ¡Vuelve pronto!</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="max-w-4xl mx-auto bg-white border border-secondary/10 rounded-sm p-6 shadow-sm">
+                  {/* Calendar Navigation header */}
+                  <div className="flex justify-between items-center mb-6">
+                    <button
+                      onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1))}
+                      className="p-2 border border-secondary/20 hover:bg-bg-alt/30 text-secondary text-xs font-bold uppercase tracking-wider rounded-sm transition-all cursor-pointer"
+                    >
+                      &larr; Anterior
+                    </button>
+                    <h3 className="font-serif text-lg font-light text-secondary uppercase tracking-widest">
+                      {calendarDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <button
+                      onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1))}
+                      className="p-2 border border-secondary/20 hover:bg-bg-alt/30 text-secondary text-xs font-bold uppercase tracking-wider rounded-sm transition-all cursor-pointer"
+                    >
+                      Siguiente &rarr;
+                    </button>
+                  </div>
+
+                  {/* Calendar grid */}
+                  <div className="grid grid-cols-7 gap-1 text-center font-bold text-[9px] uppercase tracking-wider text-text-muted mb-2">
+                    <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1">
+                    {(() => {
+                      const year = calendarDate.getFullYear();
+                      const month = calendarDate.getMonth();
+                      const firstDayOfMonth = new Date(year, month, 1).getDay(); // Sunday=0, Monday=1, etc.
+                      // Adjust to make Monday index 0
+                      const startingOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
+                      const totalDays = new Date(year, month + 1, 0).getDate();
+
+                      const dayBlocks = [];
+                      // Empty cells before start of month
+                      for (let i = 0; i < startingOffset; i++) {
+                        dayBlocks.push(<div key={`empty-${i}`} className="aspect-square bg-bg-base/30 border border-secondary/5 rounded-sm" />);
+                      }
+
+                      // Month days
+                      for (let day = 1; day <= totalDays; day++) {
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        const dayEvents = allEvents.filter(evt => evt.date === dateStr);
+
+                        dayBlocks.push(
+                          <div key={`day-${day}`} className="aspect-square border border-secondary/10 bg-white p-1 rounded-sm flex flex-col justify-between items-stretch min-h-[70px] hover:bg-bg-alt/10 transition-colors">
+                            <span className="text-[10px] font-sans text-text-muted font-bold text-left">{day}</span>
+                            {dayEvents.map(evt => {
+                              const spotsLeft = Math.max(0, evt.capacity - (evt.registered_count || 0));
+                              const isFull = spotsLeft <= 0;
+                              return (
+                                <button
+                                  key={evt.id}
+                                  onClick={() => { setSelectedEvent(evt); setShowEventModal(true); }}
+                                  className={`text-[8px] p-1 font-bold rounded-sm border truncate text-left transition-all ${
+                                    isFull 
+                                      ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                      : 'bg-primary/5 text-primary border-primary/20 hover:bg-primary/10'
+                                  }`}
+                                  title={`${evt.title} (${evt.time} hrs)`}
+                                >
+                                  {evt.time} {evt.title}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+
+                      return dayBlocks;
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
@@ -777,6 +1040,76 @@ export default function App() {
             </div>
           </section>
         </motion.div>
+
+        {/* INSCRIPTION EVENT MODAL */}
+        {showEventModal && selectedEvent && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setShowEventModal(false)}>
+            <div className="bg-white rounded-sm shadow-xl border border-secondary/10 p-8 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider font-bold text-gold-dark">Inscripción a Evento</span>
+                  <h3 className="font-serif text-2xl font-light text-secondary mt-1">{selectedEvent.title}</h3>
+                </div>
+                <button onClick={() => setShowEventModal(false)} className="p-1 text-text-muted hover:text-secondary cursor-pointer">
+                  <X className="w-4.5 h-4.5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleEventInscribe} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest">Nombre Completo</label>
+                  <input required placeholder="Tu nombre y apellido" value={eventForm.client_name} onChange={e => setEventForm({ ...eventForm, client_name: e.target.value })}
+                    className="w-full px-3.5 py-2 text-xs border border-secondary/20 rounded-sm bg-white focus:outline-none focus:border-primary" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest">Correo Electrónico</label>
+                  <input required type="email" placeholder="ejemplo@correo.com" value={eventForm.client_email} onChange={e => setEventForm({ ...eventForm, client_email: e.target.value })}
+                    className="w-full px-3.5 py-2 text-xs border border-secondary/20 rounded-sm bg-white focus:outline-none focus:border-primary" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest">Teléfono de Contacto</label>
+                  <input required placeholder="+569..." value={eventForm.client_phone} onChange={e => setEventForm({ ...eventForm, client_phone: e.target.value })}
+                    className="w-full px-3.5 py-2 text-xs border border-secondary/20 rounded-sm bg-white focus:outline-none focus:border-primary" />
+                </div>
+
+                {eventMsg && (
+                  <div className={`p-3 rounded-sm text-xs font-semibold ${eventMsg.includes('exitosa') ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                    {eventMsg}
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-4">
+                  <button type="submit" className="flex-1 bg-primary hover:bg-primary-dark text-white text-[10px] uppercase font-bold px-4 py-3 rounded-sm border border-primary cursor-pointer transition-colors">
+                    Confirmar Inscripción
+                  </button>
+                  <button type="button" onClick={() => setShowEventModal(false)} className="text-[10px] uppercase font-bold text-text-muted px-4 cursor-pointer">Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        {/* FLOATING WHATSAPP BUTTON */}
+        {(() => {
+          const rawPhone = siteContent.contacto_telefono || '+56961676706';
+          const cleanPhone = rawPhone.replace(/\D/g, '');
+          return (
+            <a
+              href={`https://wa.me/${cleanPhone}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="fixed bottom-6 right-6 z-50 bg-[#25D366] hover:bg-[#20ba5a] text-white p-3.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center border border-white/10 group cursor-pointer"
+              title="Contactar por WhatsApp"
+            >
+              <svg 
+                className="w-6.5 h-6.5 fill-current" 
+                viewBox="0 0 24 24" 
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.704 1.46h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413"/>
+              </svg>
+            </a>
+          );
+        })()}
       </main>
 
       <footer className="bg-secondary text-white border-t border-gold/20">
@@ -795,6 +1128,7 @@ export default function App() {
                 <li><button onClick={() => { scrollToSection('nosotros-seccion'); }} className="text-white/70 hover:text-gold transition-colors cursor-pointer">Nosotros</button></li>
                 <li><button onClick={() => { scrollToSection('especialistas-seccion'); }} className="text-white/70 hover:text-gold transition-colors cursor-pointer">Profesionales</button></li>
                 <li><button onClick={() => { scrollToSection('servicios-seccion'); }} className="text-white/70 hover:text-gold transition-colors cursor-pointer">Servicios</button></li>
+                <li><button onClick={() => { scrollToSection('eventos-seccion'); }} className="text-white/70 hover:text-gold transition-colors cursor-pointer">Eventos</button></li>
                 <li><button onClick={() => { scrollToSection('contacto-seccion'); }} className="text-white/70 hover:text-gold transition-colors cursor-pointer">Contacto</button></li>
               </ul>
             </div>

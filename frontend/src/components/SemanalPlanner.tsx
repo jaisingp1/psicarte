@@ -56,15 +56,11 @@ interface SemanalPlannerProps {
   allProfessionals: Professional[];
 }
 
-export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServices, allProfessionals }) => {
+export function SemanalPlanner({ rooms, allServices, allProfessionals }: SemanalPlannerProps) {
   const [day, setDay] = useState('Lunes');
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
-  const [dragging, setDragging] = useState<{
-    id: string; type: 'move' | 'resize-start' | 'resize-end';
-    startY: number; origTop: number; origRoom: string; origDay: string;
-  } | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [modalPos, setModalPos] = useState({ top: 0, roomId: '' });
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [newBlock, setNewBlock] = useState({
     professional_id: '', service_id: '', room_id: '',
     start_time: '09:00', end_time: '10:00',
@@ -127,7 +123,6 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
   allProfessionals.forEach((p, i) => { profColorMap[p.id] = PROF_COLORS[i % PROF_COLORS.length]; });
 
   const handleGridClick = (e: React.MouseEvent, roomId: string) => {
-    if (dragging) return;
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
     const rect = gridRef.current?.getBoundingClientRect();
@@ -141,7 +136,7 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
       showMsg('Horario fuera del horario de la sala');
       return;
     }
-    setModalPos({ top: y, roomId });
+    setEditingBlockId(null);
     setNewBlock({
       professional_id: '',
       service_id: '',
@@ -152,23 +147,54 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
     setShowModal(true);
   };
 
-  const handleAddBlock = async () => {
+  const handleBlockDoubleClick = (block: ScheduleBlock, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingBlockId(block.id);
+    setNewBlock({
+      professional_id: block.professional_id,
+      service_id: block.service_id,
+      room_id: block.room_id,
+      start_time: block.start_time,
+      end_time: block.end_time,
+    });
+    setShowModal(true);
+  };
+
+  const handleSaveBlock = async () => {
     if (!newBlock.professional_id || !newBlock.service_id || !newBlock.start_time || !newBlock.end_time) {
       showMsg('Completa todos los campos');
       return;
     }
-    const id = `sb-${Date.now()}`;
-    const res = await fetch(`${API}/schedule`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newBlock, id, day }),
-    });
-    if (res.ok) {
-      loadBlocks();
-      setShowModal(false);
-      showMsg('Bloque agregado');
+
+    if (editingBlockId) {
+      // Update existing
+      const res = await fetch(`${API}/schedule/${editingBlockId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newBlock, day }),
+      });
+      if (res.ok) {
+        loadBlocks();
+        setShowModal(false);
+        showMsg('Bloque actualizado');
+      } else {
+        const err = await res.json();
+        showMsg(err.error || 'Error al actualizar bloque');
+      }
     } else {
-      const err = await res.json();
-      showMsg(err.error || 'Error al agregar bloque');
+      // Create new
+      const id = `sb-${Date.now()}`;
+      const res = await fetch(`${API}/schedule`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newBlock, id, day }),
+      });
+      if (res.ok) {
+        loadBlocks();
+        setShowModal(false);
+        showMsg('Bloque agregado');
+      } else {
+        const err = await res.json();
+        showMsg(err.error || 'Error al agregar bloque');
+      }
     }
   };
 
@@ -176,133 +202,6 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
     const res = await fetch(`${API}/schedule/${blockId}`, { method: 'DELETE' });
     if (res.ok) { loadBlocks(); showMsg('Bloque eliminado'); }
   };
-
-  const handleMouseDown = (block: ScheduleBlock, type: 'move' | 'resize-start' | 'resize-end', e: React.MouseEvent) => {
-    e.preventDefault();
-    const blockEl = (e.target as HTMLElement).closest('.sb-block') as HTMLElement;
-    if (!blockEl) return;
-    setDragging({
-      id: block.id, type,
-      startY: e.clientY,
-      origTop: timeToPixels(block.start_time),
-      origRoom: block.room_id,
-      origDay: day,
-    });
-  };
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!dragging || !gridRef.current) return;
-    const rect = gridRef.current.getBoundingClientRect();
-    const scrollTop = gridRef.current.scrollTop;
-    const deltaY = (e.clientY - dragging.startY) * 1;
-    const newPixels = Math.max(0, dragging.origTop + deltaY);
-
-    if (dragging.type === 'move') {
-      const block = blocks.find(b => b.id === dragging.id);
-      if (!block) return;
-      const newTime = pixelsToTime(newPixels);
-      const snapped = snapTo10(newTime);
-      // Find which room column we're over
-      const mouseX = e.clientX - rect.left + gridRef.current.scrollLeft - 48; // account for time label width
-      let roomIdx = Math.floor(mouseX / COL_WIDTH);
-      roomIdx = Math.max(0, Math.min(rooms.length - 1, roomIdx));
-      const targetRoom = rooms[roomIdx]?.id || block.room_id;
-      const svc = allServices.find(s => s.id === block.service_id);
-      const endT = svc ? calcEndTime(snapped, svc.duration) : block.end_time;
-      // Update block visually via DOM
-      const el = gridRef.current.querySelector(`[data-block-id="${dragging.id}"]`) as HTMLElement;
-      if (el) {
-        el.style.top = `${timeToPixels(snapped)}px`;
-        el.style.left = `${roomIdx * COL_WIDTH}px`;
-      }
-    } else if (dragging.type === 'resize-start' || dragging.type === 'resize-end') {
-      // Will handle on mouse up for simplicity
-    }
-  }, [dragging, blocks, rooms, allServices]);
-
-  const handleMouseUp = useCallback(async (e: MouseEvent) => {
-    if (!dragging) return;
-    const block = blocks.find(b => b.id === dragging.id);
-    if (!block) { setDragging(null); return; }
-
-    const rect = gridRef.current?.getBoundingClientRect();
-    const scrollTop = gridRef.current?.scrollTop || 0;
-    const deltaY = (e.clientY - dragging.startY) * 1;
-    const newPixels = Math.max(0, dragging.origTop + deltaY);
-
-    if (dragging.type === 'move') {
-      const newTime = pixelsToTime(newPixels);
-      const snapped = snapTo10(newTime);
-      const mouseX = e.clientX - (rect?.left || 0) + scrollTop - 48;
-      let roomIdx = Math.floor(mouseX / COL_WIDTH);
-      roomIdx = Math.max(0, Math.min(rooms.length - 1, roomIdx));
-      const targetRoomObj = rooms[roomIdx] || rooms.find(r => r.id === block.room_id);
-      const targetRoom = targetRoomObj?.id || block.room_id;
-      const svc = allServices.find(s => s.id === block.service_id);
-      const endT = svc ? calcEndTime(snapped, svc.duration) : block.end_time;
-
-      if (snapped < (targetRoomObj?.open_time || '08:00') || endT > (targetRoomObj?.close_time || '22:00')) {
-        showMsg('El bloque no cabe en el horario de la sala');
-        setDragging(null);
-        return;
-      }
-
-      if (snapped !== block.start_time || targetRoom !== block.room_id) {
-        const res = await fetch(`${API}/schedule/${dragging.id}`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            day, start_time: snapped, end_time: endT, room_id: targetRoom,
-            professional_id: block.professional_id, service_id: block.service_id,
-          }),
-        });
-        if (res.ok) { loadBlocks(); showMsg('Bloque movido'); }
-        else { const err = await res.json(); showMsg(err.error || 'Error'); }
-      }
-    } else if (dragging.type === 'resize-start' || dragging.type === 'resize-end') {
-      // Resize: recalculate start or end based on drag
-      const svc = allServices.find(s => s.id === block.service_id);
-      const blockDuration = svc ? svc.duration : 60;
-      const newPixelsStart = dragging.type === 'resize-start'
-        ? Math.max(0, dragging.origTop + (e.clientY - dragging.startY))
-        : timeToPixels(block.start_time);
-      const newPixelsEnd = dragging.type === 'resize-end'
-        ? Math.max(newPixelsStart + 10, dragging.origTop + timeToPixels(block.end_time) - timeToPixels(block.start_time) + (e.clientY - dragging.startY))
-        : timeToPixels(block.end_time);
-
-      const newStart = pixelsToTime(newPixelsStart);
-      const newEnd = pixelsToTime(newPixelsEnd);
-      const snappedStart = snapTo10(newStart);
-      const snappedEnd = snapTo10(newEnd);
-
-      if (snappedStart !== block.start_time || snappedEnd !== block.end_time) {
-        const res = await fetch(`${API}/schedule/${dragging.id}`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            day, start_time: snappedStart, end_time: snappedEnd,
-            room_id: block.room_id, professional_id: block.professional_id, service_id: block.service_id,
-          }),
-        });
-        if (res.ok) { loadBlocks(); showMsg('Bloque redimensionado'); }
-        else { const err = await res.json(); showMsg(err.error || 'Error'); }
-      }
-    }
-
-    // Reset visual position
-    const el = gridRef.current?.querySelector(`[data-block-id="${dragging.id}"]`) as HTMLElement;
-    if (el) { el.style.top = ''; el.style.left = ''; }
-    setDragging(null);
-  }, [dragging, blocks, rooms, allServices, day, loadBlocks]);
-
-  useEffect(() => {
-    if (dragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [dragging, handleMouseMove, handleMouseUp]);
 
   const filteredBlocks = blocks.filter(b => b.day === day);
 
@@ -385,7 +284,7 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
                       style={{ top: openPixels, height: closePixels - openPixels }}
                       onMouseDown={(e) => {
                         const target = e.target as HTMLElement;
-                        if (!target.closest('.sb-block') && !target.closest('.sb-block-handle')) {
+                        if (!target.closest('.sb-block')) {
                           handleGridClick(e, r.id);
                         }
                       }}
@@ -409,27 +308,19 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
                 <motion.div
                   key={block.id}
                   data-block-id={block.id}
-                  className="sb-block absolute rounded-sm border shadow-sm overflow-hidden cursor-grab active:cursor-grabbing"
+                  className="sb-block absolute rounded-sm border shadow-sm overflow-hidden cursor-pointer"
                   style={{
                     top, left: roomIdx * COL_WIDTH + 2,
                     width: COL_WIDTH - 4, height,
                     backgroundColor: `${color}15`,
                     borderColor: color,
                     borderLeftWidth: 3,
-                    zIndex: dragging?.id === block.id ? 50 : 10,
+                    zIndex: 10,
                   }}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  onMouseDown={(e) => handleMouseDown(block, 'move', e)}
+                  onDoubleClick={(e) => handleBlockDoubleClick(block, e)}
                 >
-                  {/* Resize handle top */}
-                  <div className="sb-block-handle absolute -top-1 left-0 right-0 h-2 cursor-n-resize z-10 hover:bg-black/10"
-                    onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(block, 'resize-start', e); }}
-                  />
-                  {/* Resize handle bottom */}
-                  <div className="sb-block-handle absolute -bottom-1 left-0 right-0 h-2 cursor-s-resize z-10 hover:bg-black/10"
-                    onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(block, 'resize-end', e); }}
-                  />
                   {/* Content */}
                   <div className="p-1.5 text-[10px] leading-tight h-full flex flex-col justify-between">
                     <div>
@@ -441,7 +332,7 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
                         {block.start_time} - {block.end_time}
                       </span>
                       <button onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 text-red-500 hover:bg-red-50 rounded cursor-pointer"
+                        className="p-0.5 text-red-500 hover:bg-red-50 rounded cursor-pointer"
                       >
                         <X className="w-2.5 h-2.5" />
                       </button>
@@ -462,12 +353,14 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
         </div>
       </div>
 
-      {/* Add Block Modal */}
+      {/* Add / Edit Block Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowModal(false)}>
           <div className="bg-white rounded-sm shadow-xl border border-secondary/10 p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-serif text-lg font-light text-secondary">Agregar Bloque</h3>
+              <h3 className="font-serif text-lg font-light text-secondary">
+                {editingBlockId ? 'Editar Bloque' : 'Agregar Bloque'}
+              </h3>
               <button onClick={() => setShowModal(false)} className="p-1 text-text-muted hover:text-secondary cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
@@ -517,9 +410,13 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
               )}
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={handleAddBlock} className="flex-1 bg-primary text-white text-[10px] uppercase font-bold px-4 py-2.5 rounded-sm border border-primary cursor-pointer">
-                <Plus className="w-3 h-3 inline mr-1" />
-                Agregar
+              <button onClick={handleSaveBlock} className="flex-1 bg-primary text-white text-[10px] uppercase font-bold px-4 py-2.5 rounded-sm border border-primary cursor-pointer">
+                {editingBlockId ? 'Guardar Cambios' : (
+                  <>
+                    <Plus className="w-3 h-3 inline mr-1" />
+                    Agregar
+                  </>
+                )}
               </button>
               <button onClick={() => setShowModal(false)} className="text-[10px] uppercase font-bold text-text-muted px-4 cursor-pointer">Cancelar</button>
             </div>
@@ -528,4 +425,4 @@ export const SemanalPlanner: React.FC<SemanalPlannerProps> = ({ rooms, allServic
       )}
     </div>
   );
-};
+}

@@ -68,12 +68,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
     fetch(`${API}/waitlist`).then(r => r.json()).then(setWaitlist);
     fetch(`${API}/news`).then(r => r.json()).then(setAllNews);
     fetch(`${API}/content`).then(r => r.json()).then(data => {
-      const mapped: Record<string, string> = {};
-      data.forEach((item: any) => {
-        mapped[item.key_name] = item.value_text;
-      });
-      setSiteContent(mapped);
+      // Mapea usando id y content según el esquema de base de datos real de site_content
+      setSiteContent(data || {});
     });
+  };
+
+  const loadDataWithEvents = () => {
+    loadData();
+    fetchEvents();
   };
 
   // News handlers
@@ -120,7 +122,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
       showMsg('Error al guardar contenido');
     }
   };
-  useEffect(loadData, []);
+  useEffect(loadDataWithEvents, []);
 
   // ===== Gantt Handlers =====
   const handleMoveAppointment = async (id: string, roomId: string | null, newDate: string, startTime: string, endTime: string) => {
@@ -361,10 +363,63 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
     showMsg('Sala eliminada');
   };
 
+  // ===== Event Management =====
+  const [allEvents, setAllEvents] = useState<any[]>([]);
+  const [showNewEvent, setShowNewEvent] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<string | null>(null);
+  const [eventForm, setEventForm] = useState({ title: '', description: '', date: '', time: '', capacity: 10, active: 1 });
+  const [eventInscriptions, setEventInscriptions] = useState<any[]>([]);
+  const [viewingEventInscriptionsId, setViewingEventInscriptionsId] = useState<string | null>(null);
+
+  const fetchEvents = () => {
+    fetch(`${API}/admin/events`).then(r => r.json()).then(setAllEvents).catch(console.error);
+  };
+
+  const handleSaveEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = { ...eventForm };
+    const id = editingEvent || `evt-${Date.now()}`;
+    const res = await fetch(`${API}/admin/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...payload })
+    });
+    if (res.ok) {
+      showMsg(editingEvent ? 'Evento actualizado' : 'Evento creado');
+      fetchEvents();
+      setShowNewEvent(false);
+      setEditingEvent(null);
+      setEventForm({ title: '', description: '', date: '', time: '', capacity: 10, active: 1 });
+    } else {
+      const err = await res.json();
+      showMsg(`Error: ${err.error}`);
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    const res = await fetch(`${API}/admin/events/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setAllEvents(prev => prev.filter(evt => evt.id !== id));
+      showMsg('Evento eliminado');
+    }
+  };
+
+  const handleViewInscriptions = async (evtId: string) => {
+    const res = await fetch(`${API}/admin/events/${evtId}/inscriptions`);
+    if (res.ok) {
+      const data = await res.json();
+      setEventInscriptions(data);
+      setViewingEventInscriptionsId(evtId);
+    }
+  };
+
+  // Add fetchEvents to initial loadData
+
   const tabs = [
     { id: 'agenda', label: 'Agenda', icon: Calendar },
     { id: 'planificador', label: 'Planificador', icon: Clock },
     { id: 'clinica', label: 'Gestión Clínica', icon: Users },
+    { id: 'eventos', label: 'Eventos Especiales', icon: Calendar },
     { id: 'contenido', label: 'Contenido del Sitio', icon: Settings },
     { id: 'noticias', label: 'Noticias / Anuncios', icon: Bell }
   ] as const;
@@ -524,6 +579,171 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, appointmen
                     </tbody>
                   </table>
                 </div>
+              </motion.div>
+            )}
+
+            {/* TAB: EVENTOS ESPECIALES */}
+            {tab === 'eventos' && (
+              <motion.div key="eventos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="font-serif text-xl font-light text-secondary">Eventos Especiales ({allEvents.length})</h3>
+                  <button onClick={() => { setShowNewEvent(true); setEditingEvent(null); setEventForm({ title: '', description: '', date: '', time: '', capacity: 15, active: 1 }); }}
+                    className="bg-primary hover:bg-primary-dark text-white text-[10px] uppercase tracking-widest font-bold px-4 py-2.5 rounded-sm border border-primary transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Nuevo Evento
+                  </button>
+                </div>
+
+                {showNewEvent && (
+                  <form onSubmit={handleSaveEvent} className="bg-bg-base/30 border border-secondary/10 rounded-sm p-5 mb-6 space-y-4">
+                    <h4 className="font-serif text-base font-light text-secondary">{editingEvent ? 'Editar Evento' : 'Crear Nuevo Evento'}</h4>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-1.5">Título del Evento</label>
+                        <input required placeholder="Ej: Taller de Meditación al Aire Libre" value={eventForm.title} onChange={e => setEventForm({ ...eventForm, title: e.target.value })}
+                          className="w-full px-3.5 py-2.5 text-xs border border-secondary/20 rounded-sm bg-white focus:border-primary focus:outline-none" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-1.5">Descripción o Detalles del Evento</label>
+                        <textarea required placeholder="Describe las actividades, requisitos y lugar..." value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })} rows={3}
+                          className="w-full px-3.5 py-2.5 text-xs border border-secondary/20 rounded-sm bg-white focus:border-primary focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-1.5">Fecha del Evento</label>
+                        <input required type="date" value={eventForm.date} onChange={e => setEventForm({ ...eventForm, date: e.target.value })}
+                          className="w-full px-3.5 py-2.5 text-xs border border-secondary/20 rounded-sm bg-white focus:border-primary focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-1.5">Hora de Inicio (HH:MM)</label>
+                        <input required type="time" value={eventForm.time} onChange={e => setEventForm({ ...eventForm, time: e.target.value })}
+                          className="w-full px-3.5 py-2.5 text-xs border border-secondary/20 rounded-sm bg-white focus:border-primary focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-1.5">Capacidad Total de Cupos</label>
+                        <input required type="number" min="1" value={eventForm.capacity} onChange={e => setEventForm({ ...eventForm, capacity: Number(e.target.value) })}
+                          className="w-full px-3.5 py-2.5 text-xs border border-secondary/20 rounded-sm bg-white focus:border-primary focus:outline-none" />
+                      </div>
+                      <div className="flex items-center gap-2 pt-6">
+                        <input type="checkbox" id="evt-active" checked={!!eventForm.active} onChange={e => setEventForm({ ...eventForm, active: e.target.checked ? 1 : 0 })}
+                          className="rounded-sm border-secondary/20 text-primary focus:ring-primary w-4 h-4 cursor-pointer" />
+                        <label htmlFor="evt-active" className="text-xs font-semibold text-secondary cursor-pointer">Evento disponible e inscriptible</label>
+                      </div>
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <button type="submit" className="bg-primary text-white text-[10px] uppercase font-bold px-4 py-2.5 rounded-sm border border-primary cursor-pointer">Guardar Evento</button>
+                      <button type="button" onClick={() => { setShowNewEvent(false); setEditingEvent(null); }} className="text-[10px] uppercase font-bold text-text-muted px-4 cursor-pointer">Cancelar</button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-secondary/10 text-[9px] uppercase tracking-widest font-bold text-text-muted bg-[#FAF8F5]">
+                        <th className="py-3 px-3">Evento</th>
+                        <th className="py-3 px-3">Fecha & Hora</th>
+                        <th className="py-3 px-3 text-center">Inscritos / Capacidad</th>
+                        <th className="py-3 px-3 text-center">Estado</th>
+                        <th className="py-3 px-3 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allEvents.map(evt => (
+                        <tr key={evt.id} className="border-b border-secondary/5 hover:bg-[#FAF8F5]/30">
+                          <td className="py-3 px-3 font-semibold text-secondary max-w-[200px] truncate">
+                            <span className="block">{evt.title}</span>
+                            <span className="block text-[10px] text-text-muted font-normal max-w-[250px] truncate">{evt.description}</span>
+                          </td>
+                          <td className="py-3 px-3 text-text-muted">
+                            {evt.date} a las {evt.time} hrs
+                          </td>
+                          <td className="py-3 px-3 text-center font-medium">
+                            <button onClick={() => handleViewInscriptions(evt.id)}
+                              className="text-primary hover:underline font-bold"
+                              title="Ver inscritos"
+                            >
+                              {evt.registered_count || 0} / {evt.capacity} inscritos
+                            </button>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm border ${evt.active ? 'text-green-700 bg-green-50 border-green-200' : 'text-red-700 bg-red-50 border-red-200'}`}>
+                              {evt.active ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex justify-end gap-1">
+                              <button onClick={() => { setEditingEvent(evt.id); setEventForm({ title: evt.title, description: evt.description, date: evt.date, time: evt.time, capacity: evt.capacity, active: evt.active }); setShowNewEvent(true); }}
+                                className="p-1.5 border border-secondary/20 text-text-muted hover:text-primary hover:border-primary rounded-sm cursor-pointer" title="Editar">
+                                <Save className="w-3 h-3" />
+                              </button>
+                              <button onClick={() => handleDeleteEvent(evt.id)} className="p-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-sm cursor-pointer" title="Eliminar">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {allEvents.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-text-muted text-sm italic">
+                            No hay eventos especiales registrados.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Event Inscriptions List Modal overlay */}
+                {viewingEventInscriptionsId && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setViewingEventInscriptionsId(null)}>
+                    <div className="bg-white rounded-sm shadow-xl border border-secondary/10 p-6 w-full max-w-2xl mx-4" onClick={e => e.stopPropagation()}>
+                      <div className="flex justify-between items-center mb-6">
+                        <div>
+                          <h4 className="font-serif text-lg font-light text-secondary">Personas Inscritas al Evento</h4>
+                          <p className="text-xs text-text-muted mt-1">Lista completa de participantes registrados</p>
+                        </div>
+                        <button onClick={() => setViewingEventInscriptionsId(null)} className="p-1 text-text-muted hover:text-secondary cursor-pointer">
+                          <X className="w-4.5 h-4.5" />
+                        </button>
+                      </div>
+
+                      <div className="max-h-[300px] overflow-y-auto border border-secondary/10 rounded-sm">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="border-b border-secondary/10 text-[9px] uppercase tracking-widest font-bold text-text-muted bg-[#FAF8F5]">
+                              <th className="py-3 px-3">Nombre</th>
+                              <th className="py-3 px-3">Email</th>
+                              <th className="py-3 px-3">Teléfono</th>
+                              <th className="py-3 px-3">Fecha Inscripción</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {eventInscriptions.map(ins => (
+                              <tr key={ins.id} className="border-b border-secondary/5 hover:bg-[#FAF8F5]/30">
+                                <td className="py-3 px-3 font-semibold text-secondary">{ins.client_name}</td>
+                                <td className="py-3 px-3 text-text-muted">{ins.client_email}</td>
+                                <td className="py-3 px-3 text-text-muted">{ins.client_phone}</td>
+                                <td className="py-3 px-3 text-text-muted">{ins.created_at}</td>
+                              </tr>
+                            ))}
+                            {eventInscriptions.length === 0 && (
+                              <tr>
+                                <td colSpan={4} className="py-12 text-center text-text-muted text-xs italic">
+                                  No hay personas inscritas aún para este evento.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-6 text-right">
+                        <button onClick={() => setViewingEventInscriptionsId(null)} className="bg-secondary text-white text-[10px] uppercase font-bold px-6 py-2.5 rounded-sm border border-secondary cursor-pointer">Cerrar</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
 

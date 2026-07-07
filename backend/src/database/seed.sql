@@ -153,3 +153,13 @@ Nuestra visión es contribuir a una cultura más consciente, empática y colabor
 -- Initial News
 INSERT INTO news (id, title, message, active, start_date, end_date) VALUES
   ('news-1', '¡Bienvenidos a nuestro nuevo portal!', 'Nos alegra presentarles nuestra plataforma renovada donde podrán agendar atenciones online y presenciales con facilidad.', 1, '2026-07-01', '2026-08-31');
+
+-- Initial Events
+INSERT INTO events (id, title, description, date, time, capacity, active) VALUES
+  ('evt-1', 'Taller de Teatro Espontáneo y Expresión', 'Un espacio de improvisación teatral y expresión corporal para liberar tensiones y compartir vivencias.', '2026-07-15', '19:00', 15, 1),
+  ('evt-2', 'Sesión Abierta de Meditación y Yoga', 'Práctica de Hatha yoga suave y meditación guiada al aire libre (sujeto a clima). Traer mat.', '2026-07-22', '10:00', 25, 1);
+
+-- Initial Inscriptions
+INSERT INTO event_inscriptions (id, event_id, client_name, client_email, client_phone) VALUES
+  ('ins-1', 'evt-1', 'Renata Jeldes', 'renata.jeldes@gmail.com', '+56987456321'),
+  ('ins-2', 'evt-1', 'Romilio Orellana', 'romilio.orellana@gmail.com', '+56974125896');

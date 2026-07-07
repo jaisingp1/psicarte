@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Heart, Calendar, Award, Sparkles, BookOpen, Clock, ShieldCheck, Mail, Phone, 
   MapPin, CheckCircle2, ChevronDown, ChevronUp, UserCheck, Settings, Eye, HelpCircle, 
-  ArrowUpRight, Info, AlertCircle, LogIn, User
+  ArrowUpRight, Info, AlertCircle, LogIn, User, Bell, X
 } from 'lucide-react';
 import { PsicarteLogo } from './components/PsicarteLogo';
 import { BookingForm } from './components/BookingForm';
@@ -62,6 +62,9 @@ export default function App() {
   const [allProfessionals, setAllProfessionals] = useState<Professional[]>([]);
   const [allServices, setAllServices] = useState<Service[]>([]);
   const [siteContent, setSiteContent] = useState<Record<string, string>>({});
+  const [activeNews, setActiveNews] = useState<any[]>([]);
+  const [showNewsPopup, setShowNewsPopup] = useState<boolean>(false);
+  const [currentNewsItem, setCurrentNewsItem] = useState<any | null>(null);
 
   // Load professionals, services, and site content from API
   useEffect(() => {
@@ -76,6 +79,16 @@ export default function App() {
     fetch('/api/content')
       .then(r => r.json())
       .then(setSiteContent)
+      .catch(console.error);
+    fetch('/api/news')
+      .then(r => r.json())
+      .then((data: any[]) => {
+        setActiveNews(data);
+        if (data.length > 0) {
+          setCurrentNewsItem(data[0]);
+          setShowNewsPopup(true);
+        }
+      })
       .catch(console.error);
   }, []);
 
@@ -329,6 +342,46 @@ export default function App() {
       </nav>
 
       <main className="flex-grow">
+        <AnimatePresence>
+          {showNewsPopup && currentNewsItem && (
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            >
+              <motion.div 
+                initial={{ scale: 0.95, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.95, y: 20 }}
+                className="bg-white border border-gold/30 rounded-lg max-w-lg w-full p-8 shadow-2xl relative overflow-hidden"
+              >
+                <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-primary via-gold to-secondary" />
+                <button 
+                  onClick={() => setShowNewsPopup(false)}
+                  className="absolute top-4 right-4 text-text-muted hover:text-secondary p-1 rounded-full hover:bg-bg-alt/50 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2.5 bg-primary/10 text-primary rounded-full">
+                    <Bell className="w-5 h-5 animate-bounce" />
+                  </div>
+                  <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-primary">Anuncio Importante</span>
+                </div>
+                <h3 className="font-serif text-2xl font-light text-secondary mb-3 leading-tight">{currentNewsItem.title}</h3>
+                <p className="text-text-muted text-sm leading-relaxed whitespace-pre-wrap mb-6">{currentNewsItem.message}</p>
+                <button 
+                  onClick={() => setShowNewsPopup(false)}
+                  className="w-full bg-secondary hover:bg-secondary-light text-white font-bold text-xs uppercase tracking-widest py-3.5 rounded-sm transition-colors border border-secondary shadow-none cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <motion.div key="corporate-site" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           {/* HERO */}
           <section id="inicio-seccion" className="relative py-24 md:py-32 overflow-hidden bg-bg-base border-b border-secondary/10">

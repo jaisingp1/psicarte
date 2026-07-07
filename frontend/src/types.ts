@@ -96,3 +96,13 @@ export interface WaitlistItem {
   status: WaitlistStatus;
   created_at: string;
 }
+
+export interface NewsItem {
+  id?: string;
+  title: string;
+  message: string;
+  active: number;
+  start_date: string | null;
+  end_date: string | null;
+  created_at?: string;
+}

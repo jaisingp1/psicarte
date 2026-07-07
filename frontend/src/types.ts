@@ -19,6 +19,9 @@ export interface Service {
   description: string;
   category: 'coaching' | 'psicoterapia' | 'yoga' | 'capacitacion' | 'taller' | 'evaluacion' | 'evento';
   modality?: 'Presencial' | 'Telemedicina' | 'Ambas';
+  // API snake_case aliases
+  professional_id?: string;
+  professional_name?: string;
 }
 
 export interface TimeBlock {

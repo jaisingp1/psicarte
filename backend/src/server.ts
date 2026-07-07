@@ -579,6 +579,17 @@ app.get('/api/schedules/:professionalId', (req, res) => {
   res.json(grouped);
 });
 
+app.get('/api/content', (_req, res) => {
+  const db = getDb();
+  const rows = queryRows(db, 'SELECT id, content FROM site_content');
+  saveAndClose(db);
+  const result: Record<string, string> = {};
+  for (const r of rows) {
+    result[r.id as string] = r.content as string;
+  }
+  res.json(result);
+});
+
 app.get('/api/content/:id', (req, res) => {
   const db = getDb();
   const row = queryOne(db, 'SELECT content FROM site_content WHERE id = ?', [req.params.id]);
@@ -587,11 +598,66 @@ app.get('/api/content/:id', (req, res) => {
   res.json(row);
 });
 
+app.put('/api/admin/content/:id', (req, res) => {
+  const { content } = req.body;
+  if (content === undefined) return res.status(400).json({ error: 'Contenido requerido' });
+  const db = getDb();
+  const existing = queryOne(db, 'SELECT id FROM site_content WHERE id = ?', [req.params.id]);
+  if (existing) {
+    db.run('UPDATE site_content SET content = ? WHERE id = ?', [content, req.params.id]);
+  } else {
+    db.run('INSERT INTO site_content (id, content) VALUES (?, ?)', [req.params.id, content]);
+  }
+  saveAndClose(db);
+  res.json({ success: true });
+});
+
 // ===================== ADMIN: Block appointment (block agenda) =====================
 
 app.post('/api/admin/appointments/:id/block', (req, res) => {
   const db = getDb();
   db.run("UPDATE appointments SET status = 'Cancelado' WHERE id = ?", [req.params.id]);
+  saveAndClose(db);
+  res.json({ success: true });
+});
+
+// ===================== PUBLIC & ADMIN: News =====================
+
+app.get('/api/news', (_req, res) => {
+  const db = getDb();
+  const today = new Date().toISOString().split('T')[0];
+  const news = queryRows(db, `SELECT * FROM news WHERE active = 1 AND (start_date IS NULL OR start_date <= ?) AND (end_date IS NULL OR end_date >= ?) ORDER BY created_at DESC`, [today, today]);
+  saveAndClose(db);
+  res.json(news);
+});
+
+app.get('/api/admin/news', (_req, res) => {
+  const db = getDb();
+  const news = queryRows(db, 'SELECT * FROM news ORDER BY created_at DESC');
+  saveAndClose(db);
+  res.json(news);
+});
+
+app.post('/api/admin/news', (req, res) => {
+  const { id, title, message, active, start_date, end_date } = req.body;
+  if (!title || !message) return res.status(400).json({ error: 'Título y mensaje son requeridos' });
+  const db = getDb();
+  const newsId = id || `news-${Date.now()}`;
+  const existing = queryOne(db, 'SELECT id FROM news WHERE id = ?', [newsId]);
+  if (existing) {
+    db.run('UPDATE news SET title = ?, message = ?, active = ?, start_date = ?, end_date = ? WHERE id = ?',
+      [title, message, active ? 1 : 0, start_date || null, end_date || null, newsId]);
+  } else {
+    db.run('INSERT INTO news (id, title, message, active, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)',
+      [newsId, title, message, active ? 1 : 0, start_date || null, end_date || null]);
+  }
+  saveAndClose(db);
+  res.json({ id: newsId, success: true });
+});
+
+app.delete('/api/admin/news/:id', (req, res) => {
+  const db = getDb();
+  db.run('DELETE FROM news WHERE id = ?', [req.params.id]);
   saveAndClose(db);
   res.json({ success: true });
 });

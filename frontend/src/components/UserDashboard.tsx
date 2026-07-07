@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, Clock, X, User, Mail, Phone, Save, LogOut, AlertCircle, CheckCircle2, Edit3, ArrowLeft } from 'lucide-react';
 import { Appointment, User as UserType, Service } from '../types';
-import { SERVICES } from '../data';
-
 interface UserDashboardProps {
   user: UserType;
   appointments: Appointment[];
@@ -117,7 +115,6 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ user, appointments
             ) : (
               <div className="space-y-3">
                 {userApps.map(app => {
-                  const service = SERVICES.find(s => s.id === app.serviceId);
                   return (
                     <div key={app.id} className={`border rounded-sm p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${app.status === 'Cancelado' ? 'bg-gray-50/50 opacity-60 border-red-200' : 'bg-white border-secondary/10 hover:border-primary/20'}`}>
                       <div className="flex-1">

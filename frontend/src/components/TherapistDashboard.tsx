@@ -5,7 +5,7 @@ import {
   Trash2, Filter, Sparkles, Sliders, CheckCircle2, RefreshCw, X, ShieldAlert 
 } from 'lucide-react';
 import { Appointment, Professional } from '../types';
-import { SERVICES, CLIENT_MOCKS } from '../data';
+import { Appointment, Professional } from '../types';
 
 interface TherapistDashboardProps {
   appointments: Appointment[];
@@ -26,6 +26,7 @@ export const TherapistDashboard: React.FC<TherapistDashboardProps> = ({
   appointments,
   onCancelAppointment,
   onAddAppointment,
+  allProfessionals = [],
 }) => {
   const [selectedTherapistId, setSelectedTherapistId] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -141,9 +142,9 @@ export const TherapistDashboard: React.FC<TherapistDashboardProps> = ({
             className="bg-transparent text-white text-xs font-semibold focus:outline-none cursor-pointer pr-4 border-none"
           >
             <option value="all" className="bg-secondary text-white">Todos los especialistas</option>
-            <option value="ivan" className="bg-secondary text-white">Iván Pastén Fuentes</option>
-            <option value="valentina" className="bg-secondary text-white">Valentina Maldonado</option>
-            <option value="macarena" className="bg-secondary text-white">Macarena Méndez</option>
+            {allProfessionals.map(prof => (
+              <option key={prof.id} value={prof.id} className="bg-secondary text-white">{prof.name}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -470,50 +471,28 @@ export const TherapistDashboard: React.FC<TherapistDashboardProps> = ({
                     Distribución de Servicios y Especialidad
                   </h4>
                   <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-xs font-semibold text-secondary mb-1.5">
-                        <span>Psicoterapia y Evaluaciones (Valentina Maldonado)</span>
-                        <span>{appointments.filter(a => a.professionalId === 'valentina' && a.status === 'Confirmado').length} sesiones</span>
-                      </div>
-                      <div className="w-full bg-secondary/10 h-2 rounded-sm overflow-hidden">
-                        <div 
-                          className="bg-primary h-full rounded-sm transition-all duration-500" 
-                          style={{ 
-                            width: `${(appointments.filter(a => a.professionalId === 'valentina' && a.status === 'Confirmado').length / (activeApps.length || 1)) * 100}%` 
-                          }} 
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-xs font-semibold text-secondary mb-1.5">
-                        <span>Talleres, Yoga y Capacitación (Iván Pastén)</span>
-                        <span>{appointments.filter(a => a.professionalId === 'ivan' && a.status === 'Confirmado').length} sesiones</span>
-                      </div>
-                      <div className="w-full bg-secondary/10 h-2 rounded-sm overflow-hidden">
-                        <div 
-                          className="bg-gold h-full rounded-sm transition-all duration-500" 
-                          style={{ 
-                            width: `${(appointments.filter(a => a.professionalId === 'ivan' && a.status === 'Confirmado').length / (activeApps.length || 1)) * 100}%` 
-                          }} 
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-xs font-semibold text-secondary mb-1.5">
-                        <span>Gestión y Venta Escénica (Macarena Méndez)</span>
-                        <span>{appointments.filter(a => a.professionalId === 'macarena' && a.status === 'Confirmado').length} reuniones</span>
-                      </div>
-                      <div className="w-full bg-secondary/10 h-2 rounded-sm overflow-hidden">
-                        <div 
-                          className="bg-secondary h-full rounded-sm transition-all duration-500" 
-                          style={{ 
-                            width: `${(appointments.filter(a => a.professionalId === 'macarena' && a.status === 'Confirmado').length / (activeApps.length || 1)) * 100}%` 
-                          }} 
-                        />
-                      </div>
-                    </div>
+                    {allProfessionals.map((prof, index) => {
+                      const profApps = appointments.filter(a => a.professionalId === prof.id && a.status === 'Confirmado');
+                      const percentage = activeApps.length ? (profApps.length / activeApps.length) * 100 : 0;
+                      // cycle colors: primary, gold, secondary
+                      const colors = ['bg-primary', 'bg-gold', 'bg-secondary'];
+                      const barColor = colors[index % colors.length];
+                      
+                      return (
+                        <div key={prof.id}>
+                          <div className="flex justify-between text-xs font-semibold text-secondary mb-1.5">
+                            <span>{prof.name} ({prof.title})</span>
+                            <span>{profApps.length} {prof.id === 'macarena' ? 'reuniones' : 'sesiones'}</span>
+                          </div>
+                          <div className="w-full bg-secondary/10 h-2 rounded-sm overflow-hidden">
+                            <div 
+                              className={`${barColor} h-full rounded-sm transition-all duration-500`}
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="pt-5 border-t border-secondary/10 flex gap-4 text-xs text-text-muted justify-around text-center">

@@ -113,3 +113,13 @@ CREATE TABLE IF NOT EXISTS schedule_blocks (
   room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS news (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  start_date TEXT, -- YYYY-MM-DD
+  end_date TEXT,   -- YYYY-MM-DD
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

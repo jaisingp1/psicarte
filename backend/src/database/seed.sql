@@ -6,7 +6,8 @@
 -- Professionals
 INSERT INTO professionals (id, name, title, experience, bio) VALUES
   ('ivan', 'Iván Pastén Fuentes', 'Actor, Profesor de Teatro, Instructor de Yoga', '8 años de experiencia', 'Actor teatral y audiovisual, profesor de teatro, dramaturgo e instructor de yoga, con formación universitaria en actuación y puesta en escena. Mi trabajo integra el arte, la expresión corporal, la comunicación y el bienestar, articulando herramientas escénicas, pedagógicas y socioemocionales para acompañar procesos creativos, educativos y personales.'),
-  ('valentina', 'Valentina Maldonado Terroba', 'Psicóloga Clínica', '5 años de experiencia', 'Psicóloga clínica titulada de la Universidad Andrés Bello, graduada Cum Laude, con formación en enfoques psicoanalítico, sistémico-narrativo y centrado en soluciones. Cuento con experiencia en atención presencial y online a niños, niñas, adolescentes y adultos, acompañando procesos terapéuticos desde una mirada integral, respetuosa y contextualizada.');
+  ('valentina', 'Valentina Maldonado Terroba', 'Psicóloga Clínica', '5 años de experiencia', 'Psicóloga clínica titulada de la Universidad Andrés Bello, graduada Cum Laude, con formación en enfoques psicoanalítico, sistémico-narrativo y centrado en soluciones. Cuento con experiencia en atención presencial y online a niños, niñas, adolescentes y adultos, acompañando procesos terapéuticos desde una mirada integral, respetuosa y contextualizada.'),
+  ('macarena', 'Macarena Méndez', 'Coordinadora de Artes Escénicas', 'Venta de Obras y Eventos', 'Coordinadora encargada del área teatral y de artes escénicas de PsicArte. Coordina la venta, exhibición y adaptación de obras teatrales, espectáculos escénicos y eventos para organizaciones o particulares.');
 
 -- Iván's diplomas
 INSERT INTO professional_diplomas (professional_id, diploma) VALUES
@@ -137,4 +138,18 @@ A través de la psicoterapia, los talleres psicoeducativos, las capacitaciones, 
 
 Buscamos consolidarnos como un espacio de referencia para personas, familias, comunidades educativas y organizaciones que requieran acompañamiento psicológico, formación, talleres y experiencias expresivas orientadas al bienestar y al desarrollo humano.
 
-Nuestra visión es contribuir a una cultura más consciente, empática y colaborativa, donde los servicios que ofrecemos sean herramientas para fortalecer la salud mental, la comunicación, la convivencia, la creatividad y el cuidado de los vínculos.');
+Nuestra visión es contribuir a una cultura más consciente, empática y colaborativa, donde los servicios que ofrecemos sean herramientas para fortalecer la salud mental, la comunicación, la convivencia, la creatividad y el cuidado de los vínculos.'),
+  ('contacto_email', 'contacto@psicarte.cl'),
+  ('contacto_telefono', '+56961676706'),
+  ('contacto_telefono_display', '+56 9 6167 6706'),
+  ('contacto_ubicacion', 'Chile • Consultas Online & Talleres Presenciales'),
+  ('hero_subtitulo', 'Salud Mental, Bienestar & Creatividad'),
+  ('hero_titulo', 'El escenario donde tu bienestar y expresión se encuentran'),
+  ('hero_descripcion', 'En PsicArte integramos psicoterapia profesional, yoga corporal, talleres creativos y teatro terapéutico para abrir caminos integrales de sanación, autoconocimiento y crecimiento humano.'),
+  ('footer_descripcion', 'Centro integral orientado al bienestar emocional, desarrollo personal, yoga, teatro y artes escénicas. Un espacio seguro de crecimiento y expresión creativa.'),
+  ('footer_lema', 'Elegancia, Psicología & Expresión Escénica'),
+  ('servicios_subtitulo', 'Boletas para Reembolso Médico Fonasa, Isapres y Seguros');
+
+-- Initial News
+INSERT INTO news (id, title, message, active, start_date, end_date) VALUES
+  ('news-1', '¡Bienvenidos a nuestro nuevo portal!', 'Nos alegra presentarles nuestra plataforma renovada donde podrán agendar atenciones online y presenciales con facilidad.', 1, '2026-07-01', '2026-08-31');

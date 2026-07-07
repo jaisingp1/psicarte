@@ -11,8 +11,7 @@ import { TherapistDashboard } from './components/TherapistDashboard';
 import { LoginPage } from './components/LoginPage';
 import { UserDashboard } from './components/UserDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
-import { PRESENTACION_TEXT, MISION_TEXT, VISION_TEXT, SERVICES } from './data';
-import { Appointment, User as UserType, Professional } from './types';
+import { Appointment, User as UserType, Professional, Service } from './types';
 
 export default function App() {
   const [activeNav, setActiveNav] = useState<string>('inicio');
@@ -61,115 +60,89 @@ export default function App() {
   // Appointments State
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allProfessionals, setAllProfessionals] = useState<Professional[]>([]);
+  const [allServices, setAllServices] = useState<Service[]>([]);
+  const [siteContent, setSiteContent] = useState<Record<string, string>>({});
 
+  // Load professionals, services, and site content from API
   useEffect(() => {
     fetch('/api/professionals')
       .then(r => r.json())
       .then(setAllProfessionals)
       .catch(console.error);
+    fetch('/api/services')
+      .then(r => r.json())
+      .then(setAllServices)
+      .catch(console.error);
+    fetch('/api/content')
+      .then(r => r.json())
+      .then(setSiteContent)
+      .catch(console.error);
   }, []);
 
-  useEffect(() => {
-    const savedApps = localStorage.getItem('psicarte_appointments');
-    if (savedApps) {
-      try {
-        setAppointments(JSON.parse(savedApps));
-        return;
-      } catch (e) {
-        console.error("Error loading appointments:", e);
-      }
-    }
-
-    const defaultApps: Appointment[] = [
-      {
-        id: 'app-pre-1',
-        clientName: 'Renata Jeldes',
-        clientEmail: 'renata.jeldes@gmail.com',
-        clientPhone: '+56987456321',
-        professionalId: 'valentina',
-        professionalName: 'Valentina Maldonado Terroba',
-        serviceId: 'val-psico-pref',
-        serviceName: 'Psicoterapia Online Preferencial',
-        servicePrice: 20990,
-        room_id: 'sala-1',
-        date: getUpcomingDateString('Jueves'),
-        start_time: '10:00',
-        end_time: '11:00',
-        timeBlock: '10:00 - 11:00',
-        notes: 'Consulta inicial por ansiedad y estrés universitario.',
-        status: 'Confirmado',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'app-pre-2',
-        clientName: 'Romilio Orellana',
-        clientEmail: 'romilio.orellana@gmail.com',
-        clientPhone: '+56974125896',
-        professionalId: 'ivan',
-        professionalName: 'Iván Pastén Fuentes',
-        serviceId: 'ivan-coaching',
-        serviceName: 'Coaching de Vida, Personal y Profesional Online',
-        servicePrice: 20990,
-        room_id: 'sala-2',
-        date: getUpcomingDateString('Martes'),
-        start_time: '20:00',
-        end_time: '21:00',
-        timeBlock: '20:00 - 21:00',
-        notes: 'Sesión para coordinar planificación de carrera y habilidades de liderazgo.',
-        status: 'Confirmado',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'app-pre-3',
-        clientName: 'Sofia Molina',
-        clientEmail: 'sofia.molina@gmail.com',
-        clientPhone: '+56936251478',
-        professionalId: 'valentina',
-        professionalName: 'Valentina Maldonado Terroba',
-        serviceId: 'val-parejas',
-        serviceName: 'Terapia de Parejas Online',
-        servicePrice: 30990,
-        room_id: 'sala-3',
-        date: getUpcomingDateString('Viernes'),
-        start_time: '20:00',
-        end_time: '21:00',
-        timeBlock: '20:00 - 21:00',
-        notes: 'Revisión de acuerdos relacionales y comunicación.',
-        status: 'Confirmado',
-        createdAt: new Date().toISOString(),
-      }
-    ];
-    setAppointments(defaultApps);
-    localStorage.setItem('psicarte_appointments', JSON.stringify(defaultApps));
-  }, []);
-
-  function getUpcomingDateString(targetDay: 'Martes' | 'Jueves' | 'Viernes'): string {
-    const today = new Date();
-    const daysMap = { 'Martes': 2, 'Jueves': 4, 'Viernes': 5 };
-    const targetDayIndex = daysMap[targetDay];
-    const currentDayIndex = today.getDay();
-    let daysToAdd = targetDayIndex - currentDayIndex;
-    if (daysToAdd <= 0) daysToAdd += 7;
-    const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + daysToAdd);
-    return `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
-  }
-
-  const saveAppointments = (apps: Appointment[]) => {
-    setAppointments(apps);
-    localStorage.setItem('psicarte_appointments', JSON.stringify(apps));
+  // Load appointments from API
+  const loadAppointments = () => {
+    fetch('/api/appointments')
+      .then(r => r.json())
+      .then((rows: any[]) => {
+        const mapped: Appointment[] = rows.map((r: any) => ({
+          id: r.id,
+          clientName: r.client_name,
+          clientEmail: r.client_email,
+          clientPhone: r.client_phone,
+          professionalId: r.professional_id,
+          professionalName: r.professional_name,
+          serviceId: r.service_id,
+          serviceName: r.service_name,
+          servicePrice: r.service_price,
+          room_id: r.room_id,
+          date: r.date,
+          start_time: r.start_time,
+          end_time: r.end_time,
+          timeBlock: r.time_block,
+          notes: r.notes,
+          status: r.status,
+          createdAt: r.created_at,
+        }));
+        setAppointments(mapped);
+      })
+      .catch(console.error);
   };
 
+  useEffect(() => {
+    loadAppointments();
+  }, []);
+
   const handleBookingSuccess = (newApp: Appointment) => {
-    const updated = [newApp, ...appointments];
-    saveAppointments(updated);
+    // POST to API and then reload
+    fetch('/api/appointments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: newApp.id,
+        clientName: newApp.clientName,
+        clientEmail: newApp.clientEmail,
+        clientPhone: newApp.clientPhone,
+        professionalId: newApp.professionalId,
+        professionalName: newApp.professionalName,
+        serviceId: newApp.serviceId,
+        serviceName: newApp.serviceName,
+        servicePrice: newApp.servicePrice,
+        date: newApp.date,
+        start_time: newApp.start_time,
+        end_time: newApp.end_time,
+        timeBlock: newApp.timeBlock,
+        notes: newApp.notes,
+        room_id: newApp.room_id,
+      }),
+    })
+      .then(() => loadAppointments())
+      .catch(console.error);
   };
 
   const handleCancelAppointment = (id: string) => {
-    const updated = appointments.map(app => 
-      app.id === id ? { ...app, status: 'Cancelado' as const } : app
-    );
-    saveAppointments(updated);
+    fetch(`/api/appointments/${id}/cancel`, { method: 'PUT' })
+      .then(() => loadAppointments())
+      .catch(console.error);
   };
 
   const handlePresetService = (serviceId: string) => {
@@ -365,13 +338,17 @@ export default function App() {
             <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10 space-y-8">
               <div className="inline-flex items-center gap-2 bg-primary/5 px-4 py-1.5 border border-primary/10 rounded-sm">
                 <Sparkles className="w-3.5 h-3.5 text-gold-dark animate-pulse" />
-                <span className="text-[10px] font-bold tracking-[0.25em] uppercase text-primary">Salud Mental, Bienestar & Creatividad</span>
+                <span className="text-[10px] font-bold tracking-[0.25em] uppercase text-primary">{siteContent.hero_subtitulo || 'Salud Mental, Bienestar & Creatividad'}</span>
               </div>
               <h1 className="font-serif text-5xl sm:text-7xl font-light tracking-tight text-secondary leading-[1.1] max-w-4xl mx-auto">
-                El escenario donde tu <span className="italic text-primary font-serif">bienestar</span> y <span className="italic text-gold font-serif">expresión</span> se encuentran
+                {siteContent.hero_titulo ? (
+                  <>{siteContent.hero_titulo.split('bienestar')[0]}<span className="italic text-primary font-serif">bienestar</span>{siteContent.hero_titulo.split('bienestar')[1]?.split('expresión')[0]}<span className="italic text-gold font-serif">expresión</span>{siteContent.hero_titulo.split('expresión')[1] || ''}</>
+                ) : (
+                  <>El escenario donde tu <span className="italic text-primary font-serif">bienestar</span> y <span className="italic text-gold font-serif">expresión</span> se encuentran</>
+                )}
               </h1>
               <p className="max-w-2xl mx-auto text-sm sm:text-base text-text-muted leading-relaxed font-sans font-light">
-                En <span className="font-semibold text-secondary">PsicArte</span> integramos psicoterapia profesional, yoga corporal, talleres creativos y teatro terapéutico para abrir caminos integrales de sanación, autoconocimiento y crecimiento humano.
+                {siteContent.hero_descripcion || 'En PsicArte integramos psicoterapia profesional, yoga corporal, talleres creativos y teatro terapéutico para abrir caminos integrales de sanación, autoconocimiento y crecimiento humano.'}
               </p>
               <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
                 <button onClick={() => scrollToSection('agendar-seccion')}
@@ -400,7 +377,7 @@ export default function App() {
                   Centro Integral PsicArte
                 </h3>
                 <div className="space-y-4">
-                  {PRESENTACION_TEXT.split('\n\n').map((para, i) => (
+                  {(siteContent.presentacion || '').split('\n\n').map((para: string, i: number) => (
                     <p key={i} className="text-text-muted text-sm leading-relaxed text-justify">{para}</p>
                   ))}
                 </div>
@@ -411,14 +388,14 @@ export default function App() {
                     <Award className="w-4 h-4 text-gold" />
                     Nuestra Misión
                   </h4>
-                  <p className="text-text-muted text-xs leading-relaxed text-justify font-sans">{MISION_TEXT}</p>
+                  <p className="text-text-muted text-xs leading-relaxed text-justify font-sans">{siteContent.mision || ''}</p>
                 </div>
                 <div className="bg-white border border-secondary/10 border-l-4 border-l-primary rounded-sm p-6 hover:shadow-md hover:translate-y-[-2px] transition-all duration-300">
                   <h4 className="font-serif text-xl font-medium text-primary flex items-center gap-2 mb-3">
                     <BookOpen className="w-4 h-4 text-primary" />
                     Nuestra Visión
                   </h4>
-                  <p className="text-text-muted text-xs leading-relaxed text-justify font-sans">{VISION_TEXT}</p>
+                  <p className="text-text-muted text-xs leading-relaxed text-justify font-sans">{siteContent.vision || ''}</p>
                 </div>
               </div>
             </div>
@@ -489,7 +466,7 @@ export default function App() {
                           className="text-[10px] uppercase tracking-wider font-bold text-secondary hover:text-primary flex items-center justify-center sm:justify-start gap-1 cursor-pointer">
                           {isExpanded ? <>Ver menos <ChevronUp className="w-3.5 h-3.5" /></> : <>Ver curriculum <ChevronDown className="w-3.5 h-3.5" /></>}
                         </button>
-                        <button onClick={() => { const firstService = SERVICES.find(s => s.professionalId === prof.id); if (firstService) handlePresetService(firstService.id); else scrollToSection('agendar-seccion'); }}
+                        <button onClick={() => { const firstService = allServices.find(s => s.professionalId === prof.id || s.professional_id === prof.id); if (firstService) handlePresetService(firstService.id); else scrollToSection('agendar-seccion'); }}
                           className="bg-primary hover:bg-primary-dark text-white text-[11px] font-bold uppercase tracking-widest px-4 py-2.5 rounded-sm border border-primary transition-all duration-300 hover:scale-[1.01]">
                           Agendar Sesión
                         </button>
@@ -504,7 +481,7 @@ export default function App() {
           {/* SERVICES */}
           <section id="servicios-seccion" className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center space-y-4 mb-20">
-              <span className="text-[10px] uppercase tracking-[0.25em] text-gold-dark font-bold block">Boletas para Reembolso Médico Fonasa, Isapres y Seguros</span>
+              <span className="text-[10px] uppercase tracking-[0.25em] text-gold-dark font-bold block">{siteContent.servicios_subtitulo || 'Boletas para Reembolso Médico Fonasa, Isapres y Seguros'}</span>
               <h2 className="font-serif text-4xl sm:text-5xl font-light tracking-tight text-secondary">Nuestros Servicios</h2>
               <div className="w-16 h-[1px] bg-gold mx-auto" />
             </div>
@@ -527,13 +504,13 @@ export default function App() {
                   Psicoterapia, Evaluaciones & Pareja
                 </h3>
                 <div className="grid md:grid-cols-3 gap-6">
-                  {SERVICES.filter(s => s.category === 'psicoterapia' || s.category === 'evaluacion').map((service) => (
+                  {allServices.filter(s => s.category === 'psicoterapia' || s.category === 'evaluacion').map((service) => (
                     <div key={service.id} className="bg-white border border-secondary/10 hover:border-gold/50 rounded-sm p-6 hover:shadow-md hover:translate-y-[-2px] transition-all duration-300 flex flex-col justify-between">
                       <div>
                         <div className="flex justify-between items-start gap-4 border-b border-secondary/10 pb-4 mb-4">
                           <div>
                             <h4 className="font-serif text-base font-medium text-secondary line-clamp-2 leading-snug">{service.name}</h4>
-                            <span className="text-[10px] uppercase tracking-wider text-text-muted mt-1.5 block">Especialista: {service.professionalName.split(' ')[0]}</span>
+                            <span className="text-[10px] uppercase tracking-wider text-text-muted mt-1.5 block">Especialista: {(service.professionalName || service.professional_name || '').split(' ')[0]}</span>
                           </div>
                           <span className="text-xs font-bold text-primary bg-primary/5 border border-primary/10 px-2.5 py-1 rounded-sm whitespace-nowrap">{service.price === 0 ? 'Gratis' : `$${service.price.toLocaleString('es-CL')}`}</span>
                         </div>
@@ -560,13 +537,13 @@ export default function App() {
                   Yoga, Clases & Bienestar Corporal
                 </h3>
                 <div className="grid md:grid-cols-3 gap-6">
-                  {SERVICES.filter(s => s.category === 'yoga').map((service) => (
+                  {allServices.filter(s => s.category === 'yoga').map((service) => (
                     <div key={service.id} className="bg-white border border-secondary/10 hover:border-gold/50 rounded-sm p-6 hover:shadow-md hover:translate-y-[-2px] transition-all duration-300 flex flex-col justify-between">
                       <div>
                         <div className="flex justify-between items-start gap-4 border-b border-secondary/10 pb-4 mb-4">
                           <div>
                             <h4 className="font-serif text-base font-medium text-secondary line-clamp-2 leading-snug">{service.name}</h4>
-                            <span className="text-[10px] uppercase tracking-wider text-text-muted mt-1.5 block">Especialista: {service.professionalName.split(' ')[0]}</span>
+                            <span className="text-[10px] uppercase tracking-wider text-text-muted mt-1.5 block">Especialista: {(service.professionalName || service.professional_name || '').split(' ')[0]}</span>
                           </div>
                           <span className="text-xs font-bold text-primary bg-primary/5 border border-primary/10 px-2.5 py-1 rounded-sm whitespace-nowrap">{service.price === 0 ? 'Gratis' : `$${service.price.toLocaleString('es-CL')}`}</span>
                         </div>
@@ -593,13 +570,13 @@ export default function App() {
                   Talleres de Teatro, Capacitaciones & Coaching
                 </h3>
                 <div className="grid md:grid-cols-3 gap-6">
-                  {SERVICES.filter(s => s.category === 'coaching' || s.category === 'taller' || s.category === 'capacitacion' || s.category === 'evento').map((service) => (
+                  {allServices.filter(s => s.category === 'coaching' || s.category === 'taller' || s.category === 'capacitacion' || s.category === 'evento').map((service) => (
                     <div key={service.id} className="bg-white border border-secondary/10 hover:border-gold/50 rounded-sm p-6 hover:shadow-md hover:translate-y-[-2px] transition-all duration-300 flex flex-col justify-between">
                       <div>
                         <div className="flex justify-between items-start gap-4 border-b border-secondary/10 pb-4 mb-4">
                           <div>
                             <h4 className="font-serif text-base font-medium text-secondary line-clamp-2 leading-snug">{service.name}</h4>
-                            <span className="text-[10px] uppercase tracking-wider text-text-muted mt-1.5 block">Encargado: {service.professionalName.split(' ')[0]}</span>
+                            <span className="text-[10px] uppercase tracking-wider text-text-muted mt-1.5 block">Encargado: {(service.professionalName || service.professional_name || '').split(' ')[0]}</span>
                           </div>
                           <span className="text-xs font-bold text-primary bg-primary/5 border border-primary/10 px-2.5 py-1 rounded-sm whitespace-nowrap">{service.price === 0 ? 'Gratis' : `$${service.price.toLocaleString('es-CL')}`}</span>
                         </div>
@@ -632,6 +609,7 @@ export default function App() {
                 onClearPresetService={() => setSelectedServiceId(undefined)}
                 existingAppointments={appointments}
                 allProfessionals={allProfessionals}
+                allServices={allServices}
               />
             </div>
           </section>
@@ -679,21 +657,21 @@ export default function App() {
                       <div className="p-3 bg-bg-alt/50 text-secondary rounded-sm border border-secondary/10"><Mail className="w-4 h-4 text-primary" /></div>
                       <div>
                         <span className="text-[9px] uppercase tracking-widest font-bold text-text-muted block">Envíanos un Correo</span>
-                        <a href="mailto:contacto@psicarte.cl" className="text-sm font-semibold text-secondary hover:text-primary transition-colors">contacto@psicarte.cl</a>
+                        <a href={`mailto:${siteContent.contacto_email || 'contacto@psicarte.cl'}`} className="text-sm font-semibold text-secondary hover:text-primary transition-colors">{siteContent.contacto_email || 'contacto@psicarte.cl'}</a>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="p-3 bg-bg-alt/50 text-secondary rounded-sm border border-secondary/10"><Phone className="w-4 h-4 text-primary" /></div>
                       <div>
                         <span className="text-[9px] uppercase tracking-widest font-bold text-text-muted block">Llámanos o escríbenos</span>
-                        <a href="tel:+56961676706" className="text-sm font-semibold text-secondary hover:text-primary transition-colors">+56 9 6167 6706</a>
+                        <a href={`tel:${siteContent.contacto_telefono || '+56961676706'}`} className="text-sm font-semibold text-secondary hover:text-primary transition-colors">{siteContent.contacto_telefono_display || '+56 9 6167 6706'}</a>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="p-3 bg-bg-alt/50 text-secondary rounded-sm border border-secondary/10"><MapPin className="w-4 h-4 text-primary" /></div>
                       <div>
                         <span className="text-[9px] uppercase tracking-widest font-bold text-text-muted block">Ubicación</span>
-                        <span className="text-sm font-semibold text-secondary">Chile • Consultas Online & Talleres Presenciales</span>
+                        <span className="text-sm font-semibold text-secondary">{siteContent.contacto_ubicacion || 'Chile • Consultas Online & Talleres Presenciales'}</span>
                       </div>
                     </div>
                   </div>
@@ -754,7 +732,7 @@ export default function App() {
             <div className="space-y-4 md:col-span-2">
               <PsicarteLogo showText={true} textColor="light" size="md" />
               <p className="text-xs text-white/60 max-w-sm mt-3 leading-relaxed">
-                Centro integral orientado al bienestar emocional, desarrollo personal, yoga, teatro y artes escénicas. Un espacio seguro de crecimiento y expresión creativa.
+                {siteContent.footer_descripcion || 'Centro integral orientado al bienestar emocional, desarrollo personal, yoga, teatro y artes escénicas. Un espacio seguro de crecimiento y expresión creativa.'}
               </p>
             </div>
             <div>
@@ -770,15 +748,15 @@ export default function App() {
             <div>
               <h5 className="font-serif text-xs font-bold text-gold uppercase tracking-widest mb-6">Contacto & Consultas</h5>
               <ul className="space-y-4 text-xs text-white/70">
-                <li className="flex items-center gap-2.5"><Mail className="w-4 h-4 text-gold-light shrink-0" /><a href="mailto:contacto@psicarte.cl" className="hover:text-gold transition-colors">contacto@psicarte.cl</a></li>
-                <li className="flex items-center gap-2.5"><Phone className="w-4 h-4 text-gold-light shrink-0" /><a href="tel:+56961676706" className="hover:text-gold transition-colors">+56 9 6167 6706</a></li>
-                <li className="flex items-center gap-2.5"><MapPin className="w-4 h-4 text-gold-light shrink-0" /><span>Chile • Sesiones Online & Presencial</span></li>
+                <li className="flex items-center gap-2.5"><Mail className="w-4 h-4 text-gold-light shrink-0" /><a href={`mailto:${siteContent.contacto_email || 'contacto@psicarte.cl'}`} className="hover:text-gold transition-colors">{siteContent.contacto_email || 'contacto@psicarte.cl'}</a></li>
+                <li className="flex items-center gap-2.5"><Phone className="w-4 h-4 text-gold-light shrink-0" /><a href={`tel:${siteContent.contacto_telefono || '+56961676706'}`} className="hover:text-gold transition-colors">{siteContent.contacto_telefono_display || '+56 9 6167 6706'}</a></li>
+                <li className="flex items-center gap-2.5"><MapPin className="w-4 h-4 text-gold-light shrink-0" /><span>{siteContent.contacto_ubicacion || 'Chile • Sesiones Online & Presencial'}</span></li>
               </ul>
             </div>
           </div>
           <div className="border-t border-white/10 mt-16 pt-8 flex flex-col sm:flex-row justify-between items-center text-[10px] uppercase tracking-widest text-white/40">
             <p>© {new Date().getFullYear()} Centro Integral PsicArte. Todos los derechos reservados.</p>
-            <p className="mt-3 sm:mt-0">Elegancia, Psicología & Expresión Escénica</p>
+            <p className="mt-3 sm:mt-0">{siteContent.footer_lema || 'Elegancia, Psicología & Expresión Escénica'}</p>
           </div>
         </div>
       </footer>

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar as CalendarIcon, Clock, User, Sparkles, Mail, Phone, FileText, CheckCircle2, ChevronRight, AlertCircle, Award, Heart } from 'lucide-react';
 import { Professional, Service, Appointment } from '../types';
-import { SERVICES, WEEKLY_SCHEDULES, CLIENT_MOCKS } from '../data';
 
 interface BookingFormProps {
   onBookingSuccess: (appointment: Appointment) => void;
@@ -10,6 +9,7 @@ interface BookingFormProps {
   onClearPresetService?: () => void;
   existingAppointments: Appointment[];
   allProfessionals: Professional[];
+  allServices: Service[];
 }
 
 export const BookingForm: React.FC<BookingFormProps> = ({
@@ -18,6 +18,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   onClearPresetService,
   existingAppointments,
   allProfessionals,
+  allServices,
 }) => {
   const [step, setStep] = useState<number>(1);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
@@ -30,7 +31,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const [clientEmail, setClientEmail] = useState<string>('');
   const [clientPhone, setClientPhone] = useState<string>('');
   const [clientNotes, setClientNotes] = useState<string>('');
-  const [isQuickSelectOpen, setIsQuickSelectOpen] = useState<boolean>(false);
+
+  // Professional-specific schedules loaded from API
+  const [profSchedules, setProfSchedules] = useState<Record<string, string[]>>({});
 
   // Success Appointment State
   const [completedAppointment, setCompletedAppointment] = useState<Appointment | null>(null);
@@ -38,28 +41,18 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   // Set preset service if provided
   useEffect(() => {
     if (presetServiceId) {
-      const service = SERVICES.find(s => s.id === presetServiceId);
+      const service = allServices.find(s => s.id === presetServiceId);
       if (service) {
         setSelectedService(service);
-        const prof = allProfessionals.find(p => p.id === service.professionalId);
+        const profId = service.professionalId || service.professional_id;
+        const prof = allProfessionals.find(p => p.id === profId);
         if (prof) {
           setSelectedProfessional(prof);
-        } else if (service.professionalId === 'macarena') {
-          // Special case for Macarena
-          setSelectedProfessional({
-            id: 'macarena',
-            name: 'Macarena Méndez',
-            title: 'Coordinadora de Artes Escénicas',
-            experience: 'Venta de Obras y Eventos',
-            bio: 'Coordinadora encargada del área teatral y de artes escénicas de PsicArte.',
-            diplomas: [],
-            specialties: []
-          });
         }
         setStep(3); // Skip directly to date/time selection
       }
     }
-  }, [presetServiceId, allProfessionals]);
+  }, [presetServiceId, allProfessionals, allServices]);
 
   // Handle professional selection
   const handleSelectProfessional = (prof: Professional) => {
@@ -75,16 +68,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const handleSelectService = (service: Service) => {
     setSelectedService(service);
     if (!selectedProfessional) {
-      const prof = allProfessionals.find(p => p.id === service.professionalId) || {
-        id: 'macarena',
-        name: 'Macarena Méndez',
-        title: 'Coordinadora de Artes Escénicas',
-        experience: 'Venta de Obras y Eventos',
-        bio: 'Coordinadora encargada del área teatral y de artes escénicas de PsicArte.',
-        diplomas: [],
-        specialties: []
-      } as Professional;
-      setSelectedProfessional(prof);
+      const profId = service.professionalId || service.professional_id;
+      const prof = allProfessionals.find(p => p.id === profId);
+      if (prof) setSelectedProfessional(prof);
     }
     setStep(3);
   };
@@ -97,20 +83,27 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     return days[date.getDay()];
   };
 
-  // Available days for scheduling (Martes, Jueves, Viernes)
+  // Load professional schedules when a professional is selected
+  useEffect(() => {
+    if (selectedProfessional) {
+      fetch(`/api/schedules/${selectedProfessional.id}`)
+        .then(r => r.json())
+        .then((data: Record<string, string[]>) => setProfSchedules(data))
+        .catch(console.error);
+    }
+  }, [selectedProfessional]);
+
+  // Available days for scheduling (dynamic from API)
   const isDateSelectable = (dateString: string): boolean => {
     const dayName = getDayNameFromDate(dateString);
-    return ['Martes', 'Jueves', 'Viernes'].includes(dayName);
+    return Object.keys(profSchedules).includes(dayName);
   };
 
   // Get active time blocks for chosen day
   const getAvailableTimeBlocks = () => {
     if (!selectedDate) return [];
     const dayName = getDayNameFromDate(selectedDate);
-    if (dayName === 'Martes') return WEEKLY_SCHEDULES.Martes;
-    if (dayName === 'Jueves') return WEEKLY_SCHEDULES.Jueves;
-    if (dayName === 'Viernes') return WEEKLY_SCHEDULES.Viernes;
-    return [];
+    return profSchedules[dayName] || [];
   };
 
   // Check if a specific date & time slot is already booked for this professional
@@ -124,17 +117,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     );
   };
 
-  // Fast client autocomplete from list of mock clients
-  const handleQuickSelectClient = (name: string) => {
-    setClientName(name);
-    const cleanName = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '.');
-    setClientEmail(`${cleanName}@gmail.com`);
-    
-    const randomDigits = Math.floor(1000000 + Math.random() * 9000000);
-    setClientPhone(`+569${randomDigits}`);
-    
-    setIsQuickSelectOpen(false);
-  };
+
 
   // Reset Booking Form
   const handleReset = () => {
@@ -281,40 +264,6 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   </button>
                 </div>
               ))}
-
-              {/* Special row for Macarena (Arts and Scenic coordination) */}
-              <div
-                onClick={() => handleSelectProfessional({
-                  id: 'macarena',
-                  name: 'Macarena Méndez',
-                  title: 'Coordinadora de Artes Escénicas',
-                  experience: 'Venta de Obras y Eventos',
-                  bio: 'Coordinadora encargada del área teatral y de artes escénicas de PsicArte.',
-                  diplomas: [],
-                  specialties: []
-                })}
-                className="group cursor-pointer rounded-sm border border-secondary/10 bg-white hover:border-gold/50 hover:shadow-md p-6 transition-all duration-300 flex flex-col justify-between"
-              >
-                <div className="space-y-4">
-                  <div className="w-14 h-14 rounded-sm bg-secondary text-white font-serif text-lg font-medium flex items-center justify-center border border-gold group-hover:scale-105 transition-transform">
-                    MM
-                  </div>
-                  <div>
-                    <h4 className="font-serif text-lg font-medium text-secondary group-hover:text-primary transition-colors">
-                      Macarena Méndez
-                    </h4>
-                    <p className="text-[9px] uppercase tracking-wider font-bold text-gold-dark mt-1.5">Gestión Cultural y Obras</p>
-                    <p className="text-xs text-text-muted italic mt-0.5">Coordinadora del Centro</p>
-                  </div>
-                  <p className="text-xs text-text-muted line-clamp-4 leading-relaxed pt-2">
-                    Coordina la venta, exhibición y adaptación de obras teatrales, espectáculos escénicos y eventos para organizaciones o particulares.
-                  </p>
-                </div>
-                
-                <button className="w-full text-center py-3 px-4 rounded-sm text-[10px] uppercase tracking-widest font-bold text-white bg-secondary group-hover:bg-primary transition-colors mt-8 border border-secondary/10 shadow-none cursor-pointer">
-                  Ver Obras y Eventos
-                </button>
-              </div>
             </div>
           </motion.div>
         )}
@@ -347,7 +296,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             </p>
 
             <div className="grid md:grid-cols-2 gap-4">
-              {SERVICES.filter(s => s.professionalId === selectedProfessional.id).map((service) => (
+              {allServices.filter(s => (s.professionalId || s.professional_id) === selectedProfessional.id).map((service) => (
                 <div
                   key={service.id}
                   onClick={() => handleSelectService(service)}
@@ -463,7 +412,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   )}
                 </div>
                 <p className="text-[10px] text-text-muted italic">
-                  * Atendemos exclusivamente los días Martes, Jueves y Viernes.
+                  * Atendemos en los días con disponibilidad del profesional seleccionado.
                 </p>
               </div>
 
@@ -569,32 +518,6 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             <form onSubmit={handleSubmitBooking} className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <h4 className="font-serif text-lg font-medium text-secondary">Información del Solicitante</h4>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsQuickSelectOpen(!isQuickSelectOpen)}
-                    className="text-[9px] uppercase tracking-widest bg-gold/5 text-gold-dark hover:bg-gold/10 font-bold px-3 py-2 rounded-sm border border-gold/15 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <User className="w-3.5 h-3.5 shrink-0 text-gold" />
-                    Autocompletar Cliente (Mock)
-                  </button>
-                  
-                  {isQuickSelectOpen && (
-                    <div className="absolute right-0 mt-1 w-64 bg-white border border-secondary/10 rounded-sm shadow-lg z-20 max-h-48 overflow-y-auto p-1">
-                      <p className="text-[9px] text-text-muted font-bold px-2 py-1.5 uppercase border-b border-secondary/10">Selecciona para pruebas:</p>
-                      {CLIENT_MOCKS.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => handleQuickSelectClient(c.name)}
-                          className="w-full text-left text-xs px-3 py-1.5 rounded-sm hover:bg-[#FAF8F5] text-secondary truncate font-medium block cursor-pointer"
-                        >
-                          {c.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
 
               <div className="grid md:grid-cols-3 gap-6">

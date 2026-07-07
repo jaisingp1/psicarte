@@ -43,6 +43,11 @@ src/
 - No commitear archivos generados, `.env`, `node_modules/`, `*.db`
 - Usar `enlist` cada vez que se crea o modifica un archivo
 
+## Pruebas
+
+- No dejar procesos corriendo en segundo plano al hacer pruebas
+- Limpiar siempre los procesos (node, servidores) al terminar una prueba
+
 ---
 
 # Identidad Visual — Centro Integral Psicarte

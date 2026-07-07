@@ -5,7 +5,6 @@ import {
   Trash2, Filter, Sparkles, Sliders, CheckCircle2, RefreshCw, X, ShieldAlert 
 } from 'lucide-react';
 import { Appointment, Professional } from '../types';
-import { Appointment, Professional } from '../types';
 
 interface TherapistDashboardProps {
   appointments: Appointment[];
@@ -87,16 +86,11 @@ export const TherapistDashboard: React.FC<TherapistDashboardProps> = ({
   // Calculate stats based on current therapist filter
   const activeApps = appointments.filter(app => app.status === 'Confirmado' && (selectedTherapistId === 'all' || app.professionalId === selectedTherapistId));
   const totalRevenue = activeApps.reduce((acc, app) => acc + app.servicePrice, 0);
-  const totalMinutes = activeApps.reduce((acc, app) => {
-    const service = SERVICES.find(s => s.id === app.serviceId);
-    return acc + (service?.duration || 50);
-  }, 0);
+  const totalMinutes = activeApps.length * 50; // default average duration
 
-  // Get distinct client list from both appointments and CLIENT_MOCKS
+  // Get distinct client list from appointments
   const getCombinedClients = () => {
     const clientsMap = new Map<string, string>();
-    
-    CLIENT_MOCKS.forEach(c => clientsMap.set(c.name, `${c.name.toLowerCase().replace(/\s+/g, '.')}@gmail.com`));
     
     appointments.forEach(app => {
       clientsMap.set(app.clientName, app.clientEmail);

@@ -929,18 +929,9 @@ function timeToMinutes(timeStr) {
     return hours * 60 + minutes;
 }
 
-// Process Payment and Book in SQLite Database
+// Process Payment and Book in SQLite Database via Khipu
 async function processPayment() {
-    const cardNum = document.getElementById("card-number").value;
-    const cardExp = document.getElementById("card-exp").value;
-    const cardCvv = document.getElementById("card-cvv").value;
-    
-    if (!cardNum || !cardExp || !cardCvv) {
-        showToast("Debe rellenar los datos de pago simulado", "error");
-        return;
-    }
-    
-    showToast("Conectando con Transbank / PsicArte Pay...", "info");
+    showToast("Creando solicitud de agendamiento...", "info");
     
     const newBooking = {
         id: "bk-" + Date.now(),
@@ -961,51 +952,153 @@ async function processPayment() {
         clientPhone: bookingState.client.phone
     };
 
-    setTimeout(async () => {
-        try {
-            const response = await fetch('/api/bookings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newBooking)
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok) {
-                showToast("¡Pago procesado con éxito!", "success");
-                setTimeout(() => {
-                    showToast(`Simulador: Email enviado a ${bookingState.client.email} con los detalles de la reserva.`, "info");
-                    showToast(`Simulador: Email enviado al profesional ${bookingState.provider.email}.`, "info");
-                }, 1000);
-                
-                // Reset Wizard
-                bookingState = {
-                    step: 1,
-                    provider: null,
-                    service: null,
-                    room: null,
-                    date: null,
-                    timeSlot: null,
-                    startTime: null,
-                    endTime: null,
-                    client: { name: "", rut: "", email: "", phone: "" }
-                };
-                
-                await loadAllData();
-                initBookingWidget();
-                goToStep(1);
-                
-                if (state.currentUser) {
-                    renderDashboardPanes();
+    try {
+        // Step 1: Create the Pending_Payment booking in backend
+        const response = await fetch('/api/bookings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newBooking)
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            showToast(result.error || "Error al registrar la reserva", "error");
+            return;
+        }
+
+        const bookingId = result.id;
+        
+        // Step 2: Create Khipu payment intent
+        showToast("Generando cobro seguro con Khipu...", "info");
+        const khipuResponse = await fetch('/api/khipu/create-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId })
+        });
+        
+        const khipuResult = await khipuResponse.json();
+        if (!khipuResponse.ok) {
+            showToast(khipuResult.error || "Error al iniciar pasarela Khipu", "error");
+            return;
+        }
+
+        const { paymentId } = khipuResult;
+        
+        // Step 2.5: Handle Khipu Offline Simulator fallback
+        if (khipuResult.isOfflineMock) {
+            showToast("Simulando portal Khipu Offline...", "info");
+            setTimeout(async () => {
+                try {
+                    // Send mock payment notification to local webhook
+                    const notifyResponse = await fetch('/api/khipu/notify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ notification_token: paymentId })
+                    });
+                    
+                    if (notifyResponse.ok) {
+                        showToast("Pago simulado procesado localmente.", "success");
+                        await pollPaymentStatus(bookingId);
+                    } else {
+                        showToast("Error al simular la notificación de pago local.", "error");
+                    }
+                } catch (errMock) {
+                    console.error("Local notify error:", errMock);
+                    showToast("Error de conexión al simular la notificación local.", "error");
                 }
-            } else {
-                showToast(result.error || "Error al procesar la reserva", "error");
+            }, 1500);
+            return;
+        }
+        
+        // Step 3: Launch Khipu Inside Web SDK modal
+        if (typeof Khipu === 'undefined') {
+            showToast("Error: SDK de Khipu no cargado. Reintentando...", "error");
+            window.location.reload();
+            return;
+        }
+
+        const khipu = new Khipu();
+        khipu.startOperation(paymentId, (res) => {
+            handleKhipuResult(res, bookingId);
+        }, {
+            mountElement: document.getElementById('khipu-web-root'),
+            modal: true,
+            modalOptions: { maxWidth: 450, maxHeight: 860 },
+            options: {
+                style: { primaryColor: '#bfa15f', fontFamily: 'Outfit' },
+                skipExitPage: false
+            }
+        });
+        
+    } catch (e) {
+        console.error("Khipu flow error:", e);
+        showToast("Error de conexión al procesar el pago.", "error");
+    }
+}
+
+async function handleKhipuResult(result, bookingId) {
+    console.log("Khipu callback result:", result);
+    if (result.result === 'OK') {
+        showToast("Pago registrado por Khipu. Confirmando reserva...", "info");
+        await pollPaymentStatus(bookingId);
+    } else if (result.result === 'ERROR') {
+        showToast(result.exitTitle || 'Error en el proceso de pago con Khipu.', "error");
+    } else if (result.result === 'WARNING') {
+        showToast(result.exitTitle || 'El pago está pendiente de confirmación.', "warning");
+        await pollPaymentStatus(bookingId);
+    }
+}
+
+async function pollPaymentStatus(bookingId, maxAttempts = 15, intervalMs = 2000) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const response = await fetch(`/api/bookings/${bookingId}/payment-status`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'Paid') {
+                    showToast("¡Pago confirmado y cita agendada exitosamente!", "success");
+                    
+                    // Reset Wizard
+                    bookingState = {
+                        step: 1, provider: null, service: null, room: null,
+                        date: null, timeSlot: null, startTime: null, endTime: null,
+                        client: { name: "", rut: "", email: "", phone: "" }
+                    };
+                    
+                    await loadAllData();
+                    initBookingWidget();
+                    goToStep(1);
+                    
+                    if (state.currentUser) {
+                        renderDashboardPanes();
+                    }
+                    return true;
+                } else if (data.status === 'Payment_Conflict') {
+                    showToast("Conflicto de horario detectado. El slot ya fue tomado por otro usuario. Por favor contacta al administrador.", "error");
+                    return false;
+                }
             }
         } catch (e) {
-            console.error("Booking error:", e);
-            showToast("Error de conexión al guardar la cita.", "error");
+            console.error("Error polling payment status:", e);
         }
-    }, 1500);
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+    
+    // Timeout
+    showToast("Tu pago está siendo procesado por Khipu. Te enviaremos un correo de confirmación tan pronto sea validado.", "info");
+    
+    // Reset Wizard anyway
+    bookingState = {
+        step: 1, provider: null, service: null, room: null,
+        date: null, timeSlot: null, startTime: null, endTime: null,
+        client: { name: "", rut: "", email: "", phone: "" }
+    };
+    await loadAllData();
+    initBookingWidget();
+    goToStep(1);
+    
+    return false;
 }
 
 // ----------------------------------------------------
@@ -1221,7 +1314,7 @@ function renderDashboardPanes() {
         } else {
             bookingsList.innerHTML = "";
             clientBookings.forEach(bk => {
-                const isPaidBadge = bk.status === "Paid" ? '<span class="badge badge-paid">Pagado</span>' : '<span class="badge badge-pending">Pendiente</span>';
+                const isPaidBadge = bk.status === "Paid" ? '<span class="badge badge-paid">Pagado</span>' : (bk.status === "Pending_Payment" ? '<span class="badge badge-warning">Procesando Pago</span>' : '<span class="badge badge-pending">Pendiente</span>');
                 const isCancelled = bk.status === "Cancelled";
                 
                 let cancelBtn = "";
@@ -1285,8 +1378,8 @@ function renderDashboardPanes() {
                         <td>${bk.serviceName}</td>
                         <td>${bk.roomName}</td>
                         <td>
-                            <span class="badge ${bk.status === 'Paid' ? 'badge-paid' : bk.status === 'Cancelled' ? 'badge-cancelled' : 'badge-pending'}">
-                                ${bk.status === 'Paid' ? 'Pagado' : bk.status === 'Cancelled' ? 'Cancelado' : 'Pendiente'}
+                            <span class="badge ${bk.status === 'Paid' ? 'badge-paid' : bk.status === 'Cancelled' ? 'badge-cancelled' : bk.status === 'Pending_Payment' ? 'badge-warning' : 'badge-pending'}">
+                                ${bk.status === 'Paid' ? 'Pagado' : bk.status === 'Cancelled' ? 'Cancelado' : bk.status === 'Pending_Payment' ? 'Procesando Pago' : 'Pendiente'}
                             </span>
                         </td>
                     </tr>
@@ -2543,7 +2636,7 @@ function renderAdminBookings() {
         const isCancelled = bk.status === 'Cancelled';
         const statusBadge = isCancelled 
             ? '<span class="badge badge-cancelled">Cancelada</span>' 
-            : bk.status === 'Paid' ? '<span class="badge badge-paid">Pagada</span>' : '<span class="badge badge-pending">Pendiente</span>';
+            : bk.status === 'Paid' ? '<span class="badge badge-paid">Pagada</span>' : (bk.status === 'Pending_Payment' ? '<span class="badge badge-warning">Procesando Pago</span>' : '<span class="badge badge-pending">Pendiente</span>');
         
         let actionBtns = '';
         if (isCancelled) {
@@ -2868,7 +2961,8 @@ processPayment = async function() {
             clientEmail: bookingState.client.email,
             clientName: bookingState.client.name,
             clientRut: bookingState.client.rut,
-            clientPhone: bookingState.client.phone
+            clientPhone: bookingState.client.phone,
+            adminMode: true
         };
         
         try {

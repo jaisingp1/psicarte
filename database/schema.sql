@@ -65,7 +65,10 @@ CREATE TABLE IF NOT EXISTS bookings (
     clientRut TEXT,
     clientPhone TEXT,
     status TEXT,
-    rescheduleCount INTEGER DEFAULT 0
+    rescheduleCount INTEGER DEFAULT 0,
+    khipuPaymentId TEXT,
+    khipuPaymentUrl TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 7. Sickness Blocks table

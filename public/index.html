@@ -6,8 +6,9 @@
     <title>Centro Integral PsicArte - Bienestar, Psicología y Arte</title>
     <meta name="description" content="Centro integral de psicología, talleres, capacitaciones y artes escénicas. Acompañamos procesos de salud mental, desarrollo y expresión.">
     <link rel="stylesheet" href="css/style.css">
-    <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Khipu Inside Web SDK -->
+    <script src="https://js.khipu.com/v1/kws.js"></script>
 </head>
 <body>
 
@@ -330,29 +331,19 @@
                             </div>
                         </div>
 
-                        <!-- Mock Payment Form -->
-                        <div>
-                            <h4>Procesar Pago (Simulador)</h4>
-                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 15px;">
-                                Sistema integrado con pasarela de pago PsicArte Pay. Introduce datos de prueba.
+                        <!-- Khipu Payment Panel -->
+                        <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 25px; border-radius: var(--radius-md); text-align: center; margin-top: 10px;">
+                            <div style="margin-bottom: 15px;">
+                                <i class="fa-solid fa-building-columns" style="font-size: 2.5rem; color: var(--color-primary); display: block; margin-bottom: 10px;"></i>
+                                <span style="font-weight: 700; font-size: 1.1rem; letter-spacing: 0.5px; color: var(--text-primary);">khipu</span>
+                                <span style="font-size: 0.8rem; background: var(--color-primary); color: #fff; padding: 2px 6px; border-radius: var(--radius-sm); margin-left: 5px; font-weight: 600; vertical-align: middle;">Pago Seguro</span>
+                            </div>
+                            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.4;">
+                                Paga al instante utilizando tu banca electrónica (BancoEstado, Santander, de Chile, BCI, etc.). La transferencia se procesa y confirma de forma 100% automatizada.
                             </p>
-                            
-                            <form id="payment-form">
-                                <div class="form-group">
-                                    <label for="card-number">Número de Tarjeta:</label>
-                                    <input type="text" id="card-number" class="form-control" placeholder="4111 2222 3333 4444" required>
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="card-exp">Vencimiento:</label>
-                                        <input type="text" id="card-exp" class="form-control" placeholder="MM/AA" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="card-cvv">CVV:</label>
-                                        <input type="password" id="card-cvv" class="form-control" placeholder="123" required>
-                                    </div>
-                                </div>
-                            </form>
+                            <div style="display: flex; justify-content: center; align-items: center; gap: 8px; color: var(--color-success); font-size: 0.85rem; font-weight: 500;">
+                                <i class="fa-solid fa-shield-halved"></i> Transacción protegida mediante SSL/TLS
+                            </div>
                         </div>
                     </div>
 
@@ -497,6 +488,9 @@
 
     <!-- Toast Container for Notifications -->
     <div id="toast-container"></div>
+
+    <!-- Khipu Inside Web Root Anchor -->
+    <div id="khipu-web-root"></div>
 
     <script src="js/app.js"></script>
 </body>

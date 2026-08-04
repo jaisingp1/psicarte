@@ -1,6 +1,8 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const db = require('./database');
 
 const app = express();
@@ -17,6 +19,78 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 function timeToMinutes(timeStr) {
     const [hours, minutes] = timeStr.split(":").map(Number);
     return hours * 60 + minutes;
+}
+
+// ----------------------------------------------------
+// KHIPU PAYMENT GATEWAY HELPERS
+// ----------------------------------------------------
+function percentEncode(str) {
+    return encodeURIComponent(str)
+        .replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+function generateKhipuSignature(method, url, params, secret) {
+    const sortedKeys = Object.keys(params).sort();
+    const paramPairs = sortedKeys.map(key => {
+        const encodedKey = percentEncode(key);
+        const encodedValue = percentEncode(String(params[key]));
+        return `${encodedKey}=${encodedValue}`;
+    });
+    const parameterString = paramPairs.join('&');
+    const baseString = [
+        method.toUpperCase(),
+        percentEncode(url),
+        percentEncode(parameterString)
+    ].join('&');
+    return crypto
+        .createHmac('sha256', secret)
+        .update(baseString)
+        .digest('hex');
+}
+
+async function callKhipuApi(method, path, params) {
+    if (params && params.notification_token && String(params.notification_token).startsWith('mock-token-')) {
+        return {
+            status: 'done',
+            transaction_id: String(params.notification_token).replace('mock-token-', '')
+        };
+    }
+
+    const receiverId = process.env.KHIPU_RECEIVER_ID;
+    const secret = process.env.KHIPU_SECRET;
+    const sandbox = process.env.KHIPU_SANDBOX === 'true';
+    const apiBase = sandbox ? 'https://sandbox.khipu.com/api/2.0' : 'https://khipu.com/api/2.0';
+    
+    const url = `${apiBase}${path}`;
+    const signature = generateKhipuSignature(method, url, params, secret);
+    
+    const headers = {
+        'Authorization': `Khipu ${receiverId}:${signature}`,
+        'Accept': 'application/json'
+    };
+    
+    let fetchUrl = url;
+    let options = { method, headers };
+    
+    if (method.toUpperCase() === 'GET') {
+        const query = Object.keys(params)
+            .map(key => `${percentEncode(key)}=${percentEncode(String(params[key]))}`)
+            .join('&');
+        fetchUrl = `${url}?${query}`;
+    } else {
+        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        const body = Object.keys(params)
+            .map(key => `${percentEncode(key)}=${percentEncode(String(params[key]))}`)
+            .join('&');
+        options.body = body;
+    }
+    
+    const response = await fetch(fetchUrl, options);
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Khipu API error: ${response.status} - ${errorText}`);
+    }
+    return await response.json();
 }
 
 // ----------------------------------------------------
@@ -267,14 +341,17 @@ app.post('/api/bookings', (req, res) => {
                     return res.status(400).json({ error: 'La sala seleccionada se encuentra ocupada por otro profesional en este horario.' });
                 }
 
+                const initialStatus = booking.adminMode ? 'Paid' : 'Pending_Payment';
+
                 // Proceed with insertion
                 db.run(`INSERT INTO bookings (
-                    id, providerId, serviceId, serviceName, price, duration, roomId, roomName, date, timeSlot, startTime, endTime, clientEmail, clientName, clientRut, clientPhone, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    id, providerId, serviceId, serviceName, price, duration, roomId, roomName, date, timeSlot, startTime, endTime, clientEmail, clientName, clientRut, clientPhone, status, khipuPaymentId, khipuPaymentUrl
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     booking.id, providerId, booking.serviceId, booking.serviceName, booking.price, booking.duration,
                     roomId, booking.roomName, date, timeSlot, startTime, endTime,
-                    booking.clientEmail, booking.clientName, booking.clientRut, booking.clientPhone, 'Paid'
+                    booking.clientEmail, booking.clientName, booking.clientRut, booking.clientPhone, 
+                    initialStatus, null, null
                 ],
                 function(err4) {
                     if (err4) return res.status(500).json({ error: err4.message });
@@ -595,8 +672,168 @@ app.post('/api/config', (req, res) => {
     });
 });
 
+// ----------------------------------------------------
+// REST API: KHIPU PAYMENTS INTEGRATION
+// ----------------------------------------------------
+app.post('/api/khipu/create-payment', (req, res) => {
+    const { bookingId } = req.body;
+    if (!bookingId) {
+        return res.status(400).json({ error: 'Falta bookingId.' });
+    }
+    
+    db.get("SELECT * FROM bookings WHERE id = ?", [bookingId], async (err, booking) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!booking) return res.status(404).json({ error: 'Reserva no encontrada.' });
+        if (booking.status !== 'Pending_Payment') {
+            return res.status(400).json({ error: 'La reserva ya fue pagada o cancelada.' });
+        }
+        
+        try {
+            const baseUrl = process.env.KHIPU_BASE_URL || `http://localhost:${PORT}`;
+            const params = {
+                subject: `Reserva PsicArte: ${booking.serviceName}`,
+                currency: 'CLP',
+                amount: booking.price,
+                transaction_id: booking.id,
+                notify_url: `${baseUrl}/api/khipu/notify`,
+                payer_email: booking.clientEmail,
+                payer_name: booking.clientName
+            };
+            
+            const khipuResponse = await callKhipuApi('POST', '/payments', params);
+            
+            // Save payment ID and URL
+            db.run("UPDATE bookings SET khipuPaymentId = ?, khipuPaymentUrl = ? WHERE id = ?",
+                [khipuResponse.payment_id, khipuResponse.payment_url, booking.id],
+                (errUpdate) => {
+                    if (errUpdate) return res.status(500).json({ error: errUpdate.message });
+                    res.json({
+                        success: true,
+                        paymentId: khipuResponse.payment_id,
+                        paymentUrl: khipuResponse.payment_url
+                    });
+                }
+            );
+        } catch (error) {
+            console.error('Error creating Khipu payment:', error.message || error);
+            
+            if (process.env.KHIPU_SANDBOX === 'true') {
+                console.warn(`WARNING: Khipu Sandbox is unreachable (${error.message || 'fetch failed'}). Activating Offline Simulator fallback.`);
+                const mockPaymentId = `mock-token-${booking.id}`;
+                const mockPaymentUrl = `#mock-payment-${booking.id}`;
+                
+                db.run("UPDATE bookings SET khipuPaymentId = ?, khipuPaymentUrl = ? WHERE id = ?",
+                    [mockPaymentId, mockPaymentUrl, booking.id],
+                    (errUpdate) => {
+                        if (errUpdate) return res.status(500).json({ error: errUpdate.message });
+                        return res.json({
+                            success: true,
+                            paymentId: mockPaymentId,
+                            paymentUrl: mockPaymentUrl,
+                            isOfflineMock: true
+                        });
+                    }
+                );
+            } else {
+                res.status(500).json({ error: 'Error al comunicarse con la pasarela de pagos Khipu.' });
+            }
+        }
+    });
+});
+
+app.post('/api/khipu/notify', (req, res) => {
+    const { notification_token } = req.body;
+    if (!notification_token) {
+        return res.status(400).send('Falta notification_token.');
+    }
+    
+    // Fetch payment details from Khipu
+    callKhipuApi('GET', `/payments`, { notification_token })
+        .then(payment => {
+            if (payment.status === 'done') {
+                const bookingId = payment.transaction_id;
+                
+                db.get("SELECT * FROM bookings WHERE id = ?", [bookingId], (errBk, booking) => {
+                    if (errBk || !booking) {
+                        console.error('Webhook: Booking not found:', bookingId);
+                        return res.status(200).send('Booking not found');
+                    }
+                    
+                    if (booking.status === 'Paid') {
+                        return res.status(200).send('Already processed');
+                    }
+                    
+                    // Re-run conflict checks before marking as Paid
+                    const slotStartMin = timeToMinutes(booking.startTime);
+                    const slotEndMin = timeToMinutes(booking.endTime);
+                    
+                    db.all("SELECT * FROM bookings WHERE providerId = ? AND date = ? AND status = 'Paid'", [booking.providerId, booking.date], (err2, books) => {
+                        const hasOverlappingBooking = !err2 && books.some(bk => {
+                            const bkStart = timeToMinutes(bk.startTime);
+                            const bkEnd = timeToMinutes(bk.endTime);
+                            return (slotStartMin < bkEnd && bkStart < slotEndMin);
+                        });
+                        
+                        db.all("SELECT * FROM bookings WHERE roomId = ? AND date = ? AND status = 'Paid'", [booking.roomId, booking.date], (err3, roomBooks) => {
+                            const hasRoomConflict = !err3 && roomBooks.some(bk => {
+                                const bkStart = timeToMinutes(bk.startTime);
+                                const bkEnd = timeToMinutes(bk.endTime);
+                                return (slotStartMin < bkEnd && bkStart < slotEndMin);
+                            });
+                            
+                            let finalStatus = 'Paid';
+                            if (hasOverlappingBooking || hasRoomConflict) {
+                                console.error(`Webhook conflict detected for booking ${bookingId}. Marking as Payment_Conflict.`);
+                                finalStatus = 'Payment_Conflict';
+                            }
+                            
+                            db.run("UPDATE bookings SET status = ? WHERE id = ?", [finalStatus, bookingId], (errUpdate) => {
+                                if (errUpdate) {
+                                    console.error('Webhook: failed to update booking status:', errUpdate.message);
+                                } else {
+                                    console.log(`Webhook: booking ${bookingId} successfully updated to ${finalStatus}`);
+                                }
+                            });
+                        });
+                    });
+                });
+            }
+            res.status(200).send('Notification received');
+        })
+        .catch(error => {
+            console.error('Webhook: Khipu verification failed:', error);
+            res.status(500).send('Verification failed');
+        });
+});
+
+app.get('/api/bookings/:id/payment-status', (req, res) => {
+    db.get("SELECT status FROM bookings WHERE id = ?", [req.params.id], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'Reserva no encontrada.' });
+        res.json({ status: row.status });
+    });
+});
+
+// ----------------------------------------------------
+// CLEANUP SCHEDULER (Abandoned Pending Payments)
+// ----------------------------------------------------
+function cleanupPendingPayments() {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    db.run("DELETE FROM bookings WHERE status = 'Pending_Payment' AND created_at < ?", [oneHourAgo], function(err) {
+        if (err) {
+            console.error('Cleanup error:', err.message);
+        } else if (this.changes > 0) {
+            console.log(`Cleanup: Deleted ${this.changes} abandoned Pending_Payment booking(s).`);
+        }
+    });
+}
+
 // Start Server
 app.listen(PORT, () => {
     console.log(`PsicArte Server is running on port ${PORT}`);
     console.log(`Frontend served locally at: http://localhost:${PORT}/index.html`);
+    
+    // Start cleanup scheduler
+    cleanupPendingPayments();
+    setInterval(cleanupPendingPayments, 30 * 60 * 1000);
 });

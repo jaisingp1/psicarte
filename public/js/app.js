@@ -367,11 +367,16 @@ function checkPopups() {
     const pBody = document.getElementById("popup-body");
     
     if (state.popupConfig.active && popup && pTitle && pBody) {
-        pTitle.innerText = state.popupConfig.title;
-        pBody.innerText = state.popupConfig.text;
-        setTimeout(() => {
-            popup.classList.add("active");
-        }, 1000);
+        const currentPopupContent = `${state.popupConfig.title}|${state.popupConfig.text}`;
+        const dismissedPopup = sessionStorage.getItem("dismissed_announcement");
+        
+        if (dismissedPopup !== currentPopupContent) {
+            pTitle.innerText = state.popupConfig.title;
+            pBody.innerText = state.popupConfig.text;
+            setTimeout(() => {
+                popup.classList.add("active");
+            }, 1000);
+        }
     }
     
     const banner = document.getElementById("announcement-banner");
@@ -386,7 +391,11 @@ function checkPopups() {
 
 function closePopup() {
     const popup = document.getElementById("announcement-popup");
-    if (popup) popup.classList.remove("active");
+    if (popup) {
+        popup.classList.remove("active");
+        const currentPopupContent = `${state.popupConfig.title}|${state.popupConfig.text}`;
+        sessionStorage.setItem("dismissed_announcement", currentPopupContent);
+    }
 }
 
 function closeBanner() {
@@ -1542,6 +1551,9 @@ function renderDashboardPanes() {
         if (whatsappActive) whatsappActive.checked = state.whatsappConfig.enabled;
         if (whatsappNumber) whatsappNumber.value = state.whatsappConfig.number;
         
+        const maxReschedulesInput = document.getElementById("max-reschedules-input");
+        if (maxReschedulesInput) maxReschedulesInput.value = state.config?.max_reschedules || '1';
+        
         renderAdminBookings();
         renderAdminClients();
     }
@@ -1887,6 +1899,27 @@ async function saveWhatsAppConfig(e) {
             showToast("Configuración de WhatsApp guardada.", "success");
             await loadAllData();
             renderWhatsAppButton();
+        }
+    } catch (e) {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+async function saveMaxReschedulesConfig(e) {
+    e.preventDefault();
+    const payload = {
+        max_reschedules: document.getElementById('max-reschedules-input').value
+    };
+    
+    try {
+        const res = await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            showToast("Límite de reagendamientos actualizado.", "success");
+            await loadAllData();
         }
     } catch (e) {
         showToast("Error de conexión.", "error");

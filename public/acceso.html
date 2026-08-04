@@ -421,6 +421,17 @@
                                     <button type="submit" class="btn-primary" style="width:100%;">Actualizar WhatsApp</button>
                                 </form>
                             </div>
+                            <div class="card" style="box-shadow: none;">
+                                <h4>Reagendamientos</h4>
+                                <form id="admin-reschedules-form" onsubmit="saveMaxReschedulesConfig(event)" style="margin-top: 15px;">
+                                    <div class="form-group">
+                                        <label for="max-reschedules-input">Máximo de reagendamientos por reserva:</label>
+                                        <input type="number" id="max-reschedules-input" class="form-control" min="0" max="10" required>
+                                        <small style="color: var(--text-secondary);">Valor global por defecto si el servicio no define uno propio.</small>
+                                    </div>
+                                    <button type="submit" class="btn-primary" style="width:100%;">Actualizar Límite</button>
+                                </form>
+                            </div>
                         </div>
                     </div>
 

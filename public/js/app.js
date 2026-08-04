@@ -607,6 +607,94 @@ function goToStep(stepNum) {
     bookingState.step = stepNum;
 }
 
+// checkDateAvailability helper to verify if a date has any available slots for a provider & service type
+function checkDateAvailability(dateStr, providerId, serviceType, bookingIdToIgnore = null) {
+    const provider = state.providers.find(p => p.id === providerId);
+    if (!provider) return { available: false, reason: "Profesional no encontrado" };
+
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const dateObj = new Date(year, month - 1, day);
+    const dayOfWeekIdx = dateObj.getDay();
+
+    const dayShifts = provider.blocks[dayOfWeekIdx] || [];
+    if (dayShifts.length === 0) {
+        return { available: false, reason: "El profesional no atiende este día" };
+    }
+
+    const matchingRooms = state.rooms.filter(r => r.type === serviceType);
+    if (matchingRooms.length === 0) {
+        return { available: false, reason: "No hay salas de este tipo disponibles" };
+    }
+
+    let hasAtLeastOneSlot = false;
+
+    for (const slot of dayShifts) {
+        const [slotStart, slotEnd] = slot.split("-");
+        const slotStartMin = timeToMinutes(slotStart);
+        const slotEndMin = timeToMinutes(slotEnd);
+
+        // 1. Licencia/Enfermedad
+        const sicknessBlock = state.sicknessBlocks.find(sb => 
+            sb.providerId === providerId && 
+            sb.date === dateStr && 
+            (sb.timeSlot === "all" || sb.timeSlot === slot)
+        );
+        if (sicknessBlock) continue;
+
+        // 2. Traslape de reserva del profesional
+        const overlappingBooking = state.bookings.find(bk => {
+            if (bk.providerId !== providerId || bk.date !== dateStr || bk.status === "Cancelled") {
+                return false;
+            }
+            if (bookingIdToIgnore && bk.id === bookingIdToIgnore) {
+                return false;
+            }
+            const bkStart = timeToMinutes(bk.startTime);
+            const bkEnd = timeToMinutes(bk.endTime);
+            return (slotStartMin < bkEnd && bkStart < slotEndMin);
+        });
+        if (overlappingBooking) continue;
+
+        // 3. Buscar al menos una sala disponible
+        let roomAvailable = false;
+        for (const room of matchingRooms) {
+            const roomOpenMin = timeToMinutes(room.openTime);
+            const roomCloseMin = timeToMinutes(room.closeTime);
+
+            if (slotStartMin < roomOpenMin || slotEndMin > roomCloseMin) {
+                continue;
+            }
+
+            const roomConflict = state.bookings.find(bk => {
+                if (bk.roomId !== room.id || bk.date !== dateStr || bk.status === "Cancelled") {
+                    return false;
+                }
+                if (bookingIdToIgnore && bk.id === bookingIdToIgnore) {
+                    return false;
+                }
+                const bkStart = timeToMinutes(bk.startTime);
+                const bkEnd = timeToMinutes(bk.endTime);
+                return (slotStartMin < bkEnd && bkStart < slotEndMin);
+            });
+            if (roomConflict) continue;
+
+            roomAvailable = true;
+            break;
+        }
+
+        if (roomAvailable) {
+            hasAtLeastOneSlot = true;
+            break;
+        }
+    }
+
+    if (hasAtLeastOneSlot) {
+        return { available: true, reason: "" };
+    } else {
+        return { available: false, reason: "No hay bloques horarios disponibles para este día" };
+    }
+}
+
 // Calendar Gen
 function renderCalendar() {
     const calendarMonthYear = document.getElementById("calendar-month-year");
@@ -633,20 +721,33 @@ function renderCalendar() {
     for (let day = 1; day <= daysInMonth; day++) {
         const cellDate = new Date(currentYear, currentMonth, day);
         let cellClass = "calendar-cell";
+        let tooltipAttr = "";
         
         const monthStr = String(currentMonth + 1).padStart(2, '0');
         const dayStr = String(day).padStart(2, '0');
         const dateStr = `${currentYear}-${monthStr}-${dayStr}`;
         
-        if (cellDate < today && cellDate.toDateString() !== today.toDateString()) {
+        const isPastDate = cellDate < today && cellDate.toDateString() !== today.toDateString();
+        
+        if (isPastDate) {
             cellClass += " disabled";
+            tooltipAttr = 'title="Fecha pasada"';
+        } else {
+            // Verificar disponibilidad si el profesional y servicio están seleccionados
+            if (bookingState.provider && bookingState.service) {
+                const availability = checkDateAvailability(dateStr, bookingState.provider.id, bookingState.service.type);
+                if (!availability.available) {
+                    cellClass += " disabled";
+                    tooltipAttr = `title="${availability.reason}"`;
+                }
+            }
         }
         
         if (bookingState.date === dateStr) {
             cellClass += " selected";
         }
         
-        calendarGrid.innerHTML += `<div class="${cellClass}" onclick="selectDate('${dateStr}', this)">${day}</div>`;
+        calendarGrid.innerHTML += `<div class="${cellClass}" ${tooltipAttr} onclick="selectDate('${dateStr}', this)">${day}</div>`;
     }
 }
 
@@ -1788,6 +1889,10 @@ function renderActivities() {
     
     filtered.sort((a, b) => a.date.localeCompare(b.date));
     
+    if (!selectedActivityDate) {
+        filtered = filtered.slice(0, 3);
+    }
+    
     if (filtered.length === 0) {
         list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 30px;">' +
             (selectedActivityDate ? 'No hay actividades programadas para este día.' : 'No hay actividades este mes.') + '</p>';
@@ -2150,20 +2255,33 @@ function renderRescheduleCalendar() {
     for (let day = 1; day <= daysInMonth; day++) {
         const cellDate = new Date(rescheduleState.calendarYear, rescheduleState.calendarMonth, day);
         let cellClass = "calendar-cell";
+        let tooltipAttr = "";
         
         const monthStr = String(rescheduleState.calendarMonth + 1).padStart(2, '0');
         const dayStr = String(day).padStart(2, '0');
         const dateStr = `${rescheduleState.calendarYear}-${monthStr}-${dayStr}`;
         
-        if (cellDate < today && cellDate.toDateString() !== today.toDateString()) {
+        const isPastDate = cellDate < today && cellDate.toDateString() !== today.toDateString();
+        
+        if (isPastDate) {
             cellClass += " disabled";
+            tooltipAttr = 'title="Fecha pasada"';
+        } else {
+            // Verificar disponibilidad si el profesional y servicio tipo están configurados
+            if (rescheduleState.providerId && rescheduleState.serviceType) {
+                const availability = checkDateAvailability(dateStr, rescheduleState.providerId, rescheduleState.serviceType, rescheduleState.bookingId);
+                if (!availability.available) {
+                    cellClass += " disabled";
+                    tooltipAttr = `title="${availability.reason}"`;
+                }
+            }
         }
         
         if (rescheduleState.date === dateStr) {
             cellClass += " selected";
         }
         
-        grid.innerHTML += `<div class="${cellClass}" onclick="selectRescheduleDate('${dateStr}', this)">${day}</div>`;
+        grid.innerHTML += `<div class="${cellClass}" ${tooltipAttr} onclick="selectRescheduleDate('${dateStr}', this)">${day}</div>`;
     }
 }
 

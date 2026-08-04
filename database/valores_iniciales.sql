@@ -68,7 +68,9 @@ INSERT OR REPLACE INTO bookings (id, providerId, serviceId, serviceName, price, 
 INSERT OR REPLACE INTO activities (id, title, date, time, location, desc, capacity) VALUES
 ('act-1', 'Charla Abierta: Ansiedad y Manejo de Estrés', date('now', '+2 days'), '19:00 a 20:30 hrs', 'Sala Virtual Zoom', 'Charla abierta para la comunidad sobre salud mental cotidiana.', 25),
 ('act-2', 'Taller Comunitario de Expresión Teatral', date('now', '+10 days'), '18:00 a 20:00 hrs', 'Sala Física Principal', 'Taller lúdico de improvisación y juego dramático dirigido por Iván Pastén.', 15),
-('act-3', 'Círculo de Apoyo: Crianza Respetuosa', date('now', '+15 days'), '17:00 a 18:30 hrs', 'Sala Física Principal', 'Encuentro reflexivo sobre crianza, límites con amor y contención emocional.', 12);
+('act-3', 'Círculo de Apoyo: Crianza Respetuosa', date('now', '+15 days'), '17:00 a 18:30 hrs', 'Sala Física Principal', 'Encuentro reflexivo sobre crianza, límites con amor y contención emocional.', 12),
+('act-4', 'Taller de Arteterapia y Expresión Creativa', date('now', '+18 days'), '18:00 a 20:00 hrs', 'Sala Física Principal', 'Taller para explorar emociones a través del arte y la creatividad.', 15),
+('act-5', 'Charla: Herramientas para la Comunicación Asertiva', date('now', '+22 days'), '19:00 a 20:30 hrs', 'Sala Virtual Zoom', 'Charla práctica sobre técnicas de comunicación asertiva en el día a día.', 20);
 
 -- 8. Seed Configurations
 INSERT OR REPLACE INTO config (key, value) VALUES

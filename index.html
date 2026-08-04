@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Centro Integral PsicArte - Bienestar, Psicología y Arte</title>
+    <meta name="description" content="Centro integral de psicología, talleres, capacitaciones y artes escénicas. Acompañamos procesos de salud mental, desarrollo y expresión.">
+    <link rel="stylesheet" href="style.css">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Customizable Pop-up notice -->
+    <div id="announcement-popup" class="popup-overlay">
+        <div class="popup-content">
+            <button class="popup-close-btn" onclick="closePopup()"><i class="fa-solid fa-xmark"></i></button>
+            <div id="popup-title" class="popup-title">Aviso Importante</div>
+            <div id="popup-body" class="popup-text">
+                El centro permanecerá cerrado los días festivos. Agradecemos su comprensión.
+            </div>
+            <button class="btn-primary" style="width: 100%" onclick="closePopup()">Entendido</button>
+        </div>
+    </div>
+
+    <!-- Announcement Top Banner -->
+    <div id="announcement-banner">
+        <span id="banner-text">¡Inscripciones abiertas para nuevos talleres de teatro y yoga!</span>
+        <button class="close-banner" onclick="closeBanner()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- Navigation Header -->
+    <header>
+        <div class="header-container">
+            <a href="#" class="logo-container" id="logo-link">
+                <!-- Fallback src, will be changed programmatically -->
+                <img id="nav-logo" src="logo_light.png" alt="PsicArte Logo">
+            </a>
+            
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="#inicio">Inicio</a></li>
+                    <li><a href="nosotros.html">Nosotros</a></li>
+                    <li><a href="#servicios">Servicios</a></li>
+                    <li><a href="#calendario">Comunidad</a></li>
+                    <li><a href="#agendamiento">Agendar Hora</a></li>
+                </ul>
+                
+                <div class="nav-actions">
+                    <!-- Light/Dark Mode Toggle -->
+                    <button class="btn-icon" id="theme-toggle" title="Cambiar tema">
+                        <i class="fa-solid fa-moon"></i>
+                    </button>
+                    
+                    <!-- Login Button / User Menu -->
+                    <div id="auth-buttons">
+                        <button class="btn-secondary" onclick="window.location.href='acceso.html'">Acceder</button>
+                    </div>
+                    <div id="user-menu" style="display: none;">
+                        <button class="btn-primary" onclick="window.location.href='acceso.html'"><i class="fa-solid fa-user"></i> Mi Cuenta</button>
+                        <button class="btn-secondary" onclick="logout()" title="Cerrar Sesión"><i class="fa-solid fa-right-from-bracket"></i></button>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        
+        <!-- Hero Section -->
+        <section id="inicio" class="hero">
+            <div class="hero-content">
+                <h1 id="hero-title">Centro Integral PsicArte</h1>
+                <p id="hero-subtitle">Psicología, Talleres, Capacitaciones y Artes Escénicas orientados al bienestar emocional, la expresión personal y el desarrollo humano.</p>
+                <a href="#agendamiento" class="btn-primary" style="font-size: 1.1rem; padding: 14px 28px;">Agendar Atención en Línea</a>
+            </div>
+        </section>
+
+        <!-- Activities Calendar Section -->
+        <section id="calendario" class="info-section" style="background-color: var(--bg-secondary); max-width: 100%;">
+            <div style="max-width: 1200px; margin: 0 auto;">
+                <h2 class="section-title">Actividades en la Comunidad</h2>
+                <p style="text-align: center; margin-top: -30px; margin-bottom: 25px; color: var(--text-secondary);">
+                    Talleres, charlas y encuentros abiertos a toda la comunidad. ¡Participa y conéctate!
+                </p>
+                <div class="community-calendar-wrapper">
+                    <!-- Left: Calendar Grid -->
+                    <div class="community-calendar-left">
+                        <div class="calendar-header">
+                            <button class="btn-icon" onclick="prevActivityMonth()"><i class="fa-solid fa-chevron-left"></i></button>
+                            <h3 id="activity-month-year"></h3>
+                            <button class="btn-icon" onclick="nextActivityMonth()"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                        <div class="calendar-grid" id="community-calendar-grid">
+                            <!-- Generated by JS -->
+                        </div>
+                    </div>
+                    <!-- Right: Activity Details -->
+                    <div class="community-calendar-right">
+                        <div id="community-activities-list">
+                            <!-- Rendered by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Services Section (Dynamic) -->
+        <section id="servicios" class="info-section">
+            <h2 class="section-title">Servicios y Aranceles</h2>
+            <p style="text-align: center; margin-top: -30px; margin-bottom: 40px; color: var(--text-secondary);">
+                Aplica para pacientes Fonasa, Isapres y particulares. Se emite Boleta de Honorarios Electrónica para reembolso.
+            </p>
+            
+            <div class="services-controls">
+                <div class="provider-tabs" id="provider-tabs" role="tablist" aria-label="Selecciona profesional">
+                    <!-- Rendered dynamically -->
+                </div>
+                <div class="services-filters">
+                    <input type="text" id="services-search" class="form-control search-box" placeholder="Buscar servicio..." aria-label="Buscar servicios">
+                    <div class="filter-pills" id="service-type-filters" role="group" aria-label="Filtrar por modalidad">
+                        <button class="filter-pill active" data-type="all" onclick="setServiceTypeFilter('all')">Todos</button>
+                        <button class="filter-pill" data-type="Virtual" onclick="setServiceTypeFilter('Virtual')"><i class="fa-solid fa-wifi"></i> Online</button>
+                        <button class="filter-pill" data-type="Física" onclick="setServiceTypeFilter('Física')"><i class="fa-solid fa-building"></i> Presencial</button>
+                    </div>
+                    <div class="view-toggle-group" role="group" aria-label="Cambiar vista de servicios">
+                        <button class="view-toggle-btn active" data-view="cards" onclick="setServicesView('cards')" aria-pressed="true">
+                            <i class="fa-solid fa-grip"></i> <span class="toggle-label">Cuadrícula</span>
+                        </button>
+                        <button class="view-toggle-btn" data-view="list" onclick="setServicesView('list')" aria-pressed="false">
+                            <i class="fa-solid fa-list"></i> <span class="toggle-label">Lista</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="services-grid" id="dynamic-services-container">
+                <!-- Rendered dynamically by JS -->
+            </div>
+        </section>
+
+        <!-- Booking Widget Section -->
+        <section id="agendamiento" class="info-section">
+            <h2 class="section-title">Sistema de Reservas en Línea</h2>
+            
+            <div class="booking-widget">
+                <!-- Steps Indicators -->
+                <div class="booking-steps">
+                    <div class="step-indicator active" id="step-ind-1">
+                        <div class="step-number">1</div>
+                        <span>Servicio</span>
+                    </div>
+                    <div class="step-indicator" id="step-ind-2">
+                        <div class="step-number">2</div>
+                        <span>Fecha y Hora</span>
+                    </div>
+                    <div class="step-indicator" id="step-ind-3">
+                        <div class="step-number">3</div>
+                        <span>Tus Datos</span>
+                    </div>
+                    <div class="step-indicator" id="step-ind-4">
+                        <div class="step-number">4</div>
+                        <span>Pago</span>
+                    </div>
+                </div>
+
+                <!-- Step 1 Pane: Select Service & Professional -->
+                <div class="booking-pane active" id="pane-step-1">
+                    <h3 style="margin-bottom: 20px;">1. Selecciona el Profesional y Servicio</h3>
+                    
+                    <!-- Search Method Tabs -->
+                    <div class="search-method-selector" role="tablist" aria-label="Método de búsqueda">
+                        <button class="btn-method active" role="tab" aria-selected="true" aria-controls="search-by-provider-group" id="tab-provider" onclick="setSearchMethod('provider')">
+                            <i class="fa-solid fa-user-doctor"></i> Buscar por Profesional
+                        </button>
+                        <button class="btn-method" role="tab" aria-selected="false" aria-controls="search-by-service-group" id="tab-service" onclick="setSearchMethod('service')">
+                            <i class="fa-solid fa-list"></i> Buscar por Servicio
+                        </button>
+                    </div>
+
+                    <!-- Provider-first flow (current) -->
+                    <div id="search-by-provider-group" role="tabpanel" aria-labelledby="tab-provider">
+                        <div class="form-group">
+                            <label for="booking-provider">Profesional:</label>
+                            <select id="booking-provider" class="form-control" onchange="onBookingProviderChange()">
+                                <option value="">Selecciona profesional...</option>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" id="booking-service-container">
+                            <label for="booking-service">Servicio:</label>
+                            <select id="booking-service" class="form-control">
+                                <option value="">Selecciona un profesional primero...</option>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Service-first flow (new) -->
+                    <div id="search-by-service-group" role="tabpanel" aria-labelledby="tab-service" style="display: none;">
+                        <div class="form-group">
+                            <label for="booking-service-all">Servicio:</label>
+                            <select id="booking-service-all" class="form-control" onchange="onBookingServiceAllChange()">
+                                <option value="">Selecciona un servicio...</option>
+                                <!-- Populated dynamically with all services -->
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="booking-provider-auto">Profesional (seleccionado automáticamente):</label>
+                            <select id="booking-provider-auto" class="form-control" disabled>
+                                <option value="">Se seleccionará automáticamente...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; margin-top: 30px;">
+                        <button class="btn-primary" onclick="goToStep(2)">Continuar <i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- Step 2 Pane: Calendar & Available Hours -->
+                <div class="booking-pane" id="pane-step-2">
+                    <h3 style="margin-bottom: 20px;">2. Selecciona Fecha y Hora</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                        <!-- Date Selector -->
+                        <div>
+                            <div class="calendar-header">
+                                <button class="btn-icon" onclick="prevMonth()"><i class="fa-solid fa-chevron-left"></i></button>
+                                <span id="calendar-month-year" style="font-weight: 700;"></span>
+                                <button class="btn-icon" onclick="nextMonth()"><i class="fa-solid fa-chevron-right"></i></button>
+                            </div>
+                            <div class="calendar-grid" id="booking-calendar">
+                                <!-- Generated Dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Slots Selector -->
+                        <div>
+                            <div class="time-slots-header" id="selected-date-label">Selecciona una fecha en el calendario</div>
+                            <div class="time-slots-grid" id="booking-slots">
+                                <!-- Generated Dynamically based on doctor blocks and room schedules -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; margin-top: 30px;">
+                        <button class="btn-secondary" onclick="goToStep(1)"><i class="fa-solid fa-arrow-left"></i> Atrás</button>
+                        <button class="btn-primary" onclick="goToStep(3)">Continuar <i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- Step 3 Pane: Personal Info Form -->
+                <div class="booking-pane" id="pane-step-3">
+                    <h3 style="margin-bottom: 20px;">3. Datos del Paciente</h3>
+                    
+                    <div id="logged-in-autofill-msg" style="background-color: rgba(47, 133, 90, 0.1); border-left: 4px solid var(--color-success); padding: 12px; margin-bottom: 20px; border-radius: 4px; display: none;">
+                        <i class="fa-solid fa-circle-check" style="color: var(--color-success);"></i> Datos de su último agendamiento autocompletados automáticamente.
+                    </div>
+
+                    <form id="booking-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="client-name">Nombre Completo:</label>
+                                <input type="text" id="client-name" class="form-control" placeholder="Ej: Romilio Orellana" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="client-rut">RUT:</label>
+                                <input type="text" id="client-rut" class="form-control" placeholder="Ej: 12.345.678-9" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="client-email">Correo Electrónico:</label>
+                                <input type="email" id="client-email" class="form-control" placeholder="nombre@correo.com" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="client-phone">Celular:</label>
+                                <input type="tel" id="client-phone" class="form-control" placeholder="Ej: +56912345678" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="accept-terms" required> Acepto los <span class="terms-link" onclick="openTermsModal()">Términos y Condiciones</span> del centro PsicArte.
+                            </label>
+                        </div>
+                    </form>
+
+                    <div style="display: flex; justify-content: space-between; margin-top: 30px;">
+                        <button class="btn-secondary" onclick="goToStep(2)"><i class="fa-solid fa-arrow-left"></i> Atrás</button>
+                        <button class="btn-primary" onclick="goToStep(4)">Continuar al Pago <i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- Step 4 Pane: Payment Screen -->
+                <div class="booking-pane" id="pane-step-4">
+                    <h3 style="margin-bottom: 20px;">4. Confirmación y Pago</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                        <!-- Summary -->
+                        <div>
+                            <h4>Resumen del Servicio</h4>
+                            <div class="booking-summary-box">
+                                <div class="booking-summary-row">
+                                    <span>Profesional:</span>
+                                    <span id="sum-provider">-</span>
+                                </div>
+                                <div class="booking-summary-row">
+                                    <span>Servicio:</span>
+                                    <span id="sum-service">-</span>
+                                </div>
+                                <div class="booking-summary-row">
+                                    <span>Sala/Modalidad:</span>
+                                    <span id="sum-room">-</span>
+                                </div>
+                                <div class="booking-summary-row">
+                                    <span>Fecha y Hora:</span>
+                                    <span id="sum-datetime">-</span>
+                                </div>
+                                <div class="booking-summary-row">
+                                    <span>Paciente:</span>
+                                    <span id="sum-patient">-</span>
+                                </div>
+                                <div class="booking-summary-row">
+                                    <span>Total a Pagar:</span>
+                                    <span id="sum-price">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mock Payment Form -->
+                        <div>
+                            <h4>Procesar Pago (Simulador)</h4>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 15px;">
+                                Sistema integrado con pasarela de pago PsicArte Pay. Introduce datos de prueba.
+                            </p>
+                            
+                            <form id="payment-form">
+                                <div class="form-group">
+                                    <label for="card-number">Número de Tarjeta:</label>
+                                    <input type="text" id="card-number" class="form-control" placeholder="4111 2222 3333 4444" required>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="card-exp">Vencimiento:</label>
+                                        <input type="text" id="card-exp" class="form-control" placeholder="MM/AA" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="card-cvv">CVV:</label>
+                                        <input type="password" id="card-cvv" class="form-control" placeholder="123" required>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; margin-top: 30px;">
+                        <button class="btn-secondary" onclick="goToStep(3)"><i class="fa-solid fa-arrow-left"></i> Atrás</button>
+                        <button class="btn-primary" style="background-color: var(--color-success);" onclick="processPayment()">Pagar y Confirmar Cita</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-info">
+                <img id="footer-logo" src="psicarte logo black.png" alt="PsicArte Logo">
+                <p>Centro Integral PsicArte está orientado al acompañamiento terapéutico, el desarrollo de capacidades artísticas y corporales, y la promoción del autocuidado y la salud mental.</p>
+            </div>
+            <div class="footer-links">
+                <h4>Enlaces Rápidos</h4>
+                <ul>
+                    <li><a href="#inicio">Inicio</a></li>
+                    <li><a href="nosotros.html">Nosotros</a></li>
+                    <li><a href="#servicios">Servicios</a></li>
+                    <li><a href="#calendario">Actividades</a></li>
+                    <li><a href="#agendamiento">Reservar Hora</a></li>
+                </ul>
+            </div>
+            <div class="footer-contact">
+                <h4>Contacto</h4>
+                <p><i class="fa-solid fa-envelope" style="color: var(--color-gold);"></i> <span id="contact-email">contacto@psicarte.cl</span></p>
+                <p><i class="fa-solid fa-phone" style="color: var(--color-gold);"></i> <span id="contact-phone">+56961676706</span></p>
+                <p><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> Modalidad Online y Presencial</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; <span id="footer-year"></span> Centro Integral PsicArte. Todos los derechos reservados.</p>
+            <p>Diseño Web Profesional y Adaptativo • <span class="terms-link" onclick="openTermsModal()">Términos y Condiciones</span></p>
+        </div>
+    </footer>
+
+    <!-- Terms & Conditions Modal -->
+    <div id="terms-modal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>Términos y Condiciones</h3>
+                <button class="modal-close" onclick="closeTermsModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="font-size: 0.9rem; line-height: 1.5; color: var(--text-secondary);">
+                <p><strong>1. Modalidades de Atención</strong><br>
+                Nuestros servicios se prestan en modalidad virtual (Online) y física (Presencial). Para consultas online, el paciente es responsable de contar con una conexión a internet estable.</p>
+                <br>
+                <p><strong>2. Agendamiento y Confirmación</strong><br>
+                Las citas quedan confirmadas únicamente tras realizar el pago virtual del servicio. Esto reserva el espacio de la sala (virtual o física) y el tiempo del prestador.</p>
+                <br>
+                <p><strong>3. Políticas de Reagendamiento y Cancelación</strong><br>
+                Las sesiones pagadas no tienen devolución de dinero. En caso de inasistencia, podrá reagendarse solo una vez con un mínimo de 24 horas de anticipación, sujeto a la disponibilidad del profesional.</p>
+                <br>
+                <p><strong>4. Bloqueos de Agenda</strong><br>
+                El centro se reserva el derecho de suspender o reagendar citas en caso de enfermedad del prestador o fuerza mayor. Se le notificará al paciente inmediatamente.</p>
+                <br>
+                <p><strong>5. Privacidad y Confidencialidad</strong><br>
+                Toda la información tratada en psicoterapia es confidencial y regida por los principios de la ética profesional y legislación vigente chilena.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="closeTermsModal()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Enrollment Modal -->
+    <div id="activity-enroll-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>Inscripción en Actividad</h3>
+                <button class="modal-close" onclick="closeEnrollModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p id="enroll-activity-name" style="font-weight: 600; margin-bottom: 15px; color: var(--color-accent);"></p>
+                <form id="enroll-form" onsubmit="submitActivityEnrollment(event)">
+                    <input type="hidden" id="enroll-activity-id">
+                    <div class="form-group">
+                        <label for="enroll-name">Nombre Completo:</label>
+                        <input type="text" id="enroll-name" class="form-control" placeholder="Ej: María López" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="enroll-email">Correo Electrónico:</label>
+                        <input type="email" id="enroll-email" class="form-control" placeholder="nombre@correo.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="enroll-phone">Celular:</label>
+                        <input type="tel" id="enroll-phone" class="form-control" placeholder="Ej: +56912345678" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeEnrollModal()">Cancelar</button>
+                <button class="btn-primary" onclick="document.getElementById('enroll-form').requestSubmit()">Confirmar Inscripción</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin View Enrollments Modal -->
+    <div id="admin-view-enrollments-modal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>Inscritos en la Actividad</h3>
+                <button class="modal-close" onclick="closeAdminEnrollmentsModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p id="admin-enrollments-activity-name" style="font-weight: 600; margin-bottom: 15px; color: var(--color-accent);"></p>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Correo</th>
+                                <th>Celular</th>
+                                <th>Fecha Inscripción</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-enrollments-table-body">
+                        </tbody>
+                    </table>
+                </div>
+                <p id="admin-enrollments-empty" style="text-align: center; color: var(--text-secondary); display: none;">No hay inscritos en esta actividad.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="closeAdminEnrollmentsModal()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- WhatsApp Floating Button -->
+    <a id="whatsapp-float-btn" href="https://wa.me/56952182998" target="_blank" rel="noopener noreferrer"
+       class="whatsapp-float" aria-label="Contactar por WhatsApp">
+        <i class="fa-brands fa-whatsapp"></i>
+    </a>
+
+    <!-- Toast Container for Notifications -->
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

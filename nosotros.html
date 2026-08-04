@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nosotros - Centro Integral PsicArte</title>
+    <meta name="description" content="Conoce al Centro Integral PsicArte: nuestra misión, visión y equipo de profesionales.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Navigation Header -->
+    <header>
+        <div class="header-container">
+            <a href="index.html" class="logo-container" id="logo-link">
+                <img id="nav-logo" src="logo_light.png" alt="PsicArte Logo">
+            </a>
+            
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="index.html#inicio">Inicio</a></li>
+                    <li><a href="nosotros.html" style="color: var(--color-accent);">Nosotros</a></li>
+                    <li><a href="index.html#servicios">Servicios</a></li>
+                    <li><a href="index.html#calendario">Comunidad</a></li>
+                    <li><a href="index.html#agendamiento">Agendar Hora</a></li>
+                </ul>
+                
+                <div class="nav-actions">
+                    <button class="btn-icon" id="theme-toggle" title="Cambiar tema">
+                        <i class="fa-solid fa-moon"></i>
+                    </button>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Presentation, Mission & Vision -->
+        <section id="nosotros" class="info-section">
+            <h2 class="section-title">Sobre Nosotros</h2>
+            <div class="card" style="margin-bottom: 30px;">
+                <h3>Presentación</h3>
+                <p id="presentation-text-short" style="margin: 15px 0; color: var(--text-secondary);">
+                    PsicArte es un centro integral orientado al bienestar emocional, el desarrollo personal, la expresión creativa y la formación de personas, familias, comunidades educativas y equipos de trabajo.
+                </p>
+                <p id="presentation-text-full" style="display: none; margin: 15px 0; color: var(--text-secondary);">
+                    PsicArte es un centro integral orientado al bienestar emocional, el desarrollo personal, la expresión creativa y la formación de personas, familias, comunidades educativas y equipos de trabajo. Integra psicología, talleres, capacitaciones, yoga, teatro y artes escénicas, articulando distintas herramientas para acompañar procesos terapéuticos, educativos, corporales y expresivos.
+                    <br><br>
+                    Desde nuestras distintas áreas de trabajo, abordamos temáticas vinculadas a salud mental, ansiedad, autoestima, desregulación emocional, habilidades sociales, comunicación efectiva, convivencia escolar, autocuidado, manejo de conflictos, bienestar laboral, riesgos psicosociales, expresión escénica, creatividad y desarrollo humano.
+                </p>
+                <button class="btn-readmore" id="btn-toggle-presentation" onclick="togglePresentation()">Leer más <i class="fa-solid fa-chevron-down"></i></button>
+            </div>
+
+            <div class="mv-container">
+                <div class="card">
+                    <h3 style="color: var(--color-pomegranate);"><i class="fa-solid fa-bullseye"></i> Misión</h3>
+                    <p id="mission-text" style="margin-top: 10px; color: var(--text-secondary);">
+                        Nuestra misión es acompañar procesos de bienestar, aprendizaje y desarrollo humano a través de intervenciones psicológicas, talleres, capacitaciones y experiencias corporales y artísticas que integren la salud mental, la educación, el teatro, el yoga y la expresión personal.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3 style="color: var(--color-gold);"><i class="fa-solid fa-eye"></i> Visión</h3>
+                    <p id="vision-text" style="margin-top: 10px; color: var(--text-secondary);">
+                        Aspiramos a que PsicArte sea reconocido como un centro integral que articula salud mental y las artes escénicas, desprendiendo la educación, capacitación y el cuerpo de manera profesional, sensible e innovadora.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Professionals Section -->
+        <section id="profesionales" class="info-section" style="background-color: var(--bg-secondary); max-width: 100%;">
+            <div style="max-width: 1200px; margin: 0 auto;">
+                <h2 class="section-title">Nuestros Profesionales</h2>
+                <div class="grid-3" id="professionals-list">
+                    <!-- Professional 1: Ivan -->
+                    <div class="card provider-card">
+                        <div class="provider-header">
+                            <div class="provider-avatar">IP</div>
+                            <div class="provider-meta">
+                                <h3>Iván Pastén Fuentes</h3>
+                                <span>Actor & Instructor de Yoga (8 años exp.)</span>
+                            </div>
+                        </div>
+                        <p class="provider-desc" id="desc-ivan">
+                            Actor teatral y audiovisual, profesor de teatro, dramaturgo e instructor de yoga, con formación universitaria en actuación y puesta en escena. Mi trabajo integra el arte, la expresión corporal, la comunicación y el bienestar, articulando herramientas escénicas, pedagógicas y socioemocionales para acompañar procesos creativos, educativos y personales.
+                        </p>
+                        <button class="btn-readmore" onclick="toggleProviderDesc('desc-ivan', this)">Leer más <i class="fa-solid fa-chevron-down"></i></button>
+                    </div>
+
+                    <!-- Professional 2: Valentina -->
+                    <div class="card provider-card">
+                        <div class="provider-header">
+                            <div class="provider-avatar">VM</div>
+                            <div class="provider-meta">
+                                <h3>Valentina Maldonado T.</h3>
+                                <span>Psicóloga Clínica (5 años exp.)</span>
+                            </div>
+                        </div>
+                        <p class="provider-desc" id="desc-valentina">
+                            Psicóloga clínica titulada de la Universidad Andrés Bello, graduada Cum Laude, con formación en enfoques psicoanalítico, sistémico-narrativo y centrado en soluciones. Cuento con experiencia en atención presencial y online a niños, niñas, adolescentes y adultos, acompañando procesos terapéuticos desde una mirada integral.
+                        </p>
+                        <button class="btn-readmore" onclick="toggleProviderDesc('desc-valentina', this)">Leer más <i class="fa-solid fa-chevron-down"></i></button>
+                    </div>
+
+                    <!-- Professional 3: Macarena -->
+                    <div class="card provider-card">
+                        <div class="provider-header">
+                            <div class="provider-avatar">MM</div>
+                            <div class="provider-meta">
+                                <h3>Macarena Méndez</h3>
+                                <span>Gestora Cultural & Coordinadora</span>
+                            </div>
+                        </div>
+                        <p class="provider-desc" id="desc-macarena">
+                            Coordinación de ventas de obras y artes escénicas para empresas, centros educativos o particulares. Reuniones informativas de proyectos teatrales y artísticos en PsicArte.
+                        </p>
+                        <button class="btn-readmore" onclick="toggleProviderDesc('desc-macarena', this)">Leer más <i class="fa-solid fa-chevron-down"></i></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA to Booking -->
+        <section class="info-section" style="text-align: center; padding: 40px 24px;">
+            <a href="index.html#agendamiento" class="btn-primary" style="font-size: 1.1rem; padding: 14px 28px;">Reservar Hora <i class="fa-solid fa-arrow-right"></i></a>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-info">
+                <img id="footer-logo" src="logo_light.png" alt="PsicArte Logo">
+                <p>Centro Integral PsicArte está orientado al acompañamiento terapéutico, el desarrollo de capacidades artísticas y corporales, y la promoción del autocuidado y la salud mental.</p>
+            </div>
+            <div class="footer-links">
+                <h4>Enlaces Rápidos</h4>
+                <ul>
+                    <li><a href="index.html#inicio">Inicio</a></li>
+                    <li><a href="nosotros.html">Nosotros</a></li>
+                    <li><a href="index.html#servicios">Servicios</a></li>
+                    <li><a href="index.html#calendario">Actividades</a></li>
+                    <li><a href="index.html#agendamiento">Reservar Hora</a></li>
+                </ul>
+            </div>
+            <div class="footer-contact">
+                <h4>Contacto</h4>
+                <p><i class="fa-solid fa-envelope" style="color: var(--color-gold);"></i> <span>contacto@psicarte.cl</span></p>
+                <p><i class="fa-solid fa-phone" style="color: var(--color-gold);"></i> <span>+56961676706</span></p>
+                <p><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> Modalidad Online y Presencial</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; <span id="footer-year"></span> Centro Integral PsicArte. Todos los derechos reservados.</p>
+            <p>Diseño Web Profesional y Adaptativo</p>
+        </div>
+    </footer>
+
+    <!-- Toast Container for Notifications -->
+    <div id="toast-container"></div>
+
+    <script>
+        // Theme management (synchronized with localStorage)
+        function initTheme() {
+            const savedTheme = localStorage.getItem("psicarte_theme") || "light";
+            document.documentElement.setAttribute("data-theme", savedTheme);
+            updateThemeUI(savedTheme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute("data-theme");
+            const newTheme = currentTheme === "dark" ? "light" : "dark";
+            document.documentElement.setAttribute("data-theme", newTheme);
+            localStorage.setItem("psicarte_theme", newTheme);
+            updateThemeUI(newTheme);
+        }
+
+        function updateThemeUI(theme) {
+            const themeBtn = document.getElementById("theme-toggle");
+            const logoImg = document.getElementById("nav-logo");
+            const footerLogo = document.getElementById("footer-logo");
+            
+            if (theme === "dark") {
+                themeBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
+                logoImg.src = "logo_dark.png";
+                if (footerLogo) footerLogo.src = "logo_dark.png";
+            } else {
+                themeBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
+                logoImg.src = "logo_light.png";
+                if (footerLogo) footerLogo.src = "logo_light.png";
+            }
+        }
+
+        document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
+
+        // Toggle presentation expand/collapse
+        function togglePresentation() {
+            const shortP = document.getElementById("presentation-text-short");
+            const fullP = document.getElementById("presentation-text-full");
+            const btn = document.getElementById("btn-toggle-presentation");
+            
+            if (fullP.style.display === "none") {
+                fullP.style.display = "block";
+                shortP.style.display = "none";
+                btn.innerHTML = 'Leer menos <i class="fa-solid fa-chevron-up"></i>';
+            } else {
+                fullP.style.display = "none";
+                shortP.style.display = "block";
+                btn.innerHTML = 'Leer más <i class="fa-solid fa-chevron-down"></i>';
+            }
+        }
+
+        // Toggle provider description expand/collapse
+        function toggleProviderDesc(id, btn) {
+            const desc = document.getElementById(id);
+            if (desc.classList.contains("expanded")) {
+                desc.classList.remove("expanded");
+                btn.innerHTML = 'Leer más <i class="fa-solid fa-chevron-down"></i>';
+            } else {
+                desc.classList.add("expanded");
+                btn.innerHTML = 'Leer menos <i class="fa-solid fa-chevron-up"></i>';
+            }
+        }
+
+        // Toast notification helper
+        function showToast(message, type = "success") {
+            const container = document.getElementById("toast-container");
+            const toast = document.createElement("div");
+            toast.className = "toast toast-" + type;
+            
+            let icon = "fa-circle-check";
+            if (type === "error") icon = "fa-circle-xmark";
+            if (type === "info") icon = "fa-circle-info";
+            
+            toast.innerHTML = '<div style="display: flex; align-items: center; gap: 10px;"><i class="fa-solid ' + icon + '"></i><span>' + message + '</span></div><button class="toast-close" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>';
+            
+            container.appendChild(toast);
+            setTimeout(function() { toast.classList.add("show"); }, 10);
+            setTimeout(function() {
+                toast.classList.remove("show");
+                setTimeout(function() { toast.remove(); }, 400);
+            }, 4000);
+        }
+
+        // Load content dynamically from SQLite backend
+        async function loadContent() {
+            try {
+                const res = await fetch('/api/content');
+                if (!res.ok) return;
+                const content = await res.json();
+                
+                if (content.presentationShort) {
+                    document.getElementById("presentation-text-short").innerText = content.presentationShort;
+                }
+                if (content.presentationFull) {
+                    document.getElementById("presentation-text-full").innerHTML = content.presentationFull.replace(/\n/g, "<br>");
+                }
+                if (content.mission) {
+                    document.getElementById("mission-text").innerText = content.mission;
+                }
+                if (content.vision) {
+                    document.getElementById("vision-text").innerText = content.vision;
+                }
+            } catch (e) {
+                console.error("Error loading content:", e);
+            }
+        }
+
+        // Initialize on load
+        initTheme();
+        loadContent();
+    </script>
+</body>
+</html>

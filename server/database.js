@@ -2,7 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-const dbPath = path.resolve(__dirname, 'database.sqlite');
+const dbPath = path.resolve(__dirname, '..', 'database.sqlite');
 
 // Check if database reset is requested via CLI argument or environment variable
 if (process.argv.includes('--reset') || process.env.RESET_DB === 'true') {
@@ -29,7 +29,7 @@ function initializeDatabase() {
     db.serialize(() => {
         try {
             // Read and execute schema tables definition from schema.sql
-            const schemaPath = path.join(__dirname, 'schema.sql');
+            const schemaPath = path.join(__dirname, '..', 'database', 'schema.sql');
             const schemaSql = fs.readFileSync(schemaPath, 'utf8');
             
             db.exec(schemaSql, (err) => {
@@ -48,7 +48,7 @@ function initializeDatabase() {
                     
                     if (row.count === 0) {
                         console.log("Database empty. Seeding initial values from SQL file...");
-                        const seedPath = path.join(__dirname, 'valores_iniciales.sql');
+                        const seedPath = path.join(__dirname, '..', 'database', 'valores_iniciales.sql');
                         const seedSql = fs.readFileSync(seedPath, 'utf8');
                         
                         db.exec(seedSql, (err3) => {

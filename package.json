@@ -2,10 +2,10 @@
   "name": "psicarte-backend",
   "version": "1.0.0",
   "description": "Backend for PsicArte Booking System and Marketing Site using SQLite",
-  "main": "server.js",
+  "main": "server/server.js",
   "scripts": {
-    "start": "node server.js",
-    "start:reset": "node server.js --reset"
+    "start": "node server/server.js",
+    "start:reset": "node server/server.js --reset"
   },
   "dependencies": {
     "cors": "^2.8.5",

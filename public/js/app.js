@@ -141,12 +141,12 @@ function updateThemeUI(theme) {
     
     if (theme === "dark") {
         themeBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
-        logoImg.src = "logo_dark.png";
-        if (footerLogo) footerLogo.src = "logo_dark.png";
+        logoImg.src = "images/logo_dark.png";
+        if (footerLogo) footerLogo.src = "images/logo_dark.png";
     } else {
         themeBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
-        logoImg.src = "logo_light.png";
-        if (footerLogo) footerLogo.src = "logo_light.png";
+        logoImg.src = "images/logo_light.png";
+        if (footerLogo) footerLogo.src = "images/logo_light.png";
     }
 }
 

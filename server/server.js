@@ -10,8 +10,8 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Serve static frontend files from current directory
-app.use(express.static(__dirname));
+// Serve static frontend files from /public directory
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Utility: convert time string "09:30" to minutes
 function timeToMinutes(timeStr) {

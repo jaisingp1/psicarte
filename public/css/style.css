@@ -379,7 +379,7 @@ section.info-section {
 /* Mission & Vision Card Layout */
 .mv-container {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 30px;
     margin-top: 30px;
 }

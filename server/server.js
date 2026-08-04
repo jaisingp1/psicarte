@@ -157,6 +157,7 @@ app.get('/api/providers', (req, res) => {
                     role: p.role,
                     email: p.email,
                     blocks: blocksParsed,
+                    bio: p.bio || '',
                     services: pServices
                 };
             });
@@ -166,14 +167,14 @@ app.get('/api/providers', (req, res) => {
 });
 
 app.post('/api/providers', (req, res) => {
-    const { id, name, role, email, blocks } = req.body;
+    const { id, name, role, email, blocks, bio } = req.body;
     const blocksStr = JSON.stringify(blocks || {
         2: ["20:00-21:00", "21:00-22:00"],
         4: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"],
         5: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"]
     });
-    db.run("INSERT INTO providers (id, name, role, email, blocks) VALUES (?, ?, ?, ?, ?)",
-        [id, name, role, email, blocksStr],
+    db.run("INSERT INTO providers (id, name, role, email, blocks, bio) VALUES (?, ?, ?, ?, ?, ?)",
+        [id, name, role, email, blocksStr, bio || ''],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true, id });
@@ -195,7 +196,7 @@ app.post('/api/services', (req, res) => {
     const { id, providerId, name, price, duration, type, allowReschedule, maxReschedules } = req.body;
     const allowRescheduleVal = allowReschedule !== undefined ? (allowReschedule ? 1 : 0) : 1;
     const maxReschedulesVal = maxReschedules || 1;
-    db.run("INSERT INTO services (id, providerId, name, price, duration, type, allowReschedule, maxReschedules) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    db.run("INSERT OR REPLACE INTO services (id, providerId, name, price, duration, type, allowReschedule, maxReschedules) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [id, providerId, name, price, duration, type, allowRescheduleVal, maxReschedulesVal],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
@@ -295,6 +296,13 @@ app.post('/api/bookings', (req, res) => {
 
 app.delete('/api/bookings/:id', (req, res) => {
     db.run("UPDATE bookings SET status = 'Cancelled' WHERE id = ?", [req.params.id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+app.delete('/api/bookings/:id/purge', (req, res) => {
+    db.run("DELETE FROM bookings WHERE id = ?", [req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
@@ -454,6 +462,13 @@ app.post('/api/clients', (req, res) => {
             res.json({ success: true });
         }
     );
+});
+
+app.delete('/api/clients/:email', (req, res) => {
+    db.run("DELETE FROM clients WHERE email = ?", [req.params.email], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
 });
 
 // ----------------------------------------------------

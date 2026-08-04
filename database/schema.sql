@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS providers (
     name TEXT,
     role TEXT,
     email TEXT,
-    blocks TEXT
+    blocks TEXT,
+    bio TEXT
 );
 
 -- 4. Services table

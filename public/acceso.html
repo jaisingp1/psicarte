@@ -266,6 +266,10 @@
                                         <label for="adm-prov-role">Especialidad/Rol:</label>
                                         <input type="text" id="adm-prov-role" class="form-control" placeholder="Ej: Psicólogo Clínico" required>
                                     </div>
+                                    <div class="form-group">
+                                        <label for="adm-prov-bio">Biografía / Descripción:</label>
+                                        <textarea id="adm-prov-bio" class="form-control edit-content-textarea" placeholder="Breve descripción del profesional..."></textarea>
+                                    </div>
                                     <button type="submit" class="btn-primary" style="width: 100%;">Crear Prestador</button>
                                 </form>
                             </div>
@@ -497,8 +501,115 @@
                                 <label for="custom-vision">Visión:</label>
                                 <textarea id="custom-vision" class="form-control edit-content-textarea" required></textarea>
                             </div>
+                            <div class="form-group">
+                                <label for="custom-objectives">Objetivos:</label>
+                                <textarea id="custom-objectives" class="form-control edit-content-textarea" placeholder="Objetivos del centro PsicArte..."></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="custom-contact-email">Email de Contacto:</label>
+                                    <input type="email" id="custom-contact-email" class="form-control" placeholder="contacto@psicarte.cl">
+                                </div>
+                                <div class="form-group">
+                                    <label for="custom-contact-phone">Teléfono de Contacto:</label>
+                                    <input type="tel" id="custom-contact-phone" class="form-control" placeholder="+56961676706">
+                                </div>
+                            </div>
                             <button type="submit" class="btn-primary">Publicar Cambios</button>
                         </form>
+                    </div>
+
+                    <div id="pane-admin-bookings" class="dashboard-pane">
+                        <h3>Gestión de Reservas</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra todas las reservas del centro. Filtra por prestador para ver agendas individuales.</p>
+                        
+                        <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;">
+                            <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+                                <select id="adm-booking-provider-filter" class="form-control" onchange="renderAdminBookings()">
+                                    <option value="all">Todos los Prestadores</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+                                <input type="text" id="adm-booking-search" class="form-control" placeholder="Buscar por cliente o servicio..." oninput="renderAdminBookings()">
+                            </div>
+                            <button class="btn-primary" onclick="startAdminBooking()"><i class="fa-solid fa-plus"></i> Nueva Reserva</button>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha/Hora</th>
+                                        <th>Cliente</th>
+                                        <th>Prestador</th>
+                                        <th>Servicio</th>
+                                        <th>Sala</th>
+                                        <th>Estado</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-bookings-table"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="pane-admin-clients" class="dashboard-pane">
+                        <h3>Gestión de Clientes</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Crea, edita y administra los perfiles de clientes del centro.</p>
+                        
+                        <div class="grid-2">
+                            <div class="card" style="box-shadow: none;">
+                                <h4 id="admin-client-form-title">Añadir Cliente</h4>
+                                <form id="admin-client-form" onsubmit="saveAdminClient(event)" style="margin-top: 15px;">
+                                    <input type="hidden" id="adm-client-editing-email" value="">
+                                    <div class="form-group">
+                                        <label for="adm-client-name">Nombre Completo:</label>
+                                        <input type="text" id="adm-client-name" class="form-control" required>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="adm-client-email">Correo:</label>
+                                            <input type="email" id="adm-client-email" class="form-control" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="adm-client-rut">RUT:</label>
+                                            <input type="text" id="adm-client-rut" class="form-control" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="adm-client-phone">Celular:</label>
+                                        <input type="tel" id="adm-client-phone" class="form-control" required>
+                                    </div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button type="submit" class="btn-primary" style="flex: 1;">Guardar Cliente</button>
+                                        <button type="button" class="btn-secondary" onclick="resetAdminClientForm()">Cancelar</button>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="card" style="box-shadow: none;">
+                                <h4>Buscar Clientes</h4>
+                                <div class="form-group" style="margin-top: 15px;">
+                                    <input type="text" id="adm-client-search" class="form-control" placeholder="Buscar por nombre o email..." oninput="renderAdminClients()">
+                                </div>
+                                <div id="admin-clients-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 10px;"></div>
+                            </div>
+                        </div>
+
+                        <h4 style="margin-top: 30px; margin-bottom: 10px;">Listado de Clientes</h4>
+                        <div class="table-responsive">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Correo</th>
+                                        <th>RUT</th>
+                                        <th>Celular</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-clients-table"></tbody>
+                            </table>
+                        </div>
                     </div>
 
                 </div>

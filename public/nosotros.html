@@ -66,6 +66,11 @@
                         Aspiramos a que PsicArte sea reconocido como un centro integral que articula salud mental y las artes escénicas, desprendiendo la educación, capacitación y el cuerpo de manera profesional, sensible e innovadora.
                     </p>
                 </div>
+                <div class="card" id="objectives-card" style="display: none;">
+                    <h3 style="color: var(--color-info);"><i class="fa-solid fa-rocket"></i> Objetivos</h3>
+                    <p id="objectives-text" style="margin-top: 10px; color: var(--text-secondary);">
+                    </p>
+                </div>
             </div>
         </section>
 
@@ -74,50 +79,6 @@
             <div style="max-width: 1200px; margin: 0 auto;">
                 <h2 class="section-title">Nuestros Profesionales</h2>
                 <div class="grid-3" id="professionals-list">
-                    <!-- Professional 1: Ivan -->
-                    <div class="card provider-card">
-                        <div class="provider-header">
-                            <div class="provider-avatar">IP</div>
-                            <div class="provider-meta">
-                                <h3>Iván Pastén Fuentes</h3>
-                                <span>Actor & Instructor de Yoga (8 años exp.)</span>
-                            </div>
-                        </div>
-                        <p class="provider-desc" id="desc-ivan">
-                            Actor teatral y audiovisual, profesor de teatro, dramaturgo e instructor de yoga, con formación universitaria en actuación y puesta en escena. Mi trabajo integra el arte, la expresión corporal, la comunicación y el bienestar, articulando herramientas escénicas, pedagógicas y socioemocionales para acompañar procesos creativos, educativos y personales.
-                        </p>
-                        <button class="btn-readmore" onclick="toggleProviderDesc('desc-ivan', this)">Leer más <i class="fa-solid fa-chevron-down"></i></button>
-                    </div>
-
-                    <!-- Professional 2: Valentina -->
-                    <div class="card provider-card">
-                        <div class="provider-header">
-                            <div class="provider-avatar">VM</div>
-                            <div class="provider-meta">
-                                <h3>Valentina Maldonado T.</h3>
-                                <span>Psicóloga Clínica (5 años exp.)</span>
-                            </div>
-                        </div>
-                        <p class="provider-desc" id="desc-valentina">
-                            Psicóloga clínica titulada de la Universidad Andrés Bello, graduada Cum Laude, con formación en enfoques psicoanalítico, sistémico-narrativo y centrado en soluciones. Cuento con experiencia en atención presencial y online a niños, niñas, adolescentes y adultos, acompañando procesos terapéuticos desde una mirada integral.
-                        </p>
-                        <button class="btn-readmore" onclick="toggleProviderDesc('desc-valentina', this)">Leer más <i class="fa-solid fa-chevron-down"></i></button>
-                    </div>
-
-                    <!-- Professional 3: Macarena -->
-                    <div class="card provider-card">
-                        <div class="provider-header">
-                            <div class="provider-avatar">MM</div>
-                            <div class="provider-meta">
-                                <h3>Macarena Méndez</h3>
-                                <span>Gestora Cultural & Coordinadora</span>
-                            </div>
-                        </div>
-                        <p class="provider-desc" id="desc-macarena">
-                            Coordinación de ventas de obras y artes escénicas para empresas, centros educativos o particulares. Reuniones informativas de proyectos teatrales y artísticos en PsicArte.
-                        </p>
-                        <button class="btn-readmore" onclick="toggleProviderDesc('desc-macarena', this)">Leer más <i class="fa-solid fa-chevron-down"></i></button>
-                    </div>
                 </div>
             </div>
         </section>
@@ -147,8 +108,8 @@
             </div>
             <div class="footer-contact">
                 <h4>Contacto</h4>
-                <p><i class="fa-solid fa-envelope" style="color: var(--color-gold);"></i> <span>contacto@psicarte.cl</span></p>
-                <p><i class="fa-solid fa-phone" style="color: var(--color-gold);"></i> <span>+56961676706</span></p>
+                <p><i class="fa-solid fa-envelope" style="color: var(--color-gold);"></i> <span id="contact-email">contacto@psicarte.cl</span></p>
+                <p><i class="fa-solid fa-phone" style="color: var(--color-gold);"></i> <span id="contact-phone">+56961676706</span></p>
                 <p><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> Modalidad Online y Presencial</p>
             </div>
         </div>
@@ -263,14 +224,66 @@
                 if (content.vision) {
                     document.getElementById("vision-text").innerText = content.vision;
                 }
+                if (content.objectives) {
+                    const objectivesCard = document.getElementById("objectives-card");
+                    const objectivesText = document.getElementById("objectives-text");
+                    if (objectivesCard && objectivesText) {
+                        objectivesText.innerText = content.objectives;
+                        objectivesCard.style.display = "block";
+                    }
+                }
+                if (content.contactEmail) {
+                    const emailEl = document.getElementById("contact-email");
+                    if (emailEl) emailEl.innerText = content.contactEmail;
+                }
+                if (content.contactPhone) {
+                    const phoneEl = document.getElementById("contact-phone");
+                    if (phoneEl) phoneEl.innerText = content.contactPhone;
+                }
             } catch (e) {
                 console.error("Error loading content:", e);
+            }
+        }
+
+        // Load providers dynamically
+        async function loadProviders() {
+            try {
+                const res = await fetch('/api/providers');
+                if (!res.ok) return;
+                const providers = await res.json();
+                
+                const container = document.getElementById("professionals-list");
+                if (!container) return;
+                container.innerHTML = "";
+                
+                providers.forEach(p => {
+                    const initials = p.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                    const bio = p.bio || 'Profesional de PsicArte.';
+                    const descId = 'desc-' + p.id;
+                    
+                    container.innerHTML += `
+                        <div class="card provider-card">
+                            <div class="provider-header">
+                                <div class="provider-avatar">${initials}</div>
+                                <div class="provider-meta">
+                                    <h3>${p.name}</h3>
+                                    <span>${p.role}</span>
+                                </div>
+                            </div>
+                            <p class="provider-desc" id="${descId}">${bio}</p>
+                            <button class="btn-readmore" onclick="toggleProviderDesc('${descId}', this)">Leer más <i class="fa-solid fa-chevron-down"></i></button>
+                        </div>
+                    `;
+                });
+            } catch (e) {
+                console.error("Error loading providers:", e);
             }
         }
 
         // Initialize on load
         initTheme();
         loadContent();
+        loadProviders();
     </script>
 </body>
 </html>

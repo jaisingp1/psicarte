@@ -6,6 +6,7 @@ const state = {
     rooms: [],
     providers: [],
     bookings: [],
+    clients: [],
     activities: [],
     activityEnrollments: [],
     sicknessBlocks: [],
@@ -87,6 +88,7 @@ async function loadAllData() {
         state.bookings = await (await fetch('/api/bookings')).json();
         state.activities = await (await fetch('/api/activities')).json();
         state.sicknessBlocks = await (await fetch('/api/blocks')).json();
+        state.clients = await (await fetch('/api/clients')).json();
         
         try {
             state.activityEnrollments = await (await fetch('/api/activities/enrollments')).json();
@@ -187,6 +189,18 @@ function renderContent() {
     if (customPresentation) customPresentation.value = state.content.presentationFull;
     if (customMission) customMission.value = state.content.mission;
     if (customVision) customVision.value = state.content.vision;
+    
+    const customObjectives = document.getElementById("custom-objectives");
+    const customContactEmail = document.getElementById("custom-contact-email");
+    const customContactPhone = document.getElementById("custom-contact-phone");
+    if (customObjectives) customObjectives.value = state.content.objectives || '';
+    if (customContactEmail) customContactEmail.value = state.content.contactEmail || '';
+    if (customContactPhone) customContactPhone.value = state.content.contactPhone || '';
+    
+    const contactEmailEl = document.getElementById("contact-email");
+    const contactPhoneEl = document.getElementById("contact-phone");
+    if (contactEmailEl && state.content.contactEmail) contactEmailEl.innerText = state.content.contactEmail;
+    if (contactPhoneEl && state.content.contactPhone) contactPhoneEl.innerText = state.content.contactPhone;
 }
 
 function togglePresentation() {
@@ -1093,12 +1107,7 @@ function logout() {
     if (dashboard) dashboard.style.display = "none";
     updateAuthUI();
     showToast("Sesión cerrada correctamente", "info");
-    
-    // Redirect to index.html if on acceso.html and no dashboard view
-    const isAccesoPage = window.location.pathname.includes('acceso.html');
-    if (isAccesoPage && !document.getElementById("dashboard-view")) {
-        window.location.href = 'index.html';
-    }
+    window.location.href = 'index.html';
 }
 
 function updateAuthUI() {
@@ -1179,6 +1188,8 @@ function renderSidebarMenu() {
         menuList.innerHTML = `
             <li><button class="sidebar-btn active" onclick="switchDashboardPane('admin-rooms', this)"><i class="fa-solid fa-building"></i> Salas</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-providers', this)"><i class="fa-solid fa-user-doctor"></i> Prestadores</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-bookings', this)"><i class="fa-solid fa-calendar-days"></i> Reservas</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-clients', this)"><i class="fa-solid fa-users"></i> Clientes</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-blocks', this)"><i class="fa-solid fa-calendar-minus"></i> Bloqueos Horarios</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-popups', this)"><i class="fa-solid fa-bullhorn"></i> Alertas y Pop-ups</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-calendar', this)"><i class="fa-solid fa-calendar-week"></i> Calendario Comun.</button></li>
@@ -1350,7 +1361,10 @@ function renderDashboardPanes() {
                     servicesListHTML += `
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border); padding: 8px 0;">
                             <span>${s.name} ($${s.price.toLocaleString("es-CL")} - ${s.duration} min) - <em>${s.type}</em> | ${rescheduleInfo}</span>
-                            <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteService('${p.id}', '${s.id}')"><i class="fa-solid fa-trash"></i></button>
+                            <div class="action-btns">
+                                <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editService('${p.id}', '${s.id}')"><i class="fa-solid fa-pencil"></i></button>
+                                <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteService('${p.id}', '${s.id}')"><i class="fa-solid fa-trash"></i></button>
+                            </div>
                         </div>
                     `;
                 });
@@ -1434,6 +1448,9 @@ function renderDashboardPanes() {
         
         if (whatsappActive) whatsappActive.checked = state.whatsappConfig.enabled;
         if (whatsappNumber) whatsappNumber.value = state.whatsappConfig.number;
+        
+        renderAdminBookings();
+        renderAdminClients();
     }
 }
 
@@ -1629,13 +1646,14 @@ async function addProvider(e) {
     e.preventDefault();
     const name = document.getElementById("adm-prov-name").value;
     const role = document.getElementById("adm-prov-role").value;
+    const bio = document.getElementById("adm-prov-bio").value;
     const email = `${name.toLowerCase().replace(/ /g, "")}@psicarte.cl`;
     
     try {
         const res = await fetch('/api/providers', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: "prov-" + Date.now(), name, role, email })
+            body: JSON.stringify({ id: "prov-" + Date.now(), name, role, email, bio })
         });
         if (res.ok) {
             showToast("Prestador creado con éxito.", "success");
@@ -2115,7 +2133,10 @@ async function saveContentCustomizations(e) {
         presentationFull: document.getElementById("custom-presentation").value,
         presentationShort: document.getElementById("custom-presentation").value.substring(0, 160) + "...",
         mission: document.getElementById("custom-mission").value,
-        vision: document.getElementById("custom-vision").value
+        vision: document.getElementById("custom-vision").value,
+        objectives: document.getElementById("custom-objectives").value,
+        contactEmail: document.getElementById("custom-contact-email").value,
+        contactPhone: document.getElementById("custom-contact-phone").value
     };
     
     try {
@@ -2477,3 +2498,410 @@ async function confirmReschedule() {
         showToast("Error de conexión al reagendar.", "error");
     }
 }
+
+// ----------------------------------------------------
+// ADMIN BOOKINGS MANAGEMENT
+// ----------------------------------------------------
+function renderAdminBookings() {
+    const tbody = document.getElementById("admin-bookings-table");
+    if (!tbody) return;
+    
+    const provFilter = document.getElementById("adm-booking-provider-filter");
+    const searchInput = document.getElementById("adm-booking-search");
+    
+    if (provFilter && provFilter.options.length <= 1) {
+        state.providers.forEach(p => {
+            provFilter.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+        });
+    }
+    
+    const filterProv = provFilter ? provFilter.value : 'all';
+    const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
+    
+    let filtered = [...state.bookings];
+    if (filterProv !== 'all') {
+        filtered = filtered.filter(b => b.providerId === filterProv);
+    }
+    if (searchQuery) {
+        filtered = filtered.filter(b => 
+            (b.clientName && b.clientName.toLowerCase().includes(searchQuery)) ||
+            (b.clientEmail && b.clientEmail.toLowerCase().includes(searchQuery)) ||
+            (b.serviceName && b.serviceName.toLowerCase().includes(searchQuery))
+        );
+    }
+    
+    filtered.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);">No hay reservas registradas.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = "";
+    filtered.forEach(bk => {
+        const provName = state.providers.find(p => p.id === bk.providerId)?.name || 'Prestador';
+        const isCancelled = bk.status === 'Cancelled';
+        const statusBadge = isCancelled 
+            ? '<span class="badge badge-cancelled">Cancelada</span>' 
+            : bk.status === 'Paid' ? '<span class="badge badge-paid">Pagada</span>' : '<span class="badge badge-pending">Pendiente</span>';
+        
+        let actionBtns = '';
+        if (isCancelled) {
+            actionBtns = `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="purgeBooking('${bk.id}')"><i class="fa-solid fa-trash"></i> Eliminar</button>`;
+        } else {
+            actionBtns = `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="cancelBooking('${bk.id}')"><i class="fa-solid fa-ban"></i></button>`;
+        }
+        
+        tbody.innerHTML += `
+            <tr>
+                <td><strong>${bk.date}</strong><br>${bk.timeSlot}</td>
+                <td>${bk.clientName}<br><small>${bk.clientEmail}</small></td>
+                <td>${provName}</td>
+                <td>${bk.serviceName}</td>
+                <td>${bk.roomName}</td>
+                <td>${statusBadge}</td>
+                <td>${actionBtns}</td>
+            </tr>
+        `;
+    });
+}
+
+async function purgeBooking(id) {
+    if (confirm("¿Estás seguro de eliminar esta reserva permanentemente? Esta acción no se puede deshacer.")) {
+        try {
+            const res = await fetch(`/api/bookings/${id}/purge`, { method: 'DELETE' });
+            if (res.ok) {
+                showToast("Reserva eliminada permanentemente.", "success");
+                await loadAllData();
+                renderAdminBookings();
+            }
+        } catch (e) {
+            showToast("Error de conexión.", "error");
+        }
+    }
+}
+
+function startAdminBooking() {
+    sessionStorage.setItem("admin_booking_mode", "true");
+    window.location.href = 'index.html#agendamiento';
+}
+
+// ----------------------------------------------------
+// ADMIN CLIENTS MANAGEMENT
+// ----------------------------------------------------
+function renderAdminClients() {
+    const tbody = document.getElementById("admin-clients-table");
+    const countEl = document.getElementById("admin-clients-count");
+    if (!tbody) return;
+    
+    const searchInput = document.getElementById("adm-client-search");
+    const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
+    
+    let filtered = [...state.clients];
+    if (searchQuery) {
+        filtered = filtered.filter(c => 
+            (c.name && c.name.toLowerCase().includes(searchQuery)) ||
+            (c.email && c.email.toLowerCase().includes(searchQuery))
+        );
+    }
+    
+    if (countEl) countEl.textContent = `${filtered.length} cliente(s) registrado(s)`;
+    
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">No hay clientes registrados.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = "";
+    filtered.forEach(c => {
+        const hasBookings = state.bookings.some(b => b.clientEmail === c.email);
+        const deleteBtn = hasBookings
+            ? `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; opacity: 0.5; cursor: not-allowed;" title="No se puede eliminar: tiene reservas asociadas"><i class="fa-solid fa-lock"></i></button>`
+            : `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteAdminClient('${c.email}')"><i class="fa-solid fa-trash"></i></button>`;
+        
+        tbody.innerHTML += `
+            <tr>
+                <td>${c.name}</td>
+                <td>${c.email}</td>
+                <td>${c.rut || '-'}</td>
+                <td>${c.phone || '-'}</td>
+                <td class="action-btns">
+                    <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editAdminClient('${c.email}')"><i class="fa-solid fa-pencil"></i></button>
+                    ${deleteBtn}
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function editAdminClient(email) {
+    const client = state.clients.find(c => c.email === email);
+    if (!client) return;
+    
+    document.getElementById("adm-client-editing-email").value = email;
+    document.getElementById("adm-client-name").value = client.name || '';
+    document.getElementById("adm-client-email").value = client.email || '';
+    document.getElementById("adm-client-rut").value = client.rut || '';
+    document.getElementById("adm-client-phone").value = client.phone || '';
+    document.getElementById("admin-client-form-title").innerText = "Editar Cliente";
+    document.getElementById("adm-client-email").readonly = true;
+}
+
+function resetAdminClientForm() {
+    document.getElementById("admin-client-form").reset();
+    document.getElementById("adm-client-editing-email").value = "";
+    document.getElementById("admin-client-form-title").innerText = "Añadir Cliente";
+    document.getElementById("adm-client-email").readonly = false;
+}
+
+async function saveAdminClient(e) {
+    e.preventDefault();
+    const editingEmail = document.getElementById("adm-client-editing-email").value;
+    const name = document.getElementById("adm-client-name").value;
+    const email = document.getElementById("adm-client-email").value;
+    const rut = document.getElementById("adm-client-rut").value;
+    const phone = document.getElementById("adm-client-phone").value;
+    
+    try {
+        const res = await fetch('/api/clients', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, name, rut, phone })
+        });
+        if (res.ok) {
+            showToast(editingEmail ? "Cliente actualizado correctamente." : "Cliente creado correctamente.", "success");
+            resetAdminClientForm();
+            await loadAllData();
+            renderAdminClients();
+        }
+    } catch (e) {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+async function deleteAdminClient(email) {
+    const hasBookings = state.bookings.some(b => b.clientEmail === email);
+    if (hasBookings) {
+        showToast("No se puede eliminar: el cliente tiene reservas asociadas. Cancela o elimina sus reservas primero.", "error");
+        return;
+    }
+    
+    if (confirm("¿Estás seguro de eliminar este cliente permanentemente?")) {
+        try {
+            const res = await fetch(`/api/clients/${encodeURIComponent(email)}`, { method: 'DELETE' });
+            if (res.ok) {
+                showToast("Cliente eliminado correctamente.", "success");
+                await loadAllData();
+                renderAdminClients();
+            }
+        } catch (e) {
+            showToast("Error de conexión.", "error");
+        }
+    }
+}
+
+// ----------------------------------------------------
+// SERVICE EDIT MODE
+// ----------------------------------------------------
+let editingServiceId = null;
+
+function editService(provId, servId) {
+    const provider = state.providers.find(p => p.id === provId);
+    if (!provider) return;
+    const service = provider.services.find(s => s.id === servId);
+    if (!service) return;
+    
+    editingServiceId = servId;
+    
+    document.getElementById("adm-serv-provider").value = provId;
+    document.getElementById("adm-serv-name").value = service.name;
+    document.getElementById("adm-serv-price").value = service.price;
+    document.getElementById("adm-serv-duration").value = service.duration;
+    document.getElementById("adm-serv-allow-reschedule").checked = service.allowReschedule !== 0;
+    document.getElementById("adm-serv-max-reschedules").value = service.maxReschedules || 1;
+    document.getElementById("adm-serv-max-reschedules-container").style.display = service.allowReschedule !== 0 ? "block" : "none";
+    
+    const submitBtn = document.querySelector("#admin-service-form button[type='submit']");
+    if (submitBtn) submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> Guardar Cambios';
+    
+    document.getElementById("pane-admin-providers").scrollIntoView({ behavior: 'smooth' });
+}
+
+const originalAddService = addService;
+addService = async function(e) {
+    e.preventDefault();
+    
+    if (editingServiceId) {
+        const provId = document.getElementById("adm-serv-provider").value;
+        const name = document.getElementById("adm-serv-name").value;
+        const price = Number(document.getElementById("adm-serv-price").value);
+        const duration = Number(document.getElementById("adm-serv-duration").value);
+        const allowReschedule = document.getElementById("adm-serv-allow-reschedule").checked;
+        const maxReschedules = Number(document.getElementById("adm-serv-max-reschedules").value) || 1;
+        
+        try {
+            const res = await fetch('/api/services', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: editingServiceId, providerId: provId, name, price, duration, type: "Virtual", allowReschedule, maxReschedules })
+            });
+            if (res.ok) {
+                showToast("Servicio actualizado correctamente.", "success");
+                editingServiceId = null;
+                document.getElementById("admin-service-form").reset();
+                document.getElementById("adm-serv-allow-reschedule").checked = true;
+                document.getElementById("adm-serv-max-reschedules").value = "1";
+                document.getElementById("adm-serv-max-reschedules-container").style.display = "block";
+                const submitBtn = document.querySelector("#admin-service-form button[type='submit']");
+                if (submitBtn) submitBtn.innerHTML = 'Añadir Servicio';
+                await loadAllData();
+                renderDashboardPanes();
+                renderServicesSection();
+            }
+        } catch (err) {
+            showToast("Error al actualizar servicio.", "error");
+        }
+        return;
+    }
+    
+    originalAddService(e);
+};
+
+// ----------------------------------------------------
+// ADMIN BOOKING MODE (admin_booking_mode)
+// ----------------------------------------------------
+function initAdminBookingMode() {
+    const isAdminMode = sessionStorage.getItem("admin_booking_mode") === "true";
+    if (!isAdminMode) return;
+    
+    const widget = document.querySelector('.booking-widget');
+    if (widget) {
+        const banner = document.createElement('div');
+        banner.id = 'admin-booking-banner';
+        banner.style.cssText = 'background: var(--color-info); color: #fff; padding: 12px 20px; border-radius: var(--radius-sm); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;';
+        banner.innerHTML = '<i class="fa-solid fa-user-shield"></i> <strong>Modo Administrador:</strong> Estás creando una reserva para un cliente. El pago se omitirá automáticamente.';
+        widget.insertBefore(banner, widget.firstChild);
+    }
+    
+    const step3 = document.getElementById("pane-step-3");
+    if (step3) {
+        const existingSearch = document.getElementById("admin-client-search-booking");
+        if (!existingSearch) {
+            const searchDiv = document.createElement('div');
+            searchDiv.className = 'form-group';
+            searchDiv.id = 'admin-client-search-booking';
+            searchDiv.innerHTML = `
+                <label>Seleccionar Cliente Registrado:</label>
+                <select class="form-control" id="admin-booking-client-select" onchange="onAdminBookingClientChange()">
+                    <option value="">-- Crear Cliente Nuevo --</option>
+                </select>
+            `;
+            step3.insertBefore(searchDiv, step3.firstChild);
+            
+            const select = document.getElementById("admin-booking-client-select");
+            state.clients.forEach(c => {
+                select.innerHTML += `<option value="${c.email}">${c.name} (${c.email})</option>`;
+            });
+        }
+    }
+}
+
+function onAdminBookingClientChange() {
+    const email = document.getElementById("admin-booking-client-select").value;
+    if (!email) {
+        document.getElementById("client-name").value = '';
+        document.getElementById("client-rut").value = '';
+        document.getElementById("client-email").value = '';
+        document.getElementById("client-phone").value = '';
+        return;
+    }
+    
+    const client = state.clients.find(c => c.email === email);
+    if (client) {
+        document.getElementById("client-name").value = client.name || '';
+        document.getElementById("client-rut").value = client.rut || '';
+        document.getElementById("client-email").value = client.email || '';
+        document.getElementById("client-phone").value = client.phone || '';
+    }
+}
+
+const originalGoToStep = goToStep;
+goToStep = function(stepNum) {
+    originalGoToStep(stepNum);
+    
+    const isAdminMode = sessionStorage.getItem("admin_booking_mode") === "true";
+    if (isAdminMode && stepNum === 3) {
+        initAdminBookingMode();
+    }
+};
+
+const originalProcessPayment = processPayment;
+processPayment = async function() {
+    const isAdminMode = sessionStorage.getItem("admin_booking_mode") === "true";
+    
+    if (isAdminMode) {
+        bookingState.client.name = document.getElementById("client-name").value;
+        bookingState.client.rut = document.getElementById("client-rut").value;
+        bookingState.client.email = document.getElementById("client-email").value;
+        bookingState.client.phone = document.getElementById("client-phone").value;
+        
+        if (!bookingState.client.name || !bookingState.client.email) {
+            showToast("Debe completar los datos del cliente.", "error");
+            return;
+        }
+        
+        showToast("Registrando reserva como administrador...", "info");
+        
+        const newBooking = {
+            id: "bk-" + Date.now(),
+            providerId: bookingState.provider.id,
+            serviceId: bookingState.service.id,
+            serviceName: bookingState.service.name,
+            price: bookingState.service.price,
+            duration: bookingState.service.duration,
+            roomId: bookingState.room.id,
+            roomName: bookingState.room.name,
+            date: bookingState.date,
+            timeSlot: bookingState.timeSlot,
+            startTime: bookingState.startTime,
+            endTime: bookingState.endTime,
+            clientEmail: bookingState.client.email,
+            clientName: bookingState.client.name,
+            clientRut: bookingState.client.rut,
+            clientPhone: bookingState.client.phone
+        };
+        
+        try {
+            const response = await fetch('/api/bookings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newBooking)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                showToast("Reserva registrada exitosamente por el administrador.", "success");
+                sessionStorage.removeItem("admin_booking_mode");
+                const banner = document.getElementById("admin-booking-banner");
+                if (banner) banner.remove();
+                
+                bookingState = {
+                    step: 1, provider: null, service: null, room: null,
+                    date: null, timeSlot: null, startTime: null, endTime: null,
+                    client: { name: "", rut: "", email: "", phone: "" }
+                };
+                
+                await loadAllData();
+                window.location.href = 'acceso.html';
+            } else {
+                showToast(result.error || "Error al registrar la reserva.", "error");
+            }
+        } catch (e) {
+            showToast("Error de conexión al guardar la reserva.", "error");
+        }
+        return;
+    }
+    
+    originalProcessPayment();
+};

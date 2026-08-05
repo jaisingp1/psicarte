@@ -3,6 +3,22 @@
 // ----------------------------------------------------
 document.addEventListener("DOMContentLoaded", async () => {
     initTheme();
+    
+    // Show logout message if redirected from forceLogout
+    const logoutMsg = sessionStorage.getItem("psicarte_logout_msg");
+    if (logoutMsg) {
+        sessionStorage.removeItem("psicarte_logout_msg");
+        setTimeout(() => showToast(logoutMsg, "info"), 300);
+    }
+    
+    // Validate session before loading data - stop if invalid
+    if (state.currentUser) {
+        const isValid = await validateSession();
+        if (!isValid) {
+            return; // Don't load anything, already redirecting
+        }
+    }
+    
     await loadAllData();
     setupEventListeners();
     initBookingWidget();
@@ -34,7 +50,7 @@ addService = async function(e) {
         try {
             const res = await fetch('/api/services', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ id: editingServiceId, providerId: provId, name, price, duration, type: "Virtual", allowReschedule, maxReschedules })
             });
             if (res.ok) {
@@ -167,7 +183,7 @@ processPayment = async function() {
         try {
             const response = await fetch('/api/bookings', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders(),
                 body: JSON.stringify(newBooking)
             });
             

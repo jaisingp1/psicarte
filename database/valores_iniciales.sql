@@ -91,3 +91,11 @@ INSERT OR REPLACE INTO khipu_notifications (id, type, headers, query_params, bod
 ('notif-1', 'payment_1.3', '{"content-type":"application/x-www-form-urlencoded"}', '{"notification_token":"mock-token-bk-1"}', '{"api_version":"1.3","notification_token":"mock-token-bk-1","receiver_id":"123456","notification_sign":"abc123xyz"}', '127.0.0.1', datetime('now', '-2 hours')),
 ('notif-2', 'rendition_drn_2.0', '{"content-type":"application/json"}', '{}', '{"report_id":"rep-drn-998","api_version":"DRN-2.0","status":"success","generated_at":"2026-08-04T12:00:00Z","summary":{"total_amount":46980,"count":2}}', '127.0.0.1', datetime('now', '-1 hours')),
 ('notif-3', 'transaction_dtn_1.0', '{"content-type":"application/json"}', '{}', '{"report_id":"rep-dtn-552","api_version":"DTN-1.0","transactions":[{"payment_id":"khipu-p1","amount":20990,"status":"cleared"},{"payment_id":"khipu-p2","amount":25990,"status":"cleared"}]}', '127.0.0.1', datetime('now', '-10 minutes'));
+
+-- 10. Seed Users
+INSERT OR REPLACE INTO users (id, email, password, name, role, rut, phone) VALUES
+('usr-admin', 'admin@psicarte.cl', '$2b$10$j6vfcBbEJBlu1IgYC3Plm.zG1AbbQ4kLrRI18ALKhhgjyRpbf3UbS', 'Administrador General', 'administrador', '', ''),
+('usr-ivan', 'ivan@psicarte.cl', '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa', 'Iván Pastén Fuentes', 'prestador', '', ''),
+('usr-valentina', 'valentina@psicarte.cl', '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa', 'Valentina Maldonado Terroba', 'prestador', '', ''),
+('usr-macarena', 'macarena@psicarte.cl', '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa', 'Macarena Méndez', 'prestador', '', '');
+

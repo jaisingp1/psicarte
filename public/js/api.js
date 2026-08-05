@@ -1,23 +1,54 @@
 // Load everything from Node/SQLite server APIs
+
+function getAuthHeaders() {
+    const token = getToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+}
+
 async function loadAllData() {
     try {
         state.content = await (await fetch('/api/content')).json();
         state.rooms = await (await fetch('/api/rooms')).json();
         state.providers = await (await fetch('/api/providers')).json();
-        state.bookings = await (await fetch('/api/bookings')).json();
+        
+        const bookingsRes = await fetch('/api/bookings', { headers: getAuthHeaders() });
+        if (bookingsRes.status === 401 || bookingsRes.status === 403) {
+            forceLogout('Sesión expirada. Inicie sesión nuevamente.');
+            return;
+        } else {
+            state.bookings = await bookingsRes.json();
+        }
+        
         state.activities = await (await fetch('/api/activities')).json();
-        state.sicknessBlocks = await (await fetch('/api/blocks')).json();
-        state.clients = await (await fetch('/api/clients')).json();
+        
+        const blocksRes = await fetch('/api/blocks', { headers: getAuthHeaders() });
+        if (blocksRes.ok) {
+            state.sicknessBlocks = await blocksRes.json();
+        }
+        
+        const clientsRes = await fetch('/api/clients', { headers: getAuthHeaders() });
+        if (clientsRes.ok) {
+            state.clients = await clientsRes.json();
+        }
         
         try {
-            state.activityEnrollments = await (await fetch('/api/activities/enrollments')).json();
+            const enrollRes = await fetch('/api/activities/enrollments', { headers: getAuthHeaders() });
+            if (enrollRes.ok) {
+                state.activityEnrollments = await enrollRes.json();
+            } else {
+                state.activityEnrollments = [];
+            }
         } catch (e) {
             state.activityEnrollments = [];
         }
 
         if (state.currentUser && state.currentUser.role === 'administrador') {
             try {
-                state.khipuNotifications = await (await fetch('/api/admin/khipu-notifications')).json();
+                state.khipuNotifications = await (await fetch('/api/admin/khipu-notifications', { headers: getAuthHeaders() })).json();
             } catch (e) {
                 console.error("Error loading Khipu notifications:", e);
                 state.khipuNotifications = [];
@@ -118,5 +149,102 @@ function toggleProviderDesc(id, btn) {
     } else {
         desc.classList.add("expanded");
         btn.innerHTML = 'Leer menos <i class="fa-solid fa-chevron-up"></i>';
+    }
+}
+
+// ----------------------------------------------------
+// API CALLS: USERS (Admin CRUD)
+// ----------------------------------------------------
+async function getUsers() {
+    try {
+        const res = await fetch('/api/users', { headers: getAuthHeaders() });
+        if (!res.ok) throw new Error('Error fetching users');
+        return await res.json();
+    } catch (e) {
+        console.error('getUsers error:', e);
+        showToast('Error al cargar usuarios.', 'error');
+        return [];
+    }
+}
+
+async function createUser(userData) {
+    try {
+        const res = await fetch('/api/users', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(userData)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error creating user');
+        return data;
+    } catch (e) {
+        console.error('createUser error:', e);
+        showToast('Error al crear usuario: ' + e.message, 'error');
+        throw e;
+    }
+}
+
+async function updateUser(id, userData) {
+    try {
+        const res = await fetch(`/api/users/${id}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(userData)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error updating user');
+        return data;
+    } catch (e) {
+        console.error('updateUser error:', e);
+        showToast('Error al actualizar usuario: ' + e.message, 'error');
+        throw e;
+    }
+}
+
+async function deleteUser(id) {
+    try {
+        const res = await fetch(`/api/users/${id}`, { 
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error deleting user');
+        return data;
+    } catch (e) {
+        console.error('deleteUser error:', e);
+        showToast('Error al eliminar usuario: ' + e.message, 'error');
+        throw e;
+    }
+}
+
+// ----------------------------------------------------
+// API CALLS: CONFIG (Advanced Raw)
+// ----------------------------------------------------
+async function getAllConfig() {
+    try {
+        const res = await fetch('/api/config', { headers: getAuthHeaders() });
+        if (!res.ok) throw new Error('Error fetching config');
+        return await res.json();
+    } catch (e) {
+        console.error('getAllConfig error:', e);
+        showToast('Error al cargar configuración.', 'error');
+        return {};
+    }
+}
+
+async function saveConfig(configData) {
+    try {
+        const res = await fetch('/api/config', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(configData)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error saving config');
+        return data;
+    } catch (e) {
+        console.error('saveConfig error:', e);
+        showToast('Error al guardar configuración: ' + e.message, 'error');
+        throw e;
     }
 }

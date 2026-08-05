@@ -272,7 +272,7 @@ async function confirmReschedule() {
     try {
         const res = await fetch(`/api/bookings/${rescheduleState.bookingId}/reschedule`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 newDate: rescheduleState.date,
                 newTimeSlot: rescheduleState.timeSlot,

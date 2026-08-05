@@ -564,65 +564,6 @@
                         </div>
                     </div>
 
-                    <div id="pane-admin-clients" class="dashboard-pane">
-                        <h3>Gestión de Clientes</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Crea, edita y administra los perfiles de clientes del centro.</p>
-                        
-                        <div class="grid-2">
-                            <div class="card" style="box-shadow: none;">
-                                <h4 id="admin-client-form-title">Añadir Cliente</h4>
-                                <form id="admin-client-form" onsubmit="saveAdminClient(event)" style="margin-top: 15px;">
-                                    <input type="hidden" id="adm-client-editing-email" value="">
-                                    <div class="form-group">
-                                        <label for="adm-client-name">Nombre Completo:</label>
-                                        <input type="text" id="adm-client-name" class="form-control" required>
-                                    </div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label for="adm-client-email">Correo:</label>
-                                            <input type="email" id="adm-client-email" class="form-control" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="adm-client-rut">RUT:</label>
-                                            <input type="text" id="adm-client-rut" class="form-control" required>
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="adm-client-phone">Celular:</label>
-                                        <input type="tel" id="adm-client-phone" class="form-control" required>
-                                    </div>
-                                    <div style="display: flex; gap: 10px;">
-                                        <button type="submit" class="btn-primary" style="flex: 1;">Guardar Cliente</button>
-                                        <button type="button" class="btn-secondary" onclick="resetAdminClientForm()">Cancelar</button>
-                                    </div>
-                                </form>
-                            </div>
-                            <div class="card" style="box-shadow: none;">
-                                <h4>Buscar Clientes</h4>
-                                <div class="form-group" style="margin-top: 15px;">
-                                    <input type="text" id="adm-client-search" class="form-control" placeholder="Buscar por nombre o email..." oninput="renderAdminClients()">
-                                </div>
-                                <div id="admin-clients-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 10px;"></div>
-                            </div>
-                        </div>
-
-                        <h4 style="margin-top: 30px; margin-bottom: 10px;">Listado de Clientes</h4>
-                        <div class="table-responsive">
-                            <table class="admin-table">
-                                <thead>
-                                    <tr>
-                                        <th>Nombre</th>
-                                        <th>Correo</th>
-                                        <th>RUT</th>
-                                        <th>Celular</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="admin-clients-table"></tbody>
-                            </table>
-                        </div>
-                    </div>
-
                     <!-- PANEL DE NOTIFICACIONES KHIPU -->
                     <div id="pane-admin-khipu-notifications" class="dashboard-pane">
                         <h3>Registro de Notificaciones Khipu</h3>
@@ -644,6 +585,152 @@
                             </table>
                         </div>
                         <p id="admin-khipu-notifications-empty" style="text-align: center; color: var(--text-secondary); display: none; margin-top: 20px;">No se han recibido notificaciones.</p>
+                    </div>
+
+                    <!-- ADMIN PERSONAL PANES -->
+                    <div id="pane-admin-my-bookings" class="dashboard-pane">
+                        <h3>Mis Reservas</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Reservas realizadas a tu nombre como administrador.</p>
+                        <div class="table-responsive">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Hora</th>
+                                        <th>Servicio</th>
+                                        <th>Prestador</th>
+                                        <th>Sala</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-my-bookings-table"></tbody>
+                            </table>
+                        </div>
+                        <p id="admin-my-bookings-empty" style="text-align: center; color: var(--text-secondary); display: none; margin-top: 20px;">No tienes reservas registradas.</p>
+                    </div>
+
+                    <div id="pane-admin-my-profile" class="dashboard-pane">
+                        <h3>Mis Datos Personales</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Edita tu información de perfil de administrador.</p>
+                        <form id="admin-profile-form" onsubmit="saveAdminProfile(event)">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="adm-profile-name">Nombre:</label>
+                                    <input type="text" id="adm-profile-name" class="form-control" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="adm-profile-email">Correo:</label>
+                                    <input type="email" id="adm-profile-email" class="form-control" required readonly>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="adm-profile-role">Rol:</label>
+                                <input type="text" id="adm-profile-role" class="form-control" readonly>
+                            </div>
+                            <button type="submit" class="btn-primary">Guardar Cambios</button>
+                        </form>
+                    </div>
+
+                    <div id="pane-admin-users" class="dashboard-pane">
+                        <h3>Gestión de Usuarios</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra todos los usuarios del sistema (administradores, prestadores y clientes).</p>
+                        
+                        <div class="grid-2">
+                            <div class="card" style="box-shadow: none;">
+                                <h4 id="admin-user-form-title">Añadir Usuario</h4>
+                                <form id="admin-user-form" onsubmit="saveAdminUser(event)" style="margin-top: 15px;">
+                                    <input type="hidden" id="adm-user-editing-id" value="">
+                                    <div class="form-group">
+                                        <label for="adm-user-name">Nombre:</label>
+                                        <input type="text" id="adm-user-name" class="form-control" required>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="adm-user-email">Correo:</label>
+                                            <input type="email" id="adm-user-email" class="form-control" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="adm-user-role">Rol:</label>
+                                            <select id="adm-user-role" class="form-control" required onchange="toggleAdminUserFields()">
+                                                <option value="usuario">Cliente / Usuario</option>
+                                                <option value="prestador">Prestador</option>
+                                                <option value="administrador">Administrador</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div id="adm-user-client-fields">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="adm-user-rut">RUT:</label>
+                                                <input type="text" id="adm-user-rut" class="form-control" placeholder="12.345.678-9">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="adm-user-phone">Celular:</label>
+                                                <input type="tel" id="adm-user-phone" class="form-control" placeholder="+56912345678">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="adm-user-password">Contraseña:</label>
+                                        <input type="password" id="adm-user-password" class="form-control" placeholder="Dejar en blanco para no cambiar">
+                                    </div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button type="submit" class="btn-primary" style="flex: 1;">Guardar Usuario</button>
+                                        <button type="button" class="btn-secondary" onclick="resetAdminUserForm()">Cancelar</button>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="card" style="box-shadow: none;">
+                                <h4>Buscar Usuarios</h4>
+                                <div class="form-group" style="margin-top: 15px;">
+                                    <input type="text" id="adm-user-search" class="form-control" placeholder="Buscar por nombre o email..." oninput="renderAdminUsers()">
+                                </div>
+                                <div id="admin-users-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 10px;"></div>
+                            </div>
+                        </div>
+
+                        <h4 style="margin-top: 30px; margin-bottom: 10px;">Listado de Usuarios</h4>
+                        <div class="table-responsive">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Correo</th>
+                                        <th>Rol</th>
+                                        <th>RUT</th>
+                                        <th>Celular</th>
+                                        <th>Creado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-users-table"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="pane-admin-config-raw" class="dashboard-pane">
+                        <h3>Configuración Avanzada</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Editor directo de la tabla de configuración clave-valor.</p>
+                        
+                        <div class="card" style="box-shadow: none; margin-bottom: 20px;">
+                            <h4>Buscar Configuración</h4>
+                            <div class="form-group" style="margin-top: 15px;">
+                                <input type="text" id="adm-config-search" class="form-control" placeholder="Buscar por clave..." oninput="renderAdminConfigRaw()">
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Clave</th>
+                                        <th>Valor</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-config-raw-table"></tbody>
+                            </table>
+                        </div>
                     </div>
 
                 </div>

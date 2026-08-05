@@ -200,7 +200,7 @@ async function submitActivityEnrollment(e) {
     try {
         const res = await fetch('/api/activities/enroll', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ activityId, clientName, clientEmail, clientPhone })
         });
         
@@ -293,7 +293,7 @@ async function addCommunityActivity(e) {
     try {
         const res = await fetch('/api/activities', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(newAct)
         });
         if (res.ok) {
@@ -311,7 +311,10 @@ async function addCommunityActivity(e) {
 
 async function deleteActivity(id) {
     try {
-        const res = await fetch(`/api/activities/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/activities/${id}`, { 
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
         if (res.ok) {
             showToast("Actividad eliminada.", "success");
             await loadAllData();

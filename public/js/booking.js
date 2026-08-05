@@ -133,7 +133,7 @@ function goToStep(stepNum) {
         
         // Auto fill if client is logged in
         if (state.currentUser && state.currentUser.role === "usuario") {
-            fetch('/api/clients')
+            fetch('/api/clients', { headers: getAuthHeaders() })
                 .then(r => r.json())
                 .then(clients => {
                     const clientData = clients.find(c => c.email === state.currentUser.email);
@@ -521,7 +521,7 @@ async function processPayment() {
         // Step 1: Create the Pending_Payment booking in backend
         const response = await fetch('/api/bookings', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(newBooking)
         });
         
@@ -538,7 +538,7 @@ async function processPayment() {
         showToast("Generando cobro seguro con Khipu...", "info");
         const khipuResponse = await fetch('/api/khipu/create-payment', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ bookingId })
         });
         
@@ -558,7 +558,7 @@ async function processPayment() {
                     // Send mock payment notification to local webhook
                     const notifyResponse = await fetch('/api/khipu/notify', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: getAuthHeaders(),
                         body: JSON.stringify({ notification_token: paymentId })
                     });
                     

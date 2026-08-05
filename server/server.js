@@ -3,10 +3,35 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const db = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// JWT Secret - regenerate on --reset for security
+const JWT_SECRET = process.argv.includes('--reset') 
+    ? crypto.randomBytes(64).toString('hex') 
+    : process.env.JWT_SECRET || 'psicarte_jwt_secret_fallback';
+
+// Auth Middleware - validates JWT token
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (!token) {
+        return res.status(401).json({ error: 'Sesión no válida. Inicie sesión nuevamente.' });
+    }
+    
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: 'Sesión expirada. Inicie sesión nuevamente.' });
+        }
+        req.user = user;
+        next();
+    });
+}
 
 // Middleware
 app.use(cors());
@@ -103,40 +128,61 @@ app.post('/api/auth/login', (req, res) => {
         return res.status(400).json({ error: 'Faltan credenciales o rol.' });
     }
 
-    if (role === 'administrador') {
-        if (email === 'admin@psicarte.cl' && password === 'admin123') {
-            return res.json({ name: 'Administrador General', email, role });
-        }
-    } else if (role === 'prestador') {
-        if (password === 'prestador123') {
-            db.get("SELECT id, name, email FROM providers WHERE email = ?", [email], (err, row) => {
-                if (err) return res.status(500).json({ error: err.message });
-                if (row) {
-                    return res.json({ id: row.id, name: row.name, email: row.email, role });
+    // First, check the users table for any role (including clients that were registered in users)
+    db.get("SELECT id, email, password, name, role FROM users WHERE email = ?", [email], (err, user) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        if (user) {
+            // Verify password using bcrypt
+            bcrypt.compare(password, user.password, (err2, isMatch) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                if (!isMatch) {
+                    return res.status(401).json({ error: 'Contraseña incorrecta.' });
+                }
+                // Normalize "admin" role to "administrador" for backward compatibility with old database instances
+                const dbRole = user.role === 'admin' ? 'administrador' : user.role;
+                
+                // If it is a provider, fetch providerId from providers table for compatibility
+                if (dbRole === 'prestador') {
+                    db.get("SELECT id FROM providers WHERE email = ?", [email], (errProv, prov) => {
+                        if (errProv) return res.status(500).json({ error: errProv.message });
+                        const finalId = prov ? prov.id : user.id;
+                        const tokenPayload = { id: finalId, email: user.email, role: dbRole };
+                        const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+                        return res.json({ ...tokenPayload, name: user.name, token });
+                    });
                 } else {
-                    return res.status(401).json({ error: 'Prestador no encontrado.' });
+                    const tokenPayload = { id: user.id, email: user.email, role: dbRole };
+                    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+                    return res.json({ ...tokenPayload, name: user.name, token });
                 }
             });
             return;
         }
-    } else if (role === 'usuario') {
-        // Auto register / login mock client
-        db.get("SELECT name, email, rut, phone FROM clients WHERE email = ?", [email], (err, row) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (row) {
-                return res.json({ name: row.name, email: row.email, role });
-            } else {
-                const name = email.split('@')[0].toUpperCase();
-                db.run("INSERT INTO clients (email, name, rut, phone) VALUES (?, ?, '', '')", [email, name], (err2) => {
-                    if (err2) return res.status(500).json({ error: err2.message });
-                    return res.json({ name, email, role });
-                });
-            }
-        });
-        return;
-    } else {
-        return res.status(401).json({ error: 'Credenciales inválidas.' });
-    }
+
+        // If user is not found in users table but role is 'usuario', allow auto-register/login behavior in clients table
+        if (role === 'usuario') {
+            db.get("SELECT name, email, rut, phone FROM clients WHERE email = ?", [email], (err2, row) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                if (row) {
+                    const tokenPayload = { id: row.email, email: row.email, role };
+                    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+                    return res.json({ name: row.name, email: row.email, role, token });
+                } else {
+                    const name = email.split('@')[0].toUpperCase();
+                    db.run("INSERT INTO clients (email, name, rut, phone) VALUES (?, ?, '', '')", [email, name], (err3) => {
+                        if (err3) return res.status(500).json({ error: err3.message });
+                        const tokenPayload = { id: email, email, role };
+                        const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+                        return res.json({ name, email, role, token });
+                    });
+                }
+            });
+            return;
+        }
+
+        return res.status(401).json({ error: 'Usuario no encontrado.' });
+    });
 });
 
 app.post('/api/auth/recover', (req, res) => {
@@ -157,6 +203,115 @@ app.post('/api/auth/recover', (req, res) => {
 });
 
 // ----------------------------------------------------
+// REST API: USERS (Admin CRUD) - PROTECTED
+// ----------------------------------------------------
+app.get('/api/users', authenticateToken, (req, res) => {
+    db.all("SELECT id, email, name, role, rut, phone, created_at FROM users", (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/users', authenticateToken, (req, res) => {
+    const { email, password, name, role, rut, phone } = req.body;
+    if (!email || !password || !name || !role) {
+        return res.status(400).json({ error: 'Faltan campos requeridos.' });
+    }
+    bcrypt.hash(password, 10, (err, hash) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const id = 'user-' + Date.now();
+        db.run("INSERT INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [id, email, hash, name, role, rut || '', phone || ''],
+            function(err2) {
+                if (err2) return res.status(500).json({ error: err2.message });
+                
+                // If role is usuario/cliente, sync with clients table
+                if (role === 'usuario') {
+                    db.run("INSERT OR REPLACE INTO clients (email, name, rut, phone) VALUES (?, ?, ?, ?)",
+                        [email, name, rut || '', phone || ''],
+                        (errClient) => {
+                            if (errClient) console.error("Error syncing to clients:", errClient.message);
+                        }
+                    );
+                }
+                res.json({ success: true, id });
+            }
+        );
+    });
+});
+
+app.put('/api/users/:id', authenticateToken, (req, res) => {
+    const { email, name, role, password, rut, phone } = req.body;
+    const { id } = req.params;
+    if (!email || !name || !role) {
+        return res.status(400).json({ error: 'Faltan campos requeridos.' });
+    }
+    
+    const finalizeUpdate = (hash) => {
+        const query = hash 
+            ? "UPDATE users SET email = ?, name = ?, role = ?, password = ?, rut = ?, phone = ? WHERE id = ?"
+            : "UPDATE users SET email = ?, name = ?, role = ?, rut = ?, phone = ? WHERE id = ?";
+        const params = hash
+            ? [email, name, role, hash, rut || '', phone || '', id]
+            : [email, name, role, rut || '', phone || '', id];
+            
+        db.run(query, params, function(err2) {
+            if (err2) return res.status(500).json({ error: err2.message });
+            
+            // Sync with clients table if role is usuario/cliente
+            if (role === 'usuario') {
+                db.run("INSERT OR REPLACE INTO clients (email, name, rut, phone) VALUES (?, ?, ?, ?)",
+                    [email, name, rut || '', phone || ''],
+                    (errClient) => {
+                        if (errClient) console.error("Error syncing to clients on update:", errClient.message);
+                    }
+                );
+            }
+            res.json({ success: true });
+        });
+    };
+
+    if (password) {
+        bcrypt.hash(password, 10, (err, hash) => {
+            if (err) return res.status(500).json({ error: err.message });
+            finalizeUpdate(hash);
+        });
+    } else {
+        finalizeUpdate(null);
+    }
+});
+
+app.delete('/api/users/:id', authenticateToken, (req, res) => {
+    db.get("SELECT email, role FROM users WHERE id = ?", [req.params.id], (err, user) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+        
+        if (user.role === 'usuario') {
+            // Check for bookings conflict
+            db.get("SELECT COUNT(*) as count FROM bookings WHERE clientEmail = ?", [user.email], (err2, row) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                if (row.count > 0) {
+                    return res.status(400).json({ error: 'No se puede eliminar el usuario/cliente porque tiene reservas asociadas.' });
+                }
+                
+                db.serialize(() => {
+                    db.run("DELETE FROM users WHERE id = ?", [req.params.id]);
+                    db.run("DELETE FROM clients WHERE email = ?", [user.email], (err3) => {
+                        if (err3) return res.status(500).json({ error: err3.message });
+                        res.json({ success: true });
+                    });
+                });
+            });
+        } else {
+            db.run("DELETE FROM users WHERE id = ?", [req.params.id], function(err2) {
+                if (err2) return res.status(500).json({ error: err2.message });
+                res.json({ success: true });
+            });
+        }
+    });
+});
+
+// ----------------------------------------------------
 // REST API: CONTENT (Mission, Vision, etc.)
 // ----------------------------------------------------
 app.get('/api/content', (req, res) => {
@@ -170,7 +325,7 @@ app.get('/api/content', (req, res) => {
     });
 });
 
-app.post('/api/content', (req, res) => {
+app.post('/api/content', authenticateToken, (req, res) => {
     const data = req.body;
     db.serialize(() => {
         const stmt = db.prepare("INSERT OR REPLACE INTO content (key, value) VALUES (?, ?)");
@@ -194,7 +349,7 @@ app.get('/api/rooms', (req, res) => {
     });
 });
 
-app.post('/api/rooms', (req, res) => {
+app.post('/api/rooms', authenticateToken, (req, res) => {
     const { id, name, type, openTime, closeTime } = req.body;
     db.run("INSERT OR REPLACE INTO rooms (id, name, type, openTime, closeTime) VALUES (?, ?, ?, ?, ?)",
         [id, name, type, openTime, closeTime],
@@ -205,7 +360,7 @@ app.post('/api/rooms', (req, res) => {
     );
 });
 
-app.delete('/api/rooms/:id', (req, res) => {
+app.delete('/api/rooms/:id', authenticateToken, (req, res) => {
     db.run("DELETE FROM rooms WHERE id = ?", [req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
@@ -240,7 +395,7 @@ app.get('/api/providers', (req, res) => {
     });
 });
 
-app.post('/api/providers', (req, res) => {
+app.post('/api/providers', authenticateToken, (req, res) => {
     const { id, name, role, email, blocks, bio } = req.body;
     const blocksStr = JSON.stringify(blocks || {
         2: ["20:00-21:00", "21:00-22:00"],
@@ -256,7 +411,7 @@ app.post('/api/providers', (req, res) => {
     );
 });
 
-app.delete('/api/providers/:id', (req, res) => {
+app.delete('/api/providers/:id', authenticateToken, (req, res) => {
     db.serialize(() => {
         db.run("DELETE FROM providers WHERE id = ?", [req.params.id]);
         db.run("DELETE FROM services WHERE providerId = ?", [req.params.id], function(err) {
@@ -266,7 +421,7 @@ app.delete('/api/providers/:id', (req, res) => {
     });
 });
 
-app.post('/api/services', (req, res) => {
+app.post('/api/services', authenticateToken, (req, res) => {
     const { id, providerId, name, price, duration, type, allowReschedule, maxReschedules } = req.body;
     const allowRescheduleVal = allowReschedule !== undefined ? (allowReschedule ? 1 : 0) : 1;
     const maxReschedulesVal = maxReschedules || 1;
@@ -279,7 +434,7 @@ app.post('/api/services', (req, res) => {
     );
 });
 
-app.delete('/api/services/:id', (req, res) => {
+app.delete('/api/services/:id', authenticateToken, (req, res) => {
     db.run("DELETE FROM services WHERE id = ?", [req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
@@ -371,14 +526,14 @@ app.post('/api/bookings', (req, res) => {
     });
 });
 
-app.delete('/api/bookings/:id', (req, res) => {
+app.delete('/api/bookings/:id', authenticateToken, (req, res) => {
     db.run("UPDATE bookings SET status = 'Cancelled' WHERE id = ?", [req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
 
-app.delete('/api/bookings/:id/purge', (req, res) => {
+app.delete('/api/bookings/:id/purge', authenticateToken, (req, res) => {
     db.run("DELETE FROM bookings WHERE id = ?", [req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
@@ -388,7 +543,7 @@ app.delete('/api/bookings/:id/purge', (req, res) => {
 // ----------------------------------------------------
 // REST API: BOOKINGS RESCHEDULE
 // ----------------------------------------------------
-app.post('/api/bookings/:id/reschedule', (req, res) => {
+app.post('/api/bookings/:id/reschedule', authenticateToken, (req, res) => {
     const { id } = req.params;
     const { newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName } = req.body;
 
@@ -424,17 +579,17 @@ app.post('/api/bookings/:id/reschedule', (req, res) => {
                 db.get("SELECT value FROM config WHERE key = 'max_reschedules'", [], (errCfg, cfgRow) => {
                     if (errCfg) return res.status(500).json({ error: errCfg.message });
                     maxReschedules = cfgRow ? parseInt(cfgRow.value, 10) : 1;
-                    proceedWithReschedule(booking, id, maxReschedules, newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName, newSlotStartMin, newSlotEndMin);
+                    proceedWithReschedule(res, booking, id, maxReschedules, newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName, newSlotStartMin, newSlotEndMin);
                 });
                 return;
             }
 
-            proceedWithReschedule(booking, id, maxReschedules, newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName, newSlotStartMin, newSlotEndMin);
+            proceedWithReschedule(res, booking, id, maxReschedules, newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName, newSlotStartMin, newSlotEndMin);
         });
     });
 });
 
-function proceedWithReschedule(booking, id, maxReschedules, newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName, newSlotStartMin, newSlotEndMin) {
+function proceedWithReschedule(res, booking, id, maxReschedules, newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName, newSlotStartMin, newSlotEndMin) {
     const rescheduleCount = booking.rescheduleCount || 0;
     if (rescheduleCount >= maxReschedules) {
         return res.status(400).json({ error: `Ha alcanzado el límite de ${maxReschedules} reagendamiento(s) para esta reserva.` });
@@ -495,14 +650,14 @@ function proceedWithReschedule(booking, id, maxReschedules, newDate, newTimeSlot
 // ----------------------------------------------------
 // REST API: SICKNESS BLOCKS
 // ----------------------------------------------------
-app.get('/api/blocks', (req, res) => {
+app.get('/api/blocks', authenticateToken, (req, res) => {
     db.all("SELECT * FROM sickness_blocks", (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
-app.post('/api/blocks', (req, res) => {
+app.post('/api/blocks', authenticateToken, (req, res) => {
     const { id, providerId, date, timeSlot, reason } = req.body;
     db.run("INSERT INTO sickness_blocks (id, providerId, date, timeSlot, reason) VALUES (?, ?, ?, ?, ?)",
         [id, providerId, date, timeSlot, reason],
@@ -513,7 +668,7 @@ app.post('/api/blocks', (req, res) => {
     );
 });
 
-app.delete('/api/blocks/:id', (req, res) => {
+app.delete('/api/blocks/:id', authenticateToken, (req, res) => {
     db.run("DELETE FROM sickness_blocks WHERE id = ?", [req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
@@ -523,14 +678,14 @@ app.delete('/api/blocks/:id', (req, res) => {
 // ----------------------------------------------------
 // REST API: CLIENTS
 // ----------------------------------------------------
-app.get('/api/clients', (req, res) => {
+app.get('/api/clients', authenticateToken, (req, res) => {
     db.all("SELECT * FROM clients", (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
-app.post('/api/clients', (req, res) => {
+app.post('/api/clients', authenticateToken, (req, res) => {
     const { email, name, rut, phone } = req.body;
     db.run("INSERT OR REPLACE INTO clients (email, name, rut, phone) VALUES (?, ?, ?, ?)",
         [email, name, rut, phone],
@@ -541,7 +696,7 @@ app.post('/api/clients', (req, res) => {
     );
 });
 
-app.delete('/api/clients/:email', (req, res) => {
+app.delete('/api/clients/:email', authenticateToken, (req, res) => {
     db.run("DELETE FROM clients WHERE email = ?", [req.params.email], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
@@ -561,7 +716,7 @@ app.get('/api/activities', (req, res) => {
     });
 });
 
-app.post('/api/activities', (req, res) => {
+app.post('/api/activities', authenticateToken, (req, res) => {
     const { id, title, date, time, location, desc, capacity } = req.body;
     db.run("INSERT INTO activities (id, title, date, time, location, desc, capacity) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [id, title, date, time, location, desc, capacity || 0],
@@ -572,7 +727,7 @@ app.post('/api/activities', (req, res) => {
     );
 });
 
-app.delete('/api/activities/:id', (req, res) => {
+app.delete('/api/activities/:id', authenticateToken, (req, res) => {
     db.serialize(() => {
         db.run("DELETE FROM activity_enrollments WHERE activityId = ?", [req.params.id]);
         db.run("DELETE FROM activities WHERE id = ?", [req.params.id], function(err) {
@@ -627,7 +782,7 @@ app.post('/api/activities/enroll', (req, res) => {
     });
 });
 
-app.get('/api/activities/enrollments', (req, res) => {
+app.get('/api/activities/enrollments', authenticateToken, (req, res) => {
     db.all(`SELECT e.*, a.title as activityTitle
             FROM activity_enrollments e
             LEFT JOIN activities a ON e.activityId = a.id
@@ -637,7 +792,7 @@ app.get('/api/activities/enrollments', (req, res) => {
     });
 });
 
-app.delete('/api/activities/enrollments/:id', (req, res) => {
+app.delete('/api/activities/enrollments/:id', authenticateToken, (req, res) => {
     db.run("DELETE FROM activity_enrollments WHERE id = ?", [req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
@@ -658,7 +813,7 @@ app.get('/api/config', (req, res) => {
     });
 });
 
-app.post('/api/config', (req, res) => {
+app.post('/api/config', authenticateToken, (req, res) => {
     const data = req.body;
     db.serialize(() => {
         const stmt = db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)");
@@ -864,7 +1019,7 @@ app.post('/api/khipu/notify/transactions', (req, res) => {
     );
 });
 
-app.get('/api/admin/khipu-notifications', (req, res) => {
+app.get('/api/admin/khipu-notifications', authenticateToken, (req, res) => {
     db.all("SELECT * FROM khipu_notifications ORDER BY received_at DESC", (err, rows) => {
         if (err) {
             console.error('Error fetching notifications from database:', err.message);

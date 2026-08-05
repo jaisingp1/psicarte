@@ -117,3 +117,16 @@ CREATE TABLE IF NOT EXISTS khipu_notifications (
     ip_address TEXT,             -- Sender's IP address
     received_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 12. Users Table
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'usuario',
+    rut TEXT,
+    phone TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+

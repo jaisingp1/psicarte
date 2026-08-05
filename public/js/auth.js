@@ -1,6 +1,49 @@
 // ----------------------------------------------------
 // AUTH & ACCESS CONTROLLER
 // ----------------------------------------------------
+function getToken() {
+    return sessionStorage.getItem("psicarte_token");
+}
+
+function setToken(token) {
+    sessionStorage.setItem("psicarte_token", token);
+}
+
+function clearToken() {
+    sessionStorage.removeItem("psicarte_token");
+}
+
+async function validateSession() {
+    const token = getToken();
+    if (!token || !state.currentUser) {
+        return false;
+    }
+    
+    try {
+        const res = await fetch('/api/users', { 
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.status === 401 || res.status === 403) {
+            forceLogout('Sesión expirada. Inicie sesión nuevamente.');
+            return false;
+        }
+        return true;
+    } catch (e) {
+        forceLogout('Error de conexión. Inicie sesión nuevamente.');
+        return false;
+    }
+}
+
+function forceLogout(message) {
+    state.currentUser = null;
+    sessionStorage.removeItem("psicarte_user");
+    clearToken();
+    if (message) {
+        sessionStorage.setItem("psicarte_logout_msg", message);
+    }
+    window.location.href = 'index.html';
+}
+
 function openLoginModal() {
     const modal = document.getElementById("login-modal");
     if (modal) modal.classList.add("active");
@@ -72,6 +115,9 @@ async function processLogin() {
         if (res.ok) {
             state.currentUser = data;
             sessionStorage.setItem("psicarte_user", JSON.stringify(data));
+            if (data.token) {
+                setToken(data.token);
+            }
             showToast(`¡Bienvenido/a, ${data.name}!`, "success");
             
             // Redirect to acceso.html or update UI if already there
@@ -93,6 +139,7 @@ async function processLogin() {
 function logout() {
     state.currentUser = null;
     sessionStorage.removeItem("psicarte_user");
+    clearToken();
     const dashboard = document.getElementById("dashboard");
     if (dashboard) dashboard.style.display = "none";
     updateAuthUI();
@@ -119,6 +166,12 @@ function updateAuthUI() {
         
         renderSidebarMenu();
         renderDashboardPanes();
+        
+        // Fix: show dashboard view if we are on acceso.html with a logged-in user session
+        const isAccesoPage = window.location.pathname.includes('acceso.html');
+        if (isAccesoPage) {
+            showDashboardView();
+        }
     } else {
         authBtns.style.display = "flex";
         userMenu.style.display = "none";

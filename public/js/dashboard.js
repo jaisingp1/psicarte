@@ -49,15 +49,18 @@ function renderSidebarMenu() {
         `;
     } else if (state.currentUser.role === "administrador") {
         menuList.innerHTML = `
-            <li><button class="sidebar-btn active" onclick="switchDashboardPane('admin-rooms', this)"><i class="fa-solid fa-building"></i> Salas</button></li>
+            <li><button class="sidebar-btn active" onclick="switchDashboardPane('admin-my-bookings', this)"><i class="fa-solid fa-calendar-check"></i> Mis Reservas</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-my-profile', this)"><i class="fa-solid fa-user-gear"></i> Mis Datos</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-rooms', this)"><i class="fa-solid fa-building"></i> Salas</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-providers', this)"><i class="fa-solid fa-user-doctor"></i> Prestadores</button></li>
-            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-bookings', this)"><i class="fa-solid fa-calendar-days"></i> Reservas</button></li>
-            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-clients', this)"><i class="fa-solid fa-users"></i> Clientes</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-bookings', this)"><i class="fa-solid fa-calendar-days"></i> Reservas Globales</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-users', this)"><i class="fa-solid fa-user-shield"></i> Gestión de Usuarios</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-blocks', this)"><i class="fa-solid fa-calendar-minus"></i> Bloqueos Horarios</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-popups', this)"><i class="fa-solid fa-bullhorn"></i> Alertas y Pop-ups</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-calendar', this)"><i class="fa-solid fa-calendar-week"></i> Calendario Comun.</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-content', this)"><i class="fa-solid fa-file-pen"></i> Personalizar Textos</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-khipu-notifications', this)"><i class="fa-solid fa-bell"></i> Notificaciones Khipu</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-config-raw', this)"><i class="fa-solid fa-gears"></i> Configuración Avanzada</button></li>
         `;
     }
 }
@@ -317,8 +320,11 @@ function renderDashboardPanes() {
         if (maxReschedulesInput) maxReschedulesInput.value = state.config?.max_reschedules || '1';
         
         renderAdminBookings();
-        renderAdminClients();
         renderAdminKhipuNotifications();
+        renderAdminMyBookings();
+        renderAdminMyProfile();
+        renderAdminUsers();
+        renderAdminConfigRaw();
     }
 }
 
@@ -349,7 +355,7 @@ async function saveClientProfile(e) {
     try {
         const res = await fetch('/api/clients', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ email: state.currentUser.email, name, rut, phone })
         });
         
@@ -383,7 +389,7 @@ async function addProviderBlock(e) {
     try {
         const res = await fetch('/api/blocks', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(newBlock)
         });
         if (res.ok) {
@@ -416,7 +422,7 @@ async function addAdminBlock(e) {
     try {
         const res = await fetch('/api/blocks', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(newBlock)
         });
         if (res.ok) {
@@ -433,7 +439,10 @@ async function addAdminBlock(e) {
 
 async function deleteBlock(id) {
     try {
-        const res = await fetch(`/api/blocks/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/blocks/${id}`, { 
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
         if (res.ok) {
             showToast("Bloqueo eliminado.", "success");
             await loadAllData();
@@ -466,7 +475,7 @@ async function saveRoom(e) {
     try {
         const res = await fetch('/api/rooms', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(roomPayload)
         });
         if (res.ok) {
@@ -497,7 +506,10 @@ function editRoom(id) {
 async function deleteRoom(id) {
     if (confirm("¿Estás seguro de eliminar esta sala?")) {
         try {
-            const res = await fetch(`/api/rooms/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/rooms/${id}`, { 
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
             if (res.ok) {
                 showToast("Sala eliminada.", "success");
                 await loadAllData();
@@ -520,7 +532,7 @@ async function addProvider(e) {
     try {
         const res = await fetch('/api/providers', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ id: "prov-" + Date.now(), name, role, email, bio })
         });
         if (res.ok) {
@@ -539,7 +551,10 @@ async function addProvider(e) {
 async function deleteProvider(id) {
     if (confirm("¿Estás seguro de eliminar este prestador? Se eliminarán todos sus servicios asociados.")) {
         try {
-            const res = await fetch(`/api/providers/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/providers/${id}`, { 
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
             if (res.ok) {
                 showToast("Prestador eliminado.", "success");
                 await loadAllData();
@@ -565,7 +580,7 @@ async function addService(e) {
     try {
         const res = await fetch('/api/services', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ id: "serv-" + Date.now(), providerId: provId, name, price, duration, type: "Virtual", allowReschedule, maxReschedules })
         });
         if (res.ok) {
@@ -585,7 +600,10 @@ async function addService(e) {
 
 async function deleteService(provId, servId) {
     try {
-        const res = await fetch(`/api/services/${servId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/services/${servId}`, { 
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
         if (res.ok) {
             showToast("Servicio eliminado.", "success");
             await loadAllData();
@@ -609,7 +627,7 @@ async function savePopupConfig(e) {
     try {
         const res = await fetch('/api/config', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(payload)
         });
         if (res.ok) {
@@ -632,7 +650,7 @@ async function saveBannerConfig(e) {
     try {
         const res = await fetch('/api/config', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(payload)
         });
         if (res.ok) {
@@ -655,7 +673,7 @@ async function saveWhatsAppConfig(e) {
     try {
         const res = await fetch('/api/config', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(payload)
         });
         if (res.ok) {
@@ -677,7 +695,7 @@ async function saveMaxReschedulesConfig(e) {
     try {
         const res = await fetch('/api/config', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(payload)
         });
         if (res.ok) {
@@ -707,7 +725,7 @@ async function saveContentCustomizations(e) {
     try {
         const res = await fetch('/api/content', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(payload)
         });
         if (res.ok) {
@@ -767,12 +785,9 @@ function renderAdminBookings() {
             ? '<span class="badge badge-cancelled">Cancelada</span>' 
             : bk.status === 'Paid' ? '<span class="badge badge-paid">Pagada</span>' : (bk.status === 'Pending_Payment' ? '<span class="badge badge-warning">Procesando Pago</span>' : '<span class="badge badge-pending">Pendiente</span>');
         
-        let actionBtns = '';
-        if (isCancelled) {
-            actionBtns = `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="purgeBooking('${bk.id}')"><i class="fa-solid fa-trash"></i> Eliminar</button>`;
-        } else {
-            actionBtns = `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="cancelBooking('${bk.id}')"><i class="fa-solid fa-ban"></i></button>`;
-        }
+        const actionBtns = isCancelled 
+            ? `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="purgeBooking('${bk.id}')"><i class="fa-solid fa-trash"></i> Eliminar</button>`
+            : `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="cancelBooking('${bk.id}')"><i class="fa-solid fa-ban"></i></button>`;
         
         tbody.innerHTML += `
             <tr>
@@ -808,119 +823,7 @@ function startAdminBooking() {
     window.location.href = 'index.html#agendamiento';
 }
 
-// ----------------------------------------------------
-// ADMIN CLIENTS MANAGEMENT
-// ----------------------------------------------------
-function renderAdminClients() {
-    const tbody = document.getElementById("admin-clients-table");
-    const countEl = document.getElementById("admin-clients-count");
-    if (!tbody) return;
-    
-    const searchInput = document.getElementById("adm-client-search");
-    const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
-    
-    let filtered = [...state.clients];
-    if (searchQuery) {
-        filtered = filtered.filter(c => 
-            (c.name && c.name.toLowerCase().includes(searchQuery)) ||
-            (c.email && c.email.toLowerCase().includes(searchQuery))
-        );
-    }
-    
-    if (countEl) countEl.textContent = `${filtered.length} cliente(s) registrado(s)`;
-    
-    if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">No hay clientes registrados.</td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = "";
-    filtered.forEach(c => {
-        const hasBookings = state.bookings.some(b => b.clientEmail === c.email);
-        const deleteBtn = hasBookings
-            ? `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; opacity: 0.5; cursor: not-allowed;" title="No se puede eliminar: tiene reservas asociadas"><i class="fa-solid fa-lock"></i></button>`
-            : `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteAdminClient('${c.email}')"><i class="fa-solid fa-trash"></i></button>`;
-        
-        tbody.innerHTML += `
-            <tr>
-                <td>${c.name}</td>
-                <td>${c.email}</td>
-                <td>${c.rut || '-'}</td>
-                <td>${c.phone || '-'}</td>
-                <td class="action-btns">
-                    <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editAdminClient('${c.email}')"><i class="fa-solid fa-pencil"></i></button>
-                    ${deleteBtn}
-                </td>
-            </tr>
-        `;
-    });
-}
 
-function editAdminClient(email) {
-    const client = state.clients.find(c => c.email === email);
-    if (!client) return;
-    
-    document.getElementById("adm-client-editing-email").value = email;
-    document.getElementById("adm-client-name").value = client.name || '';
-    document.getElementById("adm-client-email").value = client.email || '';
-    document.getElementById("adm-client-rut").value = client.rut || '';
-    document.getElementById("adm-client-phone").value = client.phone || '';
-    document.getElementById("admin-client-form-title").innerText = "Editar Cliente";
-    document.getElementById("adm-client-email").readonly = true;
-}
-
-function resetAdminClientForm() {
-    document.getElementById("admin-client-form").reset();
-    document.getElementById("adm-client-editing-email").value = "";
-    document.getElementById("admin-client-form-title").innerText = "Añadir Cliente";
-    document.getElementById("adm-client-email").readonly = false;
-}
-
-async function saveAdminClient(e) {
-    e.preventDefault();
-    const editingEmail = document.getElementById("adm-client-editing-email").value;
-    const name = document.getElementById("adm-client-name").value;
-    const email = document.getElementById("adm-client-email").value;
-    const rut = document.getElementById("adm-client-rut").value;
-    const phone = document.getElementById("adm-client-phone").value;
-    
-    try {
-        const res = await fetch('/api/clients', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, name, rut, phone })
-        });
-        if (res.ok) {
-            showToast(editingEmail ? "Cliente actualizado correctamente." : "Cliente creado correctamente.", "success");
-            resetAdminClientForm();
-            await loadAllData();
-            renderAdminClients();
-        }
-    } catch (e) {
-        showToast("Error de conexión.", "error");
-    }
-}
-
-async function deleteAdminClient(email) {
-    const hasBookings = state.bookings.some(b => b.clientEmail === email);
-    if (hasBookings) {
-        showToast("No se puede eliminar: el cliente tiene reservas asociadas. Cancela o elimina sus reservas primero.", "error");
-        return;
-    }
-    
-    if (confirm("¿Estás seguro de eliminar este cliente permanentemente?")) {
-        try {
-            const res = await fetch(`/api/clients/${encodeURIComponent(email)}`, { method: 'DELETE' });
-            if (res.ok) {
-                showToast("Cliente eliminado correctamente.", "success");
-                await loadAllData();
-                renderAdminClients();
-            }
-        } catch (e) {
-            showToast("Error de conexión.", "error");
-        }
-    }
-}
 
 // ----------------------------------------------------
 // SERVICE EDIT MODE
@@ -969,8 +872,8 @@ function renderAdminKhipuNotifications() {
     tbody.innerHTML = "";
 
     notifs.forEach(notif => {
-        let typeBadge = "";
-        let summaryText = "";
+        let typeBadge;
+        let summaryText;
 
         if (notif.type === "payment_1.3") {
             typeBadge = '<span class="badge badge-paid">Pago (API 1.3)</span>';
@@ -1008,9 +911,9 @@ function renderAdminKhipuNotifications() {
             : dateObj.toLocaleString("es-CL", { dateStyle: "short", timeStyle: "medium" });
 
         // Pretty print JSON structures
-        let prettyHeaders = "";
-        let prettyQuery = "";
-        let prettyBody = "";
+        let prettyHeaders;
+        let prettyQuery;
+        let prettyBody;
         try {
             prettyHeaders = JSON.stringify(JSON.parse(notif.headers || "{}"), null, 2);
         } catch(e) {
@@ -1060,5 +963,357 @@ function toggleNotifDetails(id) {
         el.style.display = "block";
     } else {
         el.style.display = "none";
+    }
+}
+
+// ----------------------------------------------------
+// ADMIN PERSONAL PANELS RENDERERS
+// ----------------------------------------------------
+function renderAdminMyBookings() {
+    const tbody = document.getElementById("admin-my-bookings-table");
+    const emptyMsg = document.getElementById("admin-my-bookings-empty");
+    if (!tbody) return;
+
+    const myBookings = state.bookings.filter(b => b.clientEmail === state.currentUser.email);
+
+    if (myBookings.length === 0) {
+        tbody.innerHTML = "";
+        if (emptyMsg) emptyMsg.style.display = "block";
+        return;
+    }
+
+    if (emptyMsg) emptyMsg.style.display = "none";
+    tbody.innerHTML = "";
+
+    myBookings.forEach(bk => {
+        const provName = state.providers.find(p => p.id === bk.providerId)?.name || 'Prestador';
+        const statusBadge = bk.status === 'Paid' 
+            ? '<span class="badge badge-paid">Pagada</span>' 
+            : bk.status === 'Cancelled' 
+                ? '<span class="badge badge-cancelled">Cancelada</span>' 
+                : '<span class="badge badge-warning">Pendiente</span>';
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${bk.date}</td>
+                <td>${bk.timeSlot}</td>
+                <td>${bk.serviceName}</td>
+                <td>${provName}</td>
+                <td>${bk.roomName}</td>
+                <td>${statusBadge}</td>
+            </tr>
+        `;
+    });
+}
+
+function renderAdminMyProfile() {
+    const nameInput = document.getElementById("adm-profile-name");
+    const emailInput = document.getElementById("adm-profile-email");
+    const roleInput = document.getElementById("adm-profile-role");
+    
+    if (nameInput) nameInput.value = state.currentUser.name || '';
+    if (emailInput) emailInput.value = state.currentUser.email || '';
+    if (roleInput) roleInput.value = state.currentUser.role || '';
+}
+
+async function saveAdminProfile(e) {
+    e.preventDefault();
+    const name = document.getElementById("adm-profile-name").value;
+    const email = document.getElementById("adm-profile-email").value;
+    
+    try {
+        const res = await fetch(`/api/users/${state.currentUser.id}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ name, email, role: state.currentUser.role })
+        });
+        if (res.ok) {
+            state.currentUser.name = name;
+            state.currentUser.email = email;
+            sessionStorage.setItem("psicarte_user", JSON.stringify(state.currentUser));
+            showToast("Perfil actualizado correctamente.", "success");
+            updateAuthUI();
+        } else {
+            const data = await res.json();
+            showToast(data.error || "Error al actualizar perfil.", "error");
+        }
+    } catch (e) {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+// ----------------------------------------------------
+// ADMIN USERS MANAGEMENT
+// ----------------------------------------------------
+let editingUserId = null;
+
+function toggleAdminUserFields() {
+    const role = document.getElementById("adm-user-role").value;
+    const fields = document.getElementById("adm-user-client-fields");
+    const rutInput = document.getElementById("adm-user-rut");
+    const phoneInput = document.getElementById("adm-user-phone");
+    
+    if (fields) {
+        if (role === 'usuario') {
+            fields.style.display = 'block';
+            if (rutInput) rutInput.required = true;
+            if (phoneInput) phoneInput.required = true;
+        } else {
+            fields.style.display = 'none';
+            if (rutInput) { rutInput.required = false; rutInput.value = ''; }
+            if (phoneInput) { phoneInput.required = false; phoneInput.value = ''; }
+        }
+    }
+}
+
+async function renderAdminUsers() {
+    const tbody = document.getElementById("admin-users-table");
+    const countEl = document.getElementById("admin-users-count");
+    if (!tbody) return;
+
+    const users = await getUsers();
+    const searchInput = document.getElementById("adm-user-search");
+    const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
+
+    let filtered = [...users];
+    if (searchQuery) {
+        filtered = filtered.filter(u => 
+            (u.name && u.name.toLowerCase().includes(searchQuery)) ||
+            (u.email && u.email.toLowerCase().includes(searchQuery))
+        );
+    }
+
+    if (countEl) countEl.textContent = `${filtered.length} usuario(s)/cliente(s) registrado(s)`;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);">No hay usuarios registrados.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = "";
+    filtered.forEach(u => {
+        const createdDate = u.created_at ? new Date(u.created_at).toLocaleDateString('es-CL') : '-';
+        const roleBadge = u.role === 'administrador' 
+            ? '<span class="badge badge-paid">administrador</span>' 
+            : u.role === 'prestador'
+                ? '<span class="badge badge-info">prestador</span>'
+                : '<span class="badge badge-success">cliente</span>';
+                
+        tbody.innerHTML += `
+            <tr>
+                <td>${u.name}</td>
+                <td>${u.email}</td>
+                <td>${roleBadge}</td>
+                <td>${u.rut || '-'}</td>
+                <td>${u.phone || '-'}</td>
+                <td>${createdDate}</td>
+                <td class="action-btns">
+                    <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editAdminUser('${u.id}')"><i class="fa-solid fa-pencil"></i></button>
+                    <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteAdminUser('${u.id}')"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function editAdminUser(id) {
+    getUsers().then(users => {
+        const user = users.find(u => u.id === id);
+        if (!user) return;
+        
+        editingUserId = id;
+        document.getElementById("adm-user-editing-id").value = id;
+        document.getElementById("adm-user-name").value = user.name || '';
+        document.getElementById("adm-user-email").value = user.email || '';
+        document.getElementById("adm-user-role").value = user.role || 'usuario';
+        document.getElementById("adm-user-password").value = '';
+        
+        const rutInput = document.getElementById("adm-user-rut");
+        const phoneInput = document.getElementById("adm-user-phone");
+        if (rutInput) rutInput.value = user.rut || '';
+        if (phoneInput) phoneInput.value = user.phone || '';
+        
+        document.getElementById("admin-user-form-title").innerText = "Editar Usuario";
+        toggleAdminUserFields();
+    });
+}
+
+function resetAdminUserForm() {
+    document.getElementById("admin-user-form").reset();
+    editingUserId = null;
+    document.getElementById("adm-user-editing-id").value = "";
+    document.getElementById("admin-user-form-title").innerText = "Añadir Usuario";
+    toggleAdminUserFields();
+}
+
+async function saveAdminUser(e) {
+    e.preventDefault();
+    const editingId = document.getElementById("adm-user-editing-id").value;
+    const name = document.getElementById("adm-user-name").value;
+    const email = document.getElementById("adm-user-email").value;
+    const role = document.getElementById("adm-user-role").value;
+    const password = document.getElementById("adm-user-password").value;
+    
+    const rut = document.getElementById("adm-user-rut") ? document.getElementById("adm-user-rut").value : '';
+    const phone = document.getElementById("adm-user-phone") ? document.getElementById("adm-user-phone").value : '';
+
+    try {
+        if (editingId) {
+            const payload = { name, email, role, rut, phone };
+            if (password) payload.password = password;
+            await updateUser(editingId, payload);
+            showToast("Usuario actualizado correctamente.", "success");
+        } else {
+            if (!password) {
+                showToast("La contraseña es obligatoria para nuevos usuarios.", "error");
+                return;
+            }
+            await createUser({ name, email, role, password, rut, phone });
+            showToast("Usuario creado correctamente.", "success");
+        }
+        await loadAllData();
+        resetAdminUserForm();
+        await renderAdminUsers();
+    } catch (e) {
+        // Error already shown by API functions
+    }
+}
+
+async function deleteAdminUser(id) {
+    if (confirm("¿Estás seguro de eliminar este usuario permanentemente?")) {
+        try {
+            await deleteUser(id);
+            showToast("Usuario eliminado correctamente.", "success");
+            await renderAdminUsers();
+        } catch (e) {
+            // Error already shown by API function
+        }
+    }
+}
+
+// ----------------------------------------------------
+// ADMIN CONFIG RAW MANAGEMENT
+// ----------------------------------------------------
+let editingConfigKey = null;
+
+async function renderAdminConfigRaw() {
+    const tbody = document.getElementById("admin-config-raw-table");
+    if (!tbody) return;
+
+    const config = await getAllConfig();
+    const searchInput = document.getElementById("adm-config-search");
+    const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
+
+    const entries = Object.entries(config);
+    const filtered = searchQuery 
+        ? entries.filter(([key]) => key.toLowerCase().includes(searchQuery))
+        : entries;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-secondary);">No hay configuraciones registradas.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = "";
+    filtered.forEach(([key, value]) => {
+        if (editingConfigKey === key) {
+            let inputHTML;
+            if (key === 'popup_active' || key === 'banner_active' || key === 'whatsapp_enabled') {
+                inputHTML = `
+                    <select id="inline-config-val-${key}" class="form-control" style="padding: 4px; font-size: 0.9rem; width: 100%;">
+                        <option value="true" ${value === 'true' ? 'selected' : ''}>true</option>
+                        <option value="false" ${value === 'false' ? 'selected' : ''}>false</option>
+                    </select>
+                `;
+            } else if (key === 'whatsapp_number') {
+                inputHTML = `
+                    <input type="text" id="inline-config-val-${key}" class="form-control" value="${value}" placeholder="11 dígitos" style="padding: 4px; font-size: 0.9rem; width: 100%;" maxlength="11">
+                `;
+            } else if (key === 'max_reschedules') {
+                inputHTML = `
+                    <input type="number" id="inline-config-val-${key}" class="form-control" value="${value}" min="0" step="1" style="padding: 4px; font-size: 0.9rem; width: 100%;">
+                `;
+            } else {
+                inputHTML = `
+                    <input type="text" id="inline-config-val-${key}" class="form-control" value="${value.replace(/"/g, '&quot;')}" style="padding: 4px; font-size: 0.9rem; width: 100%;">
+                `;
+            }
+
+            tbody.innerHTML += `
+                <tr>
+                    <td><strong>${key}</strong></td>
+                    <td>${inputHTML}</td>
+                    <td class="action-btns">
+                        <button class="btn-primary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="saveInlineConfig('${key.replace(/'/g, "\\'")}')"><i class="fa-solid fa-check"></i></button>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="cancelInlineConfig()"><i class="fa-solid fa-xmark"></i></button>
+                    </td>
+                </tr>
+            `;
+        } else {
+            tbody.innerHTML += `
+                <tr>
+                    <td><strong>${key}</strong></td>
+                    <td style="max-width: 300px; word-break: break-all;">${value}</td>
+                    <td class="action-btns">
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editAdminConfig('${key.replace(/'/g, "\\'")}')"><i class="fa-solid fa-pencil"></i></button>
+                    </td>
+                </tr>
+            `;
+        }
+    });
+}
+
+function editAdminConfig(key) {
+    editingConfigKey = key;
+    renderAdminConfigRaw();
+}
+
+function cancelInlineConfig() {
+    editingConfigKey = null;
+    renderAdminConfigRaw();
+}
+
+async function saveInlineConfig(key) {
+    const inputEl = document.getElementById(`inline-config-val-${key}`);
+    if (!inputEl) return;
+    
+    const val = inputEl.value.trim();
+    
+    // Validation
+    if (key === 'popup_active' || key === 'banner_active' || key === 'whatsapp_enabled') {
+        if (val !== 'true' && val !== 'false') {
+            showToast("El valor debe ser true o false.", "error");
+            return;
+        }
+    } else if (key === 'whatsapp_number') {
+        if (!/^\d{11}$/.test(val)) {
+            showToast("El número de WhatsApp debe tener exactamente 11 dígitos enteros positivos.", "error");
+            return;
+        }
+    } else if (key === 'max_reschedules') {
+        const intVal = parseInt(val, 10);
+        if (isNaN(intVal) || intVal < 0 || String(intVal) !== val) {
+            showToast("El límite de reagendamientos debe ser un entero positivo o cero.", "error");
+            return;
+        }
+    }
+    
+    try {
+        await saveConfig({ [key]: val });
+        showToast("Configuración guardada correctamente.", "success");
+        editingConfigKey = null;
+        await loadAllData();
+        renderAdminConfigRaw();
+        
+        // Refresh dependent elements/views
+        if (key.startsWith('popup_') || key.startsWith('banner_')) {
+            if (typeof checkPopups === 'function') checkPopups();
+        }
+        if (key.startsWith('whatsapp_')) {
+            if (typeof renderWhatsAppButton === 'function') renderWhatsAppButton();
+        }
+        renderDashboardPanes();
+    } catch (e) {
+        // Error toast already shown by saveConfig
     }
 }

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es" data-theme="light">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
+
 <body>
 
     <!-- Navigation Header -->
@@ -16,7 +18,7 @@
             <a href="index.html" class="logo-container" id="logo-link">
                 <img id="nav-logo" src="images/logo_light.png" alt="PsicArte Logo">
             </a>
-            
+
             <nav>
                 <ul class="nav-links">
                     <li><a href="index.html">Inicio</a></li>
@@ -25,18 +27,20 @@
                     <li><a href="index.html#calendario">Comunidad</a></li>
                     <li><a href="index.html#agendamiento">Agendar Hora</a></li>
                 </ul>
-                
+
                 <div class="nav-actions">
                     <button class="btn-icon" id="theme-toggle" title="Cambiar tema">
                         <i class="fa-solid fa-moon"></i>
                     </button>
-                    
+
                     <div id="auth-buttons">
                         <button class="btn-secondary" disabled>Acceder</button>
                     </div>
                     <div id="user-menu" style="display: none;">
-                        <button class="btn-primary" onclick="window.location.href='acceso.html'"><i class="fa-solid fa-user"></i> Mi Cuenta</button>
-                        <button class="btn-secondary" onclick="logout()" title="Cerrar Sesión"><i class="fa-solid fa-right-from-bracket"></i></button>
+                        <button class="btn-primary" onclick="window.location.href='acceso.html'"><i
+                                class="fa-solid fa-user"></i> Mi Cuenta</button>
+                        <button class="btn-secondary" onclick="logout()" title="Cerrar Sesión"><i
+                                class="fa-solid fa-right-from-bracket"></i></button>
                     </div>
                 </div>
             </nav>
@@ -47,8 +51,9 @@
         <!-- Login View (when not logged in) -->
         <section id="login-view" class="info-section" style="max-width: 600px; margin: 40px auto; padding: 0 20px;">
             <h2 class="section-title">Acceso al Portal PsicArte</h2>
-            
-            <div style="background-color: var(--bg-secondary); padding: 30px; border-radius: var(--radius-md); border: 1px solid var(--color-border);">
+
+            <div
+                style="background-color: var(--bg-secondary); padding: 30px; border-radius: var(--radius-md); border: 1px solid var(--color-border);">
                 <div class="form-group">
                     <label for="login-email">Correo Electrónico:</label>
                     <input type="email" id="login-email" class="form-control" placeholder="correo@ejemplo.com">
@@ -57,9 +62,11 @@
                     <label for="login-password">Contraseña:</label>
                     <input type="password" id="login-password" class="form-control" placeholder="••••••••">
                 </div>
-                
+
                 <div style="text-align: right; margin-bottom: 20px;">
-                    <a href="javascript:void(0)" onclick="openRecovery()" style="font-size: 0.85rem; color: var(--color-accent); text-decoration: underline;">¿Olvidaste tu contraseña?</a>
+                    <a href="javascript:void(0)" onclick="openRecovery()"
+                        style="font-size: 0.85rem; color: var(--color-accent); text-decoration: underline;">¿Olvidaste
+                        tu contraseña?</a>
                 </div>
 
                 <div class="form-group">
@@ -71,10 +78,12 @@
                     </select>
                 </div>
 
-                <div style="background-color: var(--bg-primary); padding: 12px; border-radius: var(--radius-sm); font-size: 0.85rem; margin-bottom: 20px; border-left: 3px solid var(--color-gold);">
+                <div
+                    style="background-color: var(--bg-primary); padding: 12px; border-radius: var(--radius-sm); font-size: 0.85rem; margin-bottom: 20px; border-left: 3px solid var(--color-gold);">
                     <strong>Credenciales de Prueba:</strong><br>
                     • Admin: <code>admin@psicarte.cl</code> / Pass: <code>admin123</code><br>
-                    • Prestadores: <code>ivan@psicarte.cl</code> o <code>valentina@psicarte.cl</code> / Pass: <code>prestador123</code><br>
+                    • Prestadores: <code>ivan@psicarte.cl</code> o <code>valentina@psicarte.cl</code> / Pass:
+                    <code>prestador123</code><br>
                     • Clientes: <code>romilio@correo.com</code> o cualquier correo nuevo para auto-registro
                 </div>
 
@@ -83,35 +92,39 @@
         </section>
 
         <!-- Dashboard View (when logged in) -->
-        <section id="dashboard-view" class="info-section" style="display: none; max-width: 1200px; margin: 40px auto; padding: 0 20px;">
+        <section id="dashboard-view" class="info-section"
+            style="display: none; max-width: 1200px; margin: 40px auto; padding: 0 20px;">
             <h2 class="section-title">Panel de Control</h2>
-            
+
             <div class="dashboard-grid">
                 <!-- Sidebar Navigation -->
                 <div class="dashboard-sidebar">
                     <div style="text-align: center; margin-bottom: 20px;">
                         <div class="provider-avatar" id="dash-user-avatar" style="margin: 0 auto 10px;">U</div>
                         <h4 id="dash-user-name">Usuario Conectado</h4>
-                        <span id="dash-user-role" style="font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Rol</span>
+                        <span id="dash-user-role"
+                            style="font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Rol</span>
                     </div>
-                    
+
                     <ul class="sidebar-menu" id="sidebar-menu-list"></ul>
                 </div>
 
                 <!-- Main Work Area -->
                 <div class="dashboard-main" id="dashboard-main-content">
-                    
+
                     <!-- USER / CLIENT PANES -->
                     <div id="pane-client-bookings" class="dashboard-pane">
                         <h3>Mis Agendamientos</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Revisa tu historial y cancela o reagenda citas futuras si es necesario.</p>
-                        
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Revisa tu historial y cancela o
+                            reagenda citas futuras si es necesario.</p>
+
                         <div id="client-bookings-list"></div>
                     </div>
 
                     <div id="pane-client-profile" class="dashboard-pane">
                         <h3>Mis Datos Personales</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Esta información se utilizará para autocompletar futuros agendamientos.</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Esta información se utilizará para
+                            autocompletar futuros agendamientos.</p>
                         <form id="client-profile-form" onsubmit="saveClientProfile(event)">
                             <div class="form-row">
                                 <div class="form-group">
@@ -140,7 +153,8 @@
                     <!-- PROVIDER PANES -->
                     <div id="pane-provider-schedule" class="dashboard-pane">
                         <h3>Mi Agenda de Pacientes</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Listado de citas agendadas por tus pacientes.</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Listado de citas agendadas por tus
+                            pacientes.</p>
                         <div class="table-responsive">
                             <table class="admin-table">
                                 <thead>
@@ -159,8 +173,9 @@
 
                     <div id="pane-provider-blocks" class="dashboard-pane">
                         <h3>Bloqueos por Enfermedad / Administrativos</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Bloquea horas específicas en las que no estarás disponible.</p>
-                        
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Bloquea horas específicas en las
+                            que no estarás disponible.</p>
+
                         <form id="provider-block-form" onsubmit="addProviderBlock(event)">
                             <div class="form-row">
                                 <div class="form-group">
@@ -181,7 +196,8 @@
                             </div>
                             <div class="form-group">
                                 <label for="block-reason">Motivo:</label>
-                                <input type="text" id="block-reason" class="form-control" placeholder="Licencia médica, cita dental..." required>
+                                <input type="text" id="block-reason" class="form-control"
+                                    placeholder="Licencia médica, cita dental..." required>
                             </div>
                             <button type="submit" class="btn-primary">Crear Bloqueo de Agenda</button>
                         </form>
@@ -205,13 +221,15 @@
                     <!-- ADMIN PANES -->
                     <div id="pane-admin-rooms" class="dashboard-pane">
                         <h3>Gestión de Salas (Físicas / Virtuales)</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Crea y edita salas y sus horarios de funcionamiento.</p>
-                        
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Crea y edita salas y sus horarios
+                            de funcionamiento.</p>
+
                         <form id="admin-room-form" onsubmit="saveRoom(event)">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="room-name">Nombre de la Sala:</label>
-                                    <input type="text" id="room-name" class="form-control" placeholder="Ej: Sala 1 - Presencial" required>
+                                    <input type="text" id="room-name" class="form-control"
+                                        placeholder="Ej: Sala 1 - Presencial" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="room-type">Tipo:</label>
@@ -252,25 +270,30 @@
 
                     <div id="pane-admin-providers" class="dashboard-pane">
                         <h3>Gestión de Prestadores y Servicios</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Configura los prestadores y los servicios que ofrece cada uno.</p>
-                        
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Configura los prestadores y los
+                            servicios que ofrece cada uno.</p>
+
                         <div class="grid-2">
                             <div class="card" style="box-shadow: none;">
                                 <h4>Añadir Prestador</h4>
                                 <form id="admin-provider-form" onsubmit="addProvider(event)" style="margin-top: 15px;">
                                     <div class="form-group">
                                         <label for="adm-prov-name">Nombre:</label>
-                                        <input type="text" id="adm-prov-name" class="form-control" placeholder="Nombre completo" required>
+                                        <input type="text" id="adm-prov-name" class="form-control"
+                                            placeholder="Nombre completo" required>
                                     </div>
                                     <div class="form-group">
                                         <label for="adm-prov-role">Especialidad/Rol:</label>
-                                        <input type="text" id="adm-prov-role" class="form-control" placeholder="Ej: Psicólogo Clínico" required>
+                                        <input type="text" id="adm-prov-role" class="form-control"
+                                            placeholder="Ej: Psicólogo Clínico" required>
                                     </div>
                                     <div class="form-group">
                                         <label for="adm-prov-bio">Biografía / Descripción:</label>
-                                        <textarea id="adm-prov-bio" class="form-control edit-content-textarea" placeholder="Breve descripción del profesional..."></textarea>
+                                        <textarea id="adm-prov-bio" class="form-control edit-content-textarea"
+                                            placeholder="Breve descripción del profesional..."></textarea>
                                     </div>
-                                    <button type="submit" class="btn-primary" style="width: 100%;">Crear Prestador</button>
+                                    <button type="submit" class="btn-primary" style="width: 100%;">Crear
+                                        Prestador</button>
                                 </form>
                             </div>
                             <div class="card" style="box-shadow: none;">
@@ -295,15 +318,19 @@
                                         </div>
                                     </div>
                                     <div class="form-group">
-                                        <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-                                            <input type="checkbox" id="adm-serv-allow-reschedule" checked> Permitir reagendamiento
+                                        <label
+                                            style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                            <input type="checkbox" id="adm-serv-allow-reschedule" checked> Permitir
+                                            reagendamiento
                                         </label>
                                     </div>
                                     <div class="form-group" id="adm-serv-max-reschedules-container">
                                         <label for="adm-serv-max-reschedules">Máx. Reagendamientos:</label>
-                                        <input type="number" id="adm-serv-max-reschedules" class="form-control" value="1" min="1">
+                                        <input type="number" id="adm-serv-max-reschedules" class="form-control"
+                                            value="1" min="1">
                                     </div>
-                                    <button type="submit" class="btn-primary" style="width: 100%;">Añadir Servicio</button>
+                                    <button type="submit" class="btn-primary" style="width: 100%;">Añadir
+                                        Servicio</button>
                                 </form>
                             </div>
                         </div>
@@ -314,8 +341,9 @@
 
                     <div id="pane-admin-blocks" class="dashboard-pane">
                         <h3>Bloqueos de Agenda (Global)</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra bloqueos de agenda por enfermedad, licencias o festivos para cualquier prestador.</p>
-                        
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra bloqueos de agenda por
+                            enfermedad, licencias o festivos para cualquier prestador.</p>
+
                         <form id="admin-block-form" onsubmit="addAdminBlock(event)">
                             <div class="form-row">
                                 <div class="form-group">
@@ -341,7 +369,8 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="adm-block-reason">Motivo:</label>
-                                    <input type="text" id="adm-block-reason" class="form-control" placeholder="Enfermedad, Licencia, Feriado..." required>
+                                    <input type="text" id="adm-block-reason" class="form-control"
+                                        placeholder="Enfermedad, Licencia, Feriado..." required>
                                 </div>
                             </div>
                             <button type="submit" class="btn-primary">Registrar Bloqueo</button>
@@ -366,15 +395,18 @@
 
                     <div id="pane-admin-popups" class="dashboard-pane">
                         <h3>Anuncios y Pop-ups</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Configura banners superiores y mensajes emergentes para alertar a los usuarios.</p>
-                        
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Configura banners superiores y
+                            mensajes emergentes para alertar a los usuarios.</p>
+
                         <div class="grid-2">
                             <div class="card" style="box-shadow: none;">
                                 <h4>Pop-up Emergente de Alerta</h4>
                                 <form id="admin-popup-form" onsubmit="savePopupConfig(event)" style="margin-top: 15px;">
                                     <div class="form-group">
-                                        <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-                                            <input type="checkbox" id="popup-active"> Mostrar Pop-up en la página de inicio
+                                        <label
+                                            style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                            <input type="checkbox" id="popup-active"> Mostrar Pop-up en la página de
+                                            inicio
                                         </label>
                                     </div>
                                     <div class="form-group">
@@ -383,24 +415,30 @@
                                     </div>
                                     <div class="form-group">
                                         <label for="popup-config-text">Texto de Advertencia:</label>
-                                        <textarea id="popup-config-text" class="form-control edit-content-textarea" required></textarea>
+                                        <textarea id="popup-config-text" class="form-control edit-content-textarea"
+                                            required></textarea>
                                     </div>
-                                    <button type="submit" class="btn-primary" style="width:100%;">Actualizar Pop-up</button>
+                                    <button type="submit" class="btn-primary" style="width:100%;">Actualizar
+                                        Pop-up</button>
                                 </form>
                             </div>
                             <div class="card" style="box-shadow: none;">
                                 <h4>Banner Superior de Anuncio</h4>
-                                <form id="admin-banner-form" onsubmit="saveBannerConfig(event)" style="margin-top: 15px;">
+                                <form id="admin-banner-form" onsubmit="saveBannerConfig(event)"
+                                    style="margin-top: 15px;">
                                     <div class="form-group">
-                                        <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                        <label
+                                            style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
                                             <input type="checkbox" id="banner-active"> Mostrar Banner superior
                                         </label>
                                     </div>
                                     <div class="form-group">
                                         <label for="banner-config-text">Texto del Banner:</label>
-                                        <textarea id="banner-config-text" class="form-control edit-content-textarea" required></textarea>
+                                        <textarea id="banner-config-text" class="form-control edit-content-textarea"
+                                            required></textarea>
                                     </div>
-                                    <button type="submit" class="btn-primary" style="width:100%;">Actualizar Banner</button>
+                                    <button type="submit" class="btn-primary" style="width:100%;">Actualizar
+                                        Banner</button>
                                 </form>
                             </div>
                         </div>
@@ -408,28 +446,38 @@
                         <div class="grid-2" style="margin-top: 20px;">
                             <div class="card" style="box-shadow: none;">
                                 <h4>WhatsApp de Contacto</h4>
-                                <form id="admin-whatsapp-form" onsubmit="saveWhatsAppConfig(event)" style="margin-top: 15px;">
+                                <form id="admin-whatsapp-form" onsubmit="saveWhatsAppConfig(event)"
+                                    style="margin-top: 15px;">
                                     <div class="form-group">
-                                        <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-                                            <input type="checkbox" id="whatsapp-active"> Mostrar botón flotante de WhatsApp
+                                        <label
+                                            style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                            <input type="checkbox" id="whatsapp-active"> Mostrar botón flotante de
+                                            WhatsApp
                                         </label>
                                     </div>
                                     <div class="form-group">
                                         <label for="whatsapp-number">Número (sin +, ej: 56952182998):</label>
-                                        <input type="text" id="whatsapp-number" class="form-control" placeholder="56952182998" required>
+                                        <input type="text" id="whatsapp-number" class="form-control"
+                                            placeholder="56952182998" required>
                                     </div>
-                                    <button type="submit" class="btn-primary" style="width:100%;">Actualizar WhatsApp</button>
+                                    <button type="submit" class="btn-primary" style="width:100%;">Actualizar
+                                        WhatsApp</button>
                                 </form>
                             </div>
                             <div class="card" style="box-shadow: none;">
                                 <h4>Reagendamientos</h4>
-                                <form id="admin-reschedules-form" onsubmit="saveMaxReschedulesConfig(event)" style="margin-top: 15px;">
+                                <form id="admin-reschedules-form" onsubmit="saveMaxReschedulesConfig(event)"
+                                    style="margin-top: 15px;">
                                     <div class="form-group">
-                                        <label for="max-reschedules-input">Máximo de reagendamientos por reserva:</label>
-                                        <input type="number" id="max-reschedules-input" class="form-control" min="0" max="10" required>
-                                        <small style="color: var(--text-secondary);">Valor global por defecto si el servicio no define uno propio.</small>
+                                        <label for="max-reschedules-input">Máximo de reagendamientos por
+                                            reserva:</label>
+                                        <input type="number" id="max-reschedules-input" class="form-control" min="0"
+                                            max="10" required>
+                                        <small style="color: var(--text-secondary);">Valor global por defecto si el
+                                            servicio no define uno propio.</small>
                                     </div>
-                                    <button type="submit" class="btn-primary" style="width:100%;">Actualizar Límite</button>
+                                    <button type="submit" class="btn-primary" style="width:100%;">Actualizar
+                                        Límite</button>
                                 </form>
                             </div>
                         </div>
@@ -437,13 +485,15 @@
 
                     <div id="pane-admin-calendar" class="dashboard-pane">
                         <h3>Calendario de Actividades de la Comunidad</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Añade o elimina actividades para mantener a la comunidad informada.</p>
-                        
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Añade o elimina actividades para
+                            mantener a la comunidad informada.</p>
+
                         <form id="admin-activity-form" onsubmit="addCommunityActivity(event)">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="act-title">Título de la Actividad:</label>
-                                    <input type="text" id="act-title" class="form-control" placeholder="Ej: Taller de Teatro Escolar" required>
+                                    <input type="text" id="act-title" class="form-control"
+                                        placeholder="Ej: Taller de Teatro Escolar" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="act-date">Fecha:</label>
@@ -453,20 +503,24 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="act-time">Horario:</label>
-                                    <input type="text" id="act-time" class="form-control" placeholder="Ej: 17:00 a 19:00 hrs" required>
+                                    <input type="text" id="act-time" class="form-control"
+                                        placeholder="Ej: 17:00 a 19:00 hrs" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="act-location">Lugar / Modalidad:</label>
-                                    <input type="text" id="act-location" class="form-control" placeholder="Ej: Sala 1 (Presencial)" required>
+                                    <input type="text" id="act-location" class="form-control"
+                                        placeholder="Ej: Sala 1 (Presencial)" required>
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label for="act-desc">Descripción Breve:</label>
-                                <input type="text" id="act-desc" class="form-control" placeholder="Ej: Dirigido a jóvenes y adultos..." required>
+                                <input type="text" id="act-desc" class="form-control"
+                                    placeholder="Ej: Dirigido a jóvenes y adultos..." required>
                             </div>
                             <div class="form-group">
                                 <label for="act-capacity">Cupos Disponibles (0 = sin límite):</label>
-                                <input type="number" id="act-capacity" class="form-control" placeholder="Ej: 25" min="0" value="0">
+                                <input type="number" id="act-capacity" class="form-control" placeholder="Ej: 25" min="0"
+                                    value="0">
                             </div>
                             <button type="submit" class="btn-primary">Añadir Actividad</button>
                         </form>
@@ -489,8 +543,9 @@
 
                     <div id="pane-admin-content" class="dashboard-pane">
                         <h3>Personalización de Contenidos</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Edita la información del centro PsicArte.</p>
-                        
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Edita la información del centro
+                            PsicArte.</p>
+
                         <form id="admin-content-form" onsubmit="saveContentCustomizations(event)">
                             <div class="form-group">
                                 <label for="custom-hero-title">Título Principal (Hero):</label>
@@ -498,32 +553,39 @@
                             </div>
                             <div class="form-group">
                                 <label for="custom-hero-subtitle">Subtítulo Principal:</label>
-                                <textarea id="custom-hero-subtitle" class="form-control edit-content-textarea" required></textarea>
+                                <textarea id="custom-hero-subtitle" class="form-control edit-content-textarea"
+                                    required></textarea>
                             </div>
                             <div class="form-group">
                                 <label for="custom-presentation">Texto Presentación:</label>
-                                <textarea id="custom-presentation" class="form-control edit-content-textarea" required></textarea>
+                                <textarea id="custom-presentation" class="form-control edit-content-textarea"
+                                    required></textarea>
                             </div>
                             <div class="form-group">
                                 <label for="custom-mission">Misión:</label>
-                                <textarea id="custom-mission" class="form-control edit-content-textarea" required></textarea>
+                                <textarea id="custom-mission" class="form-control edit-content-textarea"
+                                    required></textarea>
                             </div>
                             <div class="form-group">
                                 <label for="custom-vision">Visión:</label>
-                                <textarea id="custom-vision" class="form-control edit-content-textarea" required></textarea>
+                                <textarea id="custom-vision" class="form-control edit-content-textarea"
+                                    required></textarea>
                             </div>
                             <div class="form-group">
                                 <label for="custom-objectives">Objetivos:</label>
-                                <textarea id="custom-objectives" class="form-control edit-content-textarea" placeholder="Objetivos del centro PsicArte..."></textarea>
+                                <textarea id="custom-objectives" class="form-control edit-content-textarea"
+                                    placeholder="Objetivos del centro PsicArte..."></textarea>
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="custom-contact-email">Email de Contacto:</label>
-                                    <input type="email" id="custom-contact-email" class="form-control" placeholder="contacto@psicarte.cl">
+                                    <input type="email" id="custom-contact-email" class="form-control"
+                                        placeholder="contacto@psicarte.cl">
                                 </div>
                                 <div class="form-group">
                                     <label for="custom-contact-phone">Teléfono de Contacto:</label>
-                                    <input type="tel" id="custom-contact-phone" class="form-control" placeholder="+56961676706">
+                                    <input type="tel" id="custom-contact-phone" class="form-control"
+                                        placeholder="+56961676706">
                                 </div>
                             </div>
                             <button type="submit" class="btn-primary">Publicar Cambios</button>
@@ -532,20 +594,25 @@
 
                     <div id="pane-admin-bookings" class="dashboard-pane">
                         <h3>Gestión de Reservas</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra todas las reservas del centro. Filtra por prestador para ver agendas individuales.</p>
-                        
-                        <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;">
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra todas las reservas del
+                            centro. Filtra por prestador para ver agendas individuales.</p>
+
+                        <div
+                            style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;">
                             <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
-                                <select id="adm-booking-provider-filter" class="form-control" onchange="renderAdminBookings()">
+                                <select id="adm-booking-provider-filter" class="form-control"
+                                    onchange="renderAdminBookings()">
                                     <option value="all">Todos los Prestadores</option>
                                 </select>
                             </div>
                             <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
-                                <input type="text" id="adm-booking-search" class="form-control" placeholder="Buscar por cliente o servicio..." oninput="renderAdminBookings()">
+                                <input type="text" id="adm-booking-search" class="form-control"
+                                    placeholder="Buscar por cliente o servicio..." oninput="renderAdminBookings()">
                             </div>
-                            <button class="btn-primary" onclick="startAdminBooking()"><i class="fa-solid fa-plus"></i> Nueva Reserva</button>
+                            <button class="btn-primary" onclick="startAdminBooking()"><i class="fa-solid fa-plus"></i>
+                                Nueva Reserva</button>
                         </div>
-                        
+
                         <div class="table-responsive">
                             <table class="admin-table">
                                 <thead>
@@ -568,9 +635,11 @@
                     <div id="pane-admin-khipu-notifications" class="dashboard-pane">
                         <h3>Registro de Notificaciones Khipu</h3>
                         <p style="color: var(--text-secondary); margin-bottom: 20px;">
-                            Monitorea las notificaciones instantáneas de pago (API 1.3), reportes diarios de rendición (DRN-2.0) y reportes diarios de transacciones (DTN-1.0) recibidos desde la pasarela de pagos Khipu.
+                            Monitorea las notificaciones instantáneas de pago (API 1.3), reportes diarios de rendición
+                            (DRN-2.0) y reportes diarios de transacciones (DTN-1.0) recibidos desde la pasarela de pagos
+                            Khipu.
                         </p>
-                        
+
                         <div class="table-responsive">
                             <table class="admin-table">
                                 <thead>
@@ -584,13 +653,16 @@
                                 <tbody id="admin-khipu-notifications-table"></tbody>
                             </table>
                         </div>
-                        <p id="admin-khipu-notifications-empty" style="text-align: center; color: var(--text-secondary); display: none; margin-top: 20px;">No se han recibido notificaciones.</p>
+                        <p id="admin-khipu-notifications-empty"
+                            style="text-align: center; color: var(--text-secondary); display: none; margin-top: 20px;">
+                            No se han recibido notificaciones.</p>
                     </div>
 
                     <!-- ADMIN PERSONAL PANES -->
                     <div id="pane-admin-my-bookings" class="dashboard-pane">
                         <h3>Mis Reservas</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Reservas realizadas a tu nombre como administrador.</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Reservas realizadas a tu nombre
+                            como administrador.</p>
                         <div class="table-responsive">
                             <table class="admin-table">
                                 <thead>
@@ -606,12 +678,15 @@
                                 <tbody id="admin-my-bookings-table"></tbody>
                             </table>
                         </div>
-                        <p id="admin-my-bookings-empty" style="text-align: center; color: var(--text-secondary); display: none; margin-top: 20px;">No tienes reservas registradas.</p>
+                        <p id="admin-my-bookings-empty"
+                            style="text-align: center; color: var(--text-secondary); display: none; margin-top: 20px;">
+                            No tienes reservas registradas.</p>
                     </div>
 
                     <div id="pane-admin-my-profile" class="dashboard-pane">
                         <h3>Mis Datos Personales</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Edita tu información de perfil de administrador.</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Edita tu información de perfil de
+                            administrador.</p>
                         <form id="admin-profile-form" onsubmit="saveAdminProfile(event)">
                             <div class="form-row">
                                 <div class="form-group">
@@ -633,8 +708,9 @@
 
                     <div id="pane-admin-users" class="dashboard-pane">
                         <h3>Gestión de Usuarios</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra todos los usuarios del sistema (administradores, prestadores y clientes).</p>
-                        
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra todos los usuarios del
+                            sistema (administradores, prestadores y clientes).</p>
+
                         <div class="grid-2">
                             <div class="card" style="box-shadow: none;">
                                 <h4 id="admin-user-form-title">Añadir Usuario</h4>
@@ -651,7 +727,8 @@
                                         </div>
                                         <div class="form-group">
                                             <label for="adm-user-role">Rol:</label>
-                                            <select id="adm-user-role" class="form-control" required onchange="toggleAdminUserFields()">
+                                            <select id="adm-user-role" class="form-control" required
+                                                onchange="toggleAdminUserFields()">
                                                 <option value="usuario">Cliente / Usuario</option>
                                                 <option value="prestador">Prestador</option>
                                                 <option value="administrador">Administrador</option>
@@ -662,30 +739,37 @@
                                         <div class="form-row">
                                             <div class="form-group">
                                                 <label for="adm-user-rut">RUT:</label>
-                                                <input type="text" id="adm-user-rut" class="form-control" placeholder="12.345.678-9">
+                                                <input type="text" id="adm-user-rut" class="form-control"
+                                                    placeholder="12.345.678-9">
                                             </div>
                                             <div class="form-group">
                                                 <label for="adm-user-phone">Celular:</label>
-                                                <input type="tel" id="adm-user-phone" class="form-control" placeholder="+56912345678">
+                                                <input type="tel" id="adm-user-phone" class="form-control"
+                                                    placeholder="+56912345678">
                                             </div>
                                         </div>
                                     </div>
                                     <div class="form-group">
                                         <label for="adm-user-password">Contraseña:</label>
-                                        <input type="password" id="adm-user-password" class="form-control" placeholder="Dejar en blanco para no cambiar">
+                                        <input type="password" id="adm-user-password" class="form-control"
+                                            placeholder="Dejar en blanco para no cambiar">
                                     </div>
                                     <div style="display: flex; gap: 10px;">
-                                        <button type="submit" class="btn-primary" style="flex: 1;">Guardar Usuario</button>
-                                        <button type="button" class="btn-secondary" onclick="resetAdminUserForm()">Cancelar</button>
+                                        <button type="submit" class="btn-primary" style="flex: 1;">Guardar
+                                            Usuario</button>
+                                        <button type="button" class="btn-secondary"
+                                            onclick="resetAdminUserForm()">Cancelar</button>
                                     </div>
                                 </form>
                             </div>
                             <div class="card" style="box-shadow: none;">
                                 <h4>Buscar Usuarios</h4>
                                 <div class="form-group" style="margin-top: 15px;">
-                                    <input type="text" id="adm-user-search" class="form-control" placeholder="Buscar por nombre o email..." oninput="renderAdminUsers()">
+                                    <input type="text" id="adm-user-search" class="form-control"
+                                        placeholder="Buscar por nombre o email..." oninput="renderAdminUsers()">
                                 </div>
-                                <div id="admin-users-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 10px;"></div>
+                                <div id="admin-users-count"
+                                    style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 10px;"></div>
                             </div>
                         </div>
 
@@ -710,12 +794,14 @@
 
                     <div id="pane-admin-config-raw" class="dashboard-pane">
                         <h3>Configuración Avanzada</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Editor directo de la tabla de configuración clave-valor.</p>
-                        
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Editor directo de la tabla de
+                            configuración clave-valor.</p>
+
                         <div class="card" style="box-shadow: none; margin-bottom: 20px;">
                             <h4>Buscar Configuración</h4>
                             <div class="form-group" style="margin-top: 15px;">
-                                <input type="text" id="adm-config-search" class="form-control" placeholder="Buscar por clave..." oninput="renderAdminConfigRaw()">
+                                <input type="text" id="adm-config-search" class="form-control"
+                                    placeholder="Buscar por clave..." oninput="renderAdminConfigRaw()">
                             </div>
                         </div>
 
@@ -743,7 +829,8 @@
         <div class="footer-container">
             <div class="footer-info">
                 <img id="footer-logo" src="images/logo_dark.png" alt="PsicArte Logo">
-                <p>Centro Integral PsicArte está orientado al acompañamiento terapéutico, el desarrollo de capacidades artísticas y corporales, y la promoción del autocuidado y la salud mental.</p>
+                <p>Centro Integral PsicArte está orientado al acompañamiento terapéutico, el desarrollo de capacidades
+                    artísticas y corporales, y la promoción del autocuidado y la salud mental.</p>
             </div>
             <div class="footer-links">
                 <h4>Enlaces Rápidos</h4>
@@ -757,14 +844,16 @@
             </div>
             <div class="footer-contact">
                 <h4>Contacto</h4>
-                <p><i class="fa-solid fa-envelope" style="color: var(--color-gold);"></i> <span id="contact-email">contacto@psicarte.cl</span></p>
-                <p><i class="fa-solid fa-phone" style="color: var(--color-gold);"></i> <span id="contact-phone">+56961676706</span></p>
-                <p><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> Modalidad Online y Presencial</p>
+                <p><i class="fa-solid fa-envelope" style="color: var(--color-gold);"></i> <span
+                        id="contact-email">contacto@psicarte.cl</span></p>
+                <p><i class="fa-solid fa-phone" style="color: var(--color-gold);"></i> <span
+                        id="contact-phone">+56961676706</span></p>
+                <p><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> Modalidad Online y
+                    Presencial</p>
             </div>
         </div>
         <div class="footer-bottom">
             <p>&copy; <span id="footer-year"></span> Centro Integral PsicArte. Todos los derechos reservados.</p>
-            <p>Diseño Web Profesional y Adaptativo • <span class="terms-link" onclick="openTermsModal()">Términos y Condiciones</span></p>
         </div>
     </footer>
 
@@ -777,7 +866,8 @@
             </div>
             <div class="modal-body">
                 <p style="margin-bottom: 15px; color: var(--text-secondary);">
-                    Ingresa el correo electrónico con el que estás registrado. Te enviaremos un correo ficticio de recuperación.
+                    Ingresa el correo electrónico con el que estás registrado. Te enviaremos un correo ficticio de
+                    recuperación.
                 </p>
                 <div class="form-group">
                     <label for="recovery-email">Correo Registrado:</label>
@@ -800,19 +890,22 @@
             </div>
             <div class="modal-body" style="font-size: 0.9rem; line-height: 1.5; color: var(--text-secondary);">
                 <p><strong>1. Modalidades de Atención</strong><br>
-                Nuestros servicios se prestan en modalidad virtual (Online) y física (Presencial).</p>
+                    Nuestros servicios se prestan en modalidad virtual (Online) y física (Presencial).</p>
                 <br>
                 <p><strong>2. Agendamiento y Confirmación</strong><br>
-                Las citas quedan confirmadas únicamente tras realizar el pago virtual del servicio.</p>
+                    Las citas quedan confirmadas únicamente tras realizar el pago virtual del servicio.</p>
                 <br>
                 <p><strong>3. Políticas de Reagendamiento y Cancelación</strong><br>
-                Las sesiones pagadas no tienen devolución de dinero. Podrá reagendarse solo una vez con un mínimo de 24 horas de anticipación, sujeto a la disponibilidad del profesional.</p>
+                    Las sesiones pagadas no tienen devolución de dinero. Podrá reagendarse solo una vez con un mínimo de
+                    24 horas de anticipación, sujeto a la disponibilidad del profesional.</p>
                 <br>
                 <p><strong>4. Bloqueos de Agenda</strong><br>
-                El centro se reserva el derecho de suspender o reagendar citas en caso de enfermedad del prestador o fuerza mayor.</p>
+                    El centro se reserva el derecho de suspender o reagendar citas en caso de enfermedad del prestador o
+                    fuerza mayor.</p>
                 <br>
                 <p><strong>5. Privacidad y Confidencialidad</strong><br>
-                Toda la información tratada en psicoterapia es confidencial y regida por los principios de la ética profesional y legislación vigente chilena.</p>
+                    Toda la información tratada en psicoterapia es confidencial y regida por los principios de la ética
+                    profesional y legislación vigente chilena.</p>
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" onclick="closeTermsModal()">Cerrar</button>
@@ -828,17 +921,20 @@
                 <button class="modal-close" onclick="closeRescheduleModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
-                <p id="reschedule-booking-info" style="font-weight: 600; margin-bottom: 15px; color: var(--color-accent);"></p>
+                <p id="reschedule-booking-info"
+                    style="font-weight: 600; margin-bottom: 15px; color: var(--color-accent);"></p>
                 <input type="hidden" id="reschedule-booking-id">
-                
+
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <!-- Reschedule Calendar -->
                     <div>
                         <h4 style="margin-bottom: 10px;">Nueva Fecha</h4>
                         <div class="calendar-header">
-                            <button class="btn-icon" onclick="prevRescheduleMonth()"><i class="fa-solid fa-chevron-left"></i></button>
+                            <button class="btn-icon" onclick="prevRescheduleMonth()"><i
+                                    class="fa-solid fa-chevron-left"></i></button>
                             <span id="reschedule-calendar-month-year" style="font-weight: 700;"></span>
-                            <button class="btn-icon" onclick="nextRescheduleMonth()"><i class="fa-solid fa-chevron-right"></i></button>
+                            <button class="btn-icon" onclick="nextRescheduleMonth()"><i
+                                    class="fa-solid fa-chevron-right"></i></button>
                         </div>
                         <div class="calendar-grid" id="reschedule-calendar"></div>
                     </div>
@@ -866,7 +962,8 @@
                 <button class="modal-close" onclick="closeEnrollModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
-                <p id="enroll-activity-name" style="font-weight: 600; margin-bottom: 15px; color: var(--color-accent);"></p>
+                <p id="enroll-activity-name" style="font-weight: 600; margin-bottom: 15px; color: var(--color-accent);">
+                </p>
                 <form id="enroll-form" onsubmit="submitActivityEnrollment(event)">
                     <input type="hidden" id="enroll-activity-id">
                     <div class="form-group">
@@ -875,17 +972,20 @@
                     </div>
                     <div class="form-group">
                         <label for="enroll-email">Correo Electrónico:</label>
-                        <input type="email" id="enroll-email" class="form-control" placeholder="nombre@correo.com" required>
+                        <input type="email" id="enroll-email" class="form-control" placeholder="nombre@correo.com"
+                            required>
                     </div>
                     <div class="form-group">
                         <label for="enroll-phone">Celular:</label>
-                        <input type="tel" id="enroll-phone" class="form-control" placeholder="Ej: +56912345678" required>
+                        <input type="tel" id="enroll-phone" class="form-control" placeholder="Ej: +56912345678"
+                            required>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="closeEnrollModal()">Cancelar</button>
-                <button class="btn-primary" onclick="document.getElementById('enroll-form').requestSubmit()">Confirmar Inscripción</button>
+                <button class="btn-primary" onclick="document.getElementById('enroll-form').requestSubmit()">Confirmar
+                    Inscripción</button>
             </div>
         </div>
     </div>
@@ -895,10 +995,12 @@
         <div class="modal-container" style="max-width: 700px;">
             <div class="modal-header">
                 <h3>Inscritos en la Actividad</h3>
-                <button class="modal-close" onclick="closeAdminEnrollmentsModal()"><i class="fa-solid fa-xmark"></i></button>
+                <button class="modal-close" onclick="closeAdminEnrollmentsModal()"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
-                <p id="admin-enrollments-activity-name" style="font-weight: 600; margin-bottom: 15px; color: var(--color-accent);"></p>
+                <p id="admin-enrollments-activity-name"
+                    style="font-weight: 600; margin-bottom: 15px; color: var(--color-accent);"></p>
                 <div class="table-responsive">
                     <table class="admin-table">
                         <thead>
@@ -913,7 +1015,9 @@
                         <tbody id="admin-enrollments-table-body"></tbody>
                     </table>
                 </div>
-                <p id="admin-enrollments-empty" style="text-align: center; color: var(--text-secondary); display: none;">No hay inscritos en esta actividad.</p>
+                <p id="admin-enrollments-empty"
+                    style="text-align: center; color: var(--text-secondary); display: none;">No hay inscritos en esta
+                    actividad.</p>
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" onclick="closeAdminEnrollmentsModal()">Cerrar</button>
@@ -922,8 +1026,8 @@
     </div>
 
     <!-- WhatsApp Floating Button -->
-    <a id="whatsapp-float-btn" href="#" target="_blank" rel="noopener noreferrer"
-       class="whatsapp-float" aria-label="Contactar por WhatsApp" style="display: none;">
+    <a id="whatsapp-float-btn" href="#" target="_blank" rel="noopener noreferrer" class="whatsapp-float"
+        aria-label="Contactar por WhatsApp" style="display: none;">
         <i class="fa-brands fa-whatsapp"></i>
     </a>
 
@@ -942,4 +1046,5 @@
     <script src="js/reschedule.js"></script>
     <script src="js/app.js"></script>
 </body>
+
 </html>

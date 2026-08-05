@@ -1,13 +1,33 @@
 -- schema.sql
 -- Database Schema for Centro Integral PsicArte
 
--- 1. Content table
+-- 1. Users Table (tabla unificada de usuarios)
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'usuario',  -- 'administrador', 'prestador', 'usuario'
+    rut TEXT,
+    phone TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Provider Profiles table (auxiliar para datos específicos de prestadores)
+CREATE TABLE IF NOT EXISTS provider_profiles (
+    userId TEXT PRIMARY KEY,
+    blocks TEXT,
+    bio TEXT,
+    FOREIGN KEY (userId) REFERENCES users(id)
+);
+
+-- 3. Content table
 CREATE TABLE IF NOT EXISTS content (
     key TEXT PRIMARY KEY,
     value TEXT
 );
 
--- 2. Rooms table
+-- 4. Rooms table
 CREATE TABLE IF NOT EXISTS rooms (
     id TEXT PRIMARY KEY,
     name TEXT,
@@ -16,17 +36,7 @@ CREATE TABLE IF NOT EXISTS rooms (
     closeTime TEXT
 );
 
--- 3. Providers table
-CREATE TABLE IF NOT EXISTS providers (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    role TEXT,
-    email TEXT,
-    blocks TEXT,
-    bio TEXT
-);
-
--- 4. Services table
+-- 5. Services table
 CREATE TABLE IF NOT EXISTS services (
     id TEXT PRIMARY KEY,
     providerId TEXT,
@@ -36,14 +46,6 @@ CREATE TABLE IF NOT EXISTS services (
     type TEXT,
     allowReschedule INTEGER DEFAULT 1,
     maxReschedules INTEGER DEFAULT 1
-);
-
--- 5. Clients table
-CREATE TABLE IF NOT EXISTS clients (
-    email TEXT PRIMARY KEY,
-    name TEXT,
-    rut TEXT,
-    phone TEXT
 );
 
 -- 6. Bookings table
@@ -117,16 +119,3 @@ CREATE TABLE IF NOT EXISTS khipu_notifications (
     ip_address TEXT,             -- Sender's IP address
     received_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
--- 12. Users Table
-CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    name TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'usuario',
-    rut TEXT,
-    phone TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-

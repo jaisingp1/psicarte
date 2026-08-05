@@ -2,7 +2,7 @@
 -- Seed Data for Centro Integral PsicArte
 
 -- 1. Seed Content (Homepage Customizable Content)
-INSERT OR REPLACE INTO content (key, value) VALUES 
+INSERT OR REPLACE INTO content (key, value) VALUES
 ('heroTitle', 'Centro Integral PsicArte'),
 ('heroSubtitle', 'Psicología, Talleres, Capacitaciones y Artes Escénicas orientados al bienestar emocional, la expresión personal y el desarrollo humano.'),
 ('presentationShort', 'PsicArte es un centro integral orientado al bienestar emocional, el desarrollo personal, la expresión creativa y la formación de personas, familias, comunidades educativas y equipos de trabajo.'),
@@ -18,14 +18,42 @@ INSERT OR REPLACE INTO rooms (id, name, type, openTime, closeTime) VALUES
 ('room-1', 'Sala Física Principal', 'Física', '08:30', '18:30'),
 ('room-2', 'Sala Virtual Zoom', 'Virtual', '08:30', '18:30');
 
--- 3. Seed Providers
--- blocks contains Tuesday (2), Thursday (4) and Friday (5) slot arrays in JSON format
-INSERT OR REPLACE INTO providers (id, name, role, email, blocks, bio) VALUES
-('prov-ivan', 'Iván Pastén Fuentes', 'Actor & Instructor de Yoga (8 años exp.)', 'ivan@psicarte.cl', '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}', 'Actor teatral y audiovisual, profesor de teatro, dramaturgo e instructor de yoga, con formación universitaria en actuación y puesta en escena. Mi trabajo integra el arte, la expresión corporal, la comunicación y el bienestar, articulando herramientas escénicas, pedagógicas y socioemocionales para acompañar procesos creativos, educativos y personales.'),
-('prov-valentina', 'Valentina Maldonado Terroba', 'Psicóloga Clínica (5 años exp.)', 'valentina@psicarte.cl', '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}', 'Psicóloga clínica titulada de la Universidad Andrés Bello, graduada Cum Laude, con formación en enfoques psicoanalítico, sistémico-narrativo y centrado en soluciones. Cuento con experiencia en atención presencial y online a niños, niñas, adolescentes y adultos, acompañando procesos terapéuticos desde una mirada integral.'),
-('prov-macarena', 'Macarena Méndez', 'Gestora Cultural & Coordinadora', 'macarena@psicarte.cl', '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}', 'Coordinación de ventas de obras y artes escénicas para empresas, centros educativos o particulares. Reuniones informativas de proyectos teatrales y artísticos en PsicArte.');
+-- 3. Seed Users (tabla unificada)
+-- Admin
+INSERT OR REPLACE INTO users (id, email, password, name, role, rut, phone) VALUES
+('usr-admin', 'admin@psicarte.cl', '$2b$10$j6vfcBbEJBlu1IgYC3Plm.zG1AbbQ4kLrRI18ALKhhgjyRpbf3UbS', 'Administrador General', 'administrador', '', '');
 
--- 4. Seed Services
+-- Prestadores (usando IDs de providers para mantener compatibilidad con services/bookings)
+INSERT OR REPLACE INTO users (id, email, password, name, role, rut, phone) VALUES
+('prov-ivan', 'ivan@psicarte.cl', '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa', 'Iván Pastén Fuentes', 'prestador', '', ''),
+('prov-valentina', 'valentina@psicarte.cl', '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa', 'Valentina Maldonado Terroba', 'prestador', '', ''),
+('prov-macarena', 'macarena@psicarte.cl', '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa', 'Macarena Méndez', 'prestador', '', '');
+
+-- Clientes (migrados de la tabla clients)
+INSERT OR REPLACE INTO users (id, email, password, name, role, rut, phone) VALUES
+('usr-romilio', 'romilio@correo.com', '', 'Romilio Orellana', 'usuario', '15.422.311-K', '+56987654321'),
+('usr-renata', 'renata@correo.com', '', 'Renata Jeldes', 'usuario', '18.399.201-9', '+56976543210'),
+('usr-sofia', 'sofia@correo.com', '', 'Sofia Molina', 'usuario', '20.144.355-6', '+56965432109'),
+('usr-monica', 'monica@correo.com', '', 'Monica Martinez', 'usuario', '12.833.456-7', '+56954321098'),
+('usr-matias-a', 'matias.a@correo.com', '', 'Matias Aguirre', 'usuario', '19.344.202-K', '+56943210987'),
+('usr-matias-c', 'matias.c@correo.com', '', 'Matias Cortes', 'usuario', '17.444.111-2', '+56932109876'),
+('usr-rafael', 'rafael@correo.com', '', 'Rafael Contreras', 'usuario', '16.929.388-3', '+56921098765'),
+('usr-patricio', 'patricio@correo.com', '', 'Patricio Fuentes', 'usuario', '14.828.199-4', '+56910987654'),
+('usr-paula', 'paula@correo.com', '', 'Paula Novoa', 'usuario', '18.822.455-8', '+56909876543'),
+('usr-victor', 'victor@correo.com', '', 'Victor Avila', 'usuario', '15.939.222-1', '+56998765432'),
+('usr-camila', 'camila@correo.com', '', 'Camila Maldonado', 'usuario', '21.033.455-K', '+56987654320'),
+('usr-benjamin', 'benjamin@correo.com', '', 'Benjamin Tabilo', 'usuario', '19.822.111-0', '+56976543219'),
+('usr-jessica', 'jessica@correo.com', '', 'Jessica Cortes', 'usuario', '16.333.109-8', '+56965432198'),
+('usr-jose', 'jose@correo.com', '', 'Jose Marin', 'usuario', '13.922.888-5', '+56954321987'),
+('usr-cristian', 'cristian@correo.com', '', 'Cristian Alvarez', 'usuario', '17.822.444-1', '+56943219876');
+
+-- 4. Seed Provider Profiles (datos específicos de prestadores)
+INSERT OR REPLACE INTO provider_profiles (userId, blocks, bio) VALUES
+('prov-ivan', '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}', 'Actor teatral y audiovisual, profesor de teatro, dramaturgo e instructor de yoga, con formación universitaria en actuación y puesta en escena. Mi trabajo integra el arte, la expresión corporal, la comunicación y el bienestar, articulando herramientas escénicas, pedagógicas y socioemocionales para acompañar procesos creativos, educativos y personales.'),
+('prov-valentina', '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}', 'Psicóloga clínica titulada de la Universidad Andrés Bello, graduada Cum Laude, con formación en enfoques psicoanalítico, sistémico-narrativo y centrado en soluciones. Cuento con experiencia en atención presencial y online a niños, niñas, adolescentes y adultos, acompañando procesos terapéuticos desde una mirada integral.'),
+('prov-macarena', '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}', 'Coordinación de ventas de obras y artes escénicas para empresas, centros educativos o particulares. Reuniones informativas de proyectos teatrales y artísticos en PsicArte.');
+
+-- 5. Seed Services
 INSERT OR REPLACE INTO services (id, providerId, name, price, duration, type, allowReschedule, maxReschedules) VALUES
 -- Ivan Services
 ('ivan-s1', 'prov-ivan', 'Coaching de Vida, Personal y Profesional Online', 20990, 50, 'Virtual', 1, 1),
@@ -43,24 +71,6 @@ INSERT OR REPLACE INTO services (id, providerId, name, price, duration, type, al
 ('val-s6', 'prov-valentina', 'Informes y Certificados', 20990, 5, 'Virtual', 1, 1),
 -- Macarena Services
 ('maca-s1', 'prov-macarena', 'Reunión informativa: Venta de obras y artes escénicas', 0, 45, 'Virtual', 1, 1);
-
--- 5. Seed Clients (Cartera de Clientes Mock)
-INSERT OR REPLACE INTO clients (email, name, rut, phone) VALUES
-('romilio@correo.com', 'Romilio Orellana', '15.422.311-K', '+56987654321'),
-('renata@correo.com', 'Renata Jeldes', '18.399.201-9', '+56976543210'),
-('sofia@correo.com', 'Sofia Molina', '20.144.355-6', '+56965432109'),
-('monica@correo.com', 'Monica Martinez', '12.833.456-7', '+56954321098'),
-('matias.a@correo.com', 'Matias Aguirre', '19.344.202-K', '+56943210987'),
-('matias.c@correo.com', 'Matias Cortes', '17.444.111-2', '+56932109876'),
-('rafael@correo.com', 'Rafael Contreras', '16.929.388-3', '+56921098765'),
-('patricio@correo.com', 'Patricio Fuentes', '14.828.199-4', '+56910987654'),
-('paula@correo.com', 'Paula Novoa', '18.822.455-8', '+56909876543'),
-('victor@correo.com', 'Victor Avila', '15.939.222-1', '+56998765432'),
-('camila@correo.com', 'Camila Maldonado', '21.033.455-K', '+56987654320'),
-('benjamin@correo.com', 'Benjamin Tabilo', '19.822.111-0', '+56976543219'),
-('jessica@correo.com', 'Jessica Cortes', '16.333.109-8', '+56965432198'),
-('jose@correo.com', 'Jose Marin', '13.922.888-5', '+56954321987'),
-('cristian@correo.com', 'Cristian Alvarez', '17.822.444-1', '+56943219876');
 
 -- 6. Seed Bookings
 INSERT OR REPLACE INTO bookings (id, providerId, serviceId, serviceName, price, duration, roomId, roomName, date, timeSlot, startTime, endTime, clientEmail, clientName, clientRut, clientPhone, status) VALUES
@@ -91,11 +101,3 @@ INSERT OR REPLACE INTO khipu_notifications (id, type, headers, query_params, bod
 ('notif-1', 'payment_1.3', '{"content-type":"application/x-www-form-urlencoded"}', '{"notification_token":"mock-token-bk-1"}', '{"api_version":"1.3","notification_token":"mock-token-bk-1","receiver_id":"123456","notification_sign":"abc123xyz"}', '127.0.0.1', datetime('now', '-2 hours')),
 ('notif-2', 'rendition_drn_2.0', '{"content-type":"application/json"}', '{}', '{"report_id":"rep-drn-998","api_version":"DRN-2.0","status":"success","generated_at":"2026-08-04T12:00:00Z","summary":{"total_amount":46980,"count":2}}', '127.0.0.1', datetime('now', '-1 hours')),
 ('notif-3', 'transaction_dtn_1.0', '{"content-type":"application/json"}', '{}', '{"report_id":"rep-dtn-552","api_version":"DTN-1.0","transactions":[{"payment_id":"khipu-p1","amount":20990,"status":"cleared"},{"payment_id":"khipu-p2","amount":25990,"status":"cleared"}]}', '127.0.0.1', datetime('now', '-10 minutes'));
-
--- 10. Seed Users
-INSERT OR REPLACE INTO users (id, email, password, name, role, rut, phone) VALUES
-('usr-admin', 'admin@psicarte.cl', '$2b$10$j6vfcBbEJBlu1IgYC3Plm.zG1AbbQ4kLrRI18ALKhhgjyRpbf3UbS', 'Administrador General', 'administrador', '', ''),
-('usr-ivan', 'ivan@psicarte.cl', '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa', 'Iván Pastén Fuentes', 'prestador', '', ''),
-('usr-valentina', 'valentina@psicarte.cl', '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa', 'Valentina Maldonado Terroba', 'prestador', '', ''),
-('usr-macarena', 'macarena@psicarte.cl', '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa', 'Macarena Méndez', 'prestador', '', '');
-

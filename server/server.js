@@ -128,56 +128,35 @@ app.post('/api/auth/login', (req, res) => {
         return res.status(400).json({ error: 'Faltan credenciales o rol.' });
     }
 
-    // First, check the users table for any role (including clients that were registered in users)
     db.get("SELECT id, email, password, name, role FROM users WHERE email = ?", [email], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         
         if (user) {
-            // Verify password using bcrypt
             bcrypt.compare(password, user.password, (err2, isMatch) => {
                 if (err2) return res.status(500).json({ error: err2.message });
                 if (!isMatch) {
                     return res.status(401).json({ error: 'Contraseña incorrecta.' });
                 }
-                // Normalize "admin" role to "administrador" for backward compatibility with old database instances
                 const dbRole = user.role === 'admin' ? 'administrador' : user.role;
-                
-                // If it is a provider, fetch providerId from providers table for compatibility
-                if (dbRole === 'prestador') {
-                    db.get("SELECT id FROM providers WHERE email = ?", [email], (errProv, prov) => {
-                        if (errProv) return res.status(500).json({ error: errProv.message });
-                        const finalId = prov ? prov.id : user.id;
-                        const tokenPayload = { id: finalId, email: user.email, role: dbRole };
-                        const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
-                        return res.json({ ...tokenPayload, name: user.name, token });
-                    });
-                } else {
-                    const tokenPayload = { id: user.id, email: user.email, role: dbRole };
-                    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
-                    return res.json({ ...tokenPayload, name: user.name, token });
-                }
+                const tokenPayload = { id: user.id, email: user.email, role: dbRole };
+                const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+                return res.json({ ...tokenPayload, name: user.name, token });
             });
             return;
         }
 
-        // If user is not found in users table but role is 'usuario', allow auto-register/login behavior in clients table
+        // Auto-register for usuarios without password
         if (role === 'usuario') {
-            db.get("SELECT name, email, rut, phone FROM clients WHERE email = ?", [email], (err2, row) => {
-                if (err2) return res.status(500).json({ error: err2.message });
-                if (row) {
-                    const tokenPayload = { id: row.email, email: row.email, role };
+            const name = email.split('@')[0].toUpperCase();
+            const userId = 'usr-' + Date.now();
+            db.run("INSERT INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, '', ?, 'usuario', '', '')",
+                [userId, email, name], (err3) => {
+                    if (err3) return res.status(500).json({ error: err3.message });
+                    const tokenPayload = { id: userId, email, role };
                     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
-                    return res.json({ name: row.name, email: row.email, role, token });
-                } else {
-                    const name = email.split('@')[0].toUpperCase();
-                    db.run("INSERT INTO clients (email, name, rut, phone) VALUES (?, ?, '', '')", [email, name], (err3) => {
-                        if (err3) return res.status(500).json({ error: err3.message });
-                        const tokenPayload = { id: email, email, role };
-                        const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
-                        return res.json({ name, email, role, token });
-                    });
+                    return res.json({ name, email, role, token });
                 }
-            });
+            );
             return;
         }
 
@@ -189,12 +168,10 @@ app.post('/api/auth/recover', (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Se requiere email.' });
     
-    // Check if email exists in any role
-    db.get("SELECT email FROM clients WHERE email = ? UNION SELECT email FROM providers WHERE email = ?", [email, email], (err, row) => {
+    db.get("SELECT email FROM users WHERE email = ?", [email], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        const isAdmin = (email === "admin@psicarte.cl");
         
-        if (row || isAdmin) {
+        if (row) {
             return res.json({ success: true, message: `Correo de recuperación enviado a ${email}` });
         } else {
             return res.status(404).json({ error: 'Correo no registrado.' });
@@ -224,16 +201,6 @@ app.post('/api/users', authenticateToken, (req, res) => {
             [id, email, hash, name, role, rut || '', phone || ''],
             function(err2) {
                 if (err2) return res.status(500).json({ error: err2.message });
-                
-                // If role is usuario/cliente, sync with clients table
-                if (role === 'usuario') {
-                    db.run("INSERT OR REPLACE INTO clients (email, name, rut, phone) VALUES (?, ?, ?, ?)",
-                        [email, name, rut || '', phone || ''],
-                        (errClient) => {
-                            if (errClient) console.error("Error syncing to clients:", errClient.message);
-                        }
-                    );
-                }
                 res.json({ success: true, id });
             }
         );
@@ -257,16 +224,6 @@ app.put('/api/users/:id', authenticateToken, (req, res) => {
             
         db.run(query, params, function(err2) {
             if (err2) return res.status(500).json({ error: err2.message });
-            
-            // Sync with clients table if role is usuario/cliente
-            if (role === 'usuario') {
-                db.run("INSERT OR REPLACE INTO clients (email, name, rut, phone) VALUES (?, ?, ?, ?)",
-                    [email, name, rut || '', phone || ''],
-                    (errClient) => {
-                        if (errClient) console.error("Error syncing to clients on update:", errClient.message);
-                    }
-                );
-            }
             res.json({ success: true });
         });
     };
@@ -287,19 +244,24 @@ app.delete('/api/users/:id', authenticateToken, (req, res) => {
         if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
         
         if (user.role === 'usuario') {
-            // Check for bookings conflict
             db.get("SELECT COUNT(*) as count FROM bookings WHERE clientEmail = ?", [user.email], (err2, row) => {
                 if (err2) return res.status(500).json({ error: err2.message });
                 if (row.count > 0) {
                     return res.status(400).json({ error: 'No se puede eliminar el usuario/cliente porque tiene reservas asociadas.' });
                 }
                 
-                db.serialize(() => {
-                    db.run("DELETE FROM users WHERE id = ?", [req.params.id]);
-                    db.run("DELETE FROM clients WHERE email = ?", [user.email], (err3) => {
-                        if (err3) return res.status(500).json({ error: err3.message });
-                        res.json({ success: true });
-                    });
+                db.run("DELETE FROM users WHERE id = ?", [req.params.id], function(err3) {
+                    if (err3) return res.status(500).json({ error: err3.message });
+                    res.json({ success: true });
+                });
+            });
+        } else if (user.role === 'prestador') {
+            db.serialize(() => {
+                db.run("DELETE FROM provider_profiles WHERE userId = ?", [req.params.id]);
+                db.run("DELETE FROM services WHERE providerId = ?", [req.params.id]);
+                db.run("DELETE FROM users WHERE id = ?", [req.params.id], function(err2) {
+                    if (err2) return res.status(500).json({ error: err2.message });
+                    res.json({ success: true });
                 });
             });
         } else {
@@ -371,8 +333,12 @@ app.delete('/api/rooms/:id', authenticateToken, (req, res) => {
 // REST API: PROVIDERS & SERVICES
 // ----------------------------------------------------
 app.get('/api/providers', (req, res) => {
-    // Join providers and services
-    db.all("SELECT * FROM providers", (err, provs) => {
+    db.all(`
+        SELECT u.id, u.name, u.email, u.role, p.blocks, p.bio
+        FROM users u
+        JOIN provider_profiles p ON u.id = p.userId
+        WHERE u.role = 'prestador'
+    `, (err, provs) => {
         if (err) return res.status(500).json({ error: err.message });
         db.all("SELECT * FROM services", (err2, servs) => {
             if (err2) return res.status(500).json({ error: err2.message });
@@ -402,19 +368,34 @@ app.post('/api/providers', authenticateToken, (req, res) => {
         4: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"],
         5: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"]
     });
-    db.run("INSERT INTO providers (id, name, role, email, blocks, bio) VALUES (?, ?, ?, ?, ?, ?)",
-        [id, name, role, email, blocksStr, bio || ''],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, id });
-        }
-    );
+    
+    // Insert into users table first
+    const providerId = id || 'prov-' + Date.now();
+    const tempPassword = 'temp-' + Date.now();
+    bcrypt.hash(tempPassword, 10, (err, hash) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        db.run("INSERT INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, ?, ?, 'prestador', '', '')",
+            [providerId, email, hash, name], (err2) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                
+                // Insert provider profile
+                db.run("INSERT INTO provider_profiles (userId, blocks, bio) VALUES (?, ?, ?)",
+                    [providerId, blocksStr, bio || ''], (err3) => {
+                        if (err3) return res.status(500).json({ error: err3.message });
+                        res.json({ success: true, id: providerId });
+                    }
+                );
+            }
+        );
+    });
 });
 
 app.delete('/api/providers/:id', authenticateToken, (req, res) => {
     db.serialize(() => {
-        db.run("DELETE FROM providers WHERE id = ?", [req.params.id]);
-        db.run("DELETE FROM services WHERE providerId = ?", [req.params.id], function(err) {
+        db.run("DELETE FROM provider_profiles WHERE userId = ?", [req.params.id]);
+        db.run("DELETE FROM services WHERE providerId = ?", [req.params.id]);
+        db.run("DELETE FROM users WHERE id = ?", [req.params.id], function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true });
         });
@@ -511,13 +492,19 @@ app.post('/api/bookings', (req, res) => {
                 function(err4) {
                     if (err4) return res.status(500).json({ error: err4.message });
                     
-                    // Insert or update Client profile database
-                    db.run("INSERT OR REPLACE INTO clients (email, name, rut, phone) VALUES (?, ?, ?, ?)",
-                        [booking.clientEmail, booking.clientName, booking.clientRut, booking.clientPhone],
-                        (err5) => {
-                            if (err5) console.error("Error storing client:", err5.message);
+                    // Auto-register client in users table if not exists
+                    db.get("SELECT id FROM users WHERE email = ?", [booking.clientEmail], (err5, existingUser) => {
+                        if (err5) console.error("Error checking user:", err5.message);
+                        if (!existingUser && booking.clientEmail) {
+                            const clientUserId = 'usr-' + Date.now();
+                            db.run("INSERT OR IGNORE INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, '', ?, 'usuario', ?, ?)",
+                                [clientUserId, booking.clientEmail, booking.clientName || booking.clientEmail.split('@')[0], booking.clientRut || '', booking.clientPhone || ''],
+                                (err6) => {
+                                    if (err6) console.error("Error creating client user:", err6.message);
+                                }
+                            );
                         }
-                    );
+                    });
                     
                     res.json({ success: true, id: booking.id });
                 });
@@ -676,10 +663,10 @@ app.delete('/api/blocks/:id', authenticateToken, (req, res) => {
 });
 
 // ----------------------------------------------------
-// REST API: CLIENTS
+// REST API: CLIENTS (ahora consultan la tabla users)
 // ----------------------------------------------------
 app.get('/api/clients', authenticateToken, (req, res) => {
-    db.all("SELECT * FROM clients", (err, rows) => {
+    db.all("SELECT id, email, name, rut, phone FROM users WHERE role = 'usuario'", (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
@@ -687,8 +674,9 @@ app.get('/api/clients', authenticateToken, (req, res) => {
 
 app.post('/api/clients', authenticateToken, (req, res) => {
     const { email, name, rut, phone } = req.body;
-    db.run("INSERT OR REPLACE INTO clients (email, name, rut, phone) VALUES (?, ?, ?, ?)",
-        [email, name, rut, phone],
+    const userId = 'usr-' + Date.now();
+    db.run("INSERT OR REPLACE INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, '', ?, 'usuario', ?, ?)",
+        [userId, email, name, rut || '', phone || ''],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true });
@@ -697,7 +685,7 @@ app.post('/api/clients', authenticateToken, (req, res) => {
 });
 
 app.delete('/api/clients/:email', authenticateToken, (req, res) => {
-    db.run("DELETE FROM clients WHERE email = ?", [req.params.email], function(err) {
+    db.run("DELETE FROM users WHERE email = ? AND role = 'usuario'", [req.params.email], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });

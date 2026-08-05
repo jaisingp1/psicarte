@@ -46,6 +46,40 @@ function timeToMinutes(timeStr) {
     return hours * 60 + minutes;
 }
 
+// Utility: convert minutes to time string "09:30"
+function minutesToTime(totalMinutes) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+// Utility: generate spots for a service in a time range
+function generateSpots(durationMin, rangeStart, rangeEnd, existingBookings) {
+    const spots = [];
+    let current = timeToMinutes(rangeStart);
+    const end = timeToMinutes(rangeEnd);
+    
+    while (current + durationMin <= end) {
+        const spotStart = minutesToTime(current);
+        const spotEnd = minutesToTime(current + durationMin);
+        
+        const hasConflict = existingBookings.some(b => {
+            const bStart = timeToMinutes(b.startTime);
+            const bEnd = timeToMinutes(b.endTime);
+            return current < bEnd && (current + durationMin) > bStart;
+        });
+        
+        spots.push({
+            startTime: spotStart,
+            endTime: spotEnd,
+            available: !hasConflict
+        });
+        
+        current += durationMin;
+    }
+    return spots;
+}
+
 // ----------------------------------------------------
 // KHIPU PAYMENT GATEWAY HELPERS
 // ----------------------------------------------------
@@ -355,7 +389,7 @@ app.get('/api/providers', (req, res) => {
         WHERE u.role = 'prestador'
     `, (err, provs) => {
         if (err) return res.status(500).json({ error: err.message });
-        db.all("SELECT * FROM services", (err2, servs) => {
+        db.all("SELECT s.*, r.name as roomName FROM services s LEFT JOIN rooms r ON s.roomId = r.id", (err2, servs) => {
             if (err2) return res.status(500).json({ error: err2.message });
             
             const nested = provs.map(p => {
@@ -388,17 +422,99 @@ app.delete('/api/providers/:id', authenticateToken, (req, res) => {
 });
 
 app.post('/api/services', authenticateToken, (req, res) => {
-    const { id, providerId, name, price, duration, type, allowReschedule, maxReschedules } = req.body;
+    const { id, providerId, name, price, duration, type, roomId, recurrence, recurrenceDay, recurrenceStartTime, recurrenceEndTime, recurrenceStartDate, recurrenceEndDate, allowReschedule, maxReschedules } = req.body;
     const allowRescheduleVal = allowReschedule !== undefined ? (allowReschedule ? 1 : 0) : 1;
     const maxReschedulesVal = maxReschedules || 1;
-    db.run("INSERT OR REPLACE INTO services (id, providerId, name, price, duration, type, allowReschedule, maxReschedules) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        [id, providerId, name, price, duration, type, allowRescheduleVal, maxReschedulesVal],
+    
+    db.run(`INSERT OR REPLACE INTO services (id, providerId, name, price, duration, type, roomId, recurrence, recurrenceDay, recurrenceStartTime, recurrenceEndTime, recurrenceStartDate, recurrenceEndDate, allowReschedule, maxReschedules) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, providerId, name, price, duration, type, roomId || null, recurrence || 'single', recurrenceDay || null, recurrenceStartTime || null, recurrenceEndTime || null, recurrenceStartDate || null, recurrenceEndDate || null, allowRescheduleVal, maxReschedulesVal],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
+            
+            // Auto-generate spots if service has a room and date
+            if (roomId && recurrenceStartDate && duration) {
+                generateSpotsForService(id, providerId, roomId, duration, recurrenceStartDate, recurrenceEndDate, recurrence, recurrenceDay, recurrenceStartTime, recurrenceEndTime);
+            }
+            
+            const spotsMessage = (roomId && recurrenceStartDate) ? ' Spots generados automáticamente.' : '';
+            res.json({ success: true, message: 'Servicio guardado.' + spotsMessage });
         }
     );
 });
+
+// Function to auto-generate spots for a service
+function generateSpotsForService(serviceId, providerId, roomId, duration, startDate, endDate, recurrence, recurrenceDay, startTime, endTime) {
+    // Get room details
+    db.get("SELECT * FROM rooms WHERE id = ?", [roomId], (err, room) => {
+        if (err || !room) {
+            console.error('Error getting room for spot generation:', err?.message || 'Room not found');
+            return;
+        }
+        
+        const rangeStart = startTime || room.openTime;
+        const rangeEnd = endTime || room.closeTime;
+        
+        console.log(`Generating spots for service ${serviceId} in room ${room.name} (${rangeStart}-${rangeEnd}), recurrence: ${recurrence}`);
+        
+        if (recurrence === 'weekly' && recurrenceDay !== null) {
+            // Generate spots for all weeks from startDate to endDate (or 12 weeks ahead)
+            const start = new Date(startDate + 'T00:00:00');
+            const end = endDate ? new Date(endDate + 'T00:00:00') : new Date(start);
+            if (!endDate) end.setDate(end.getDate() + 84); // 12 weeks
+            
+            const current = new Date(start);
+            let datesGenerated = 0;
+            while (current <= end) {
+                if (current.getDay() === recurrenceDay) {
+                    const dateStr = formatDateStr(current);
+                    console.log(`  Generating spots for date: ${dateStr}`);
+                    generateSpotsForDate(serviceId, providerId, roomId, duration, dateStr, rangeStart, rangeEnd);
+                    datesGenerated++;
+                }
+                current.setDate(current.getDate() + 1);
+            }
+            console.log(`  Total dates with spots: ${datesGenerated}`);
+        } else if (recurrence === 'single' && startDate) {
+            // Generate spots for a single date
+            console.log(`  Generating spots for single date: ${startDate}`);
+            generateSpotsForDate(serviceId, providerId, roomId, duration, startDate, rangeStart, rangeEnd);
+        }
+    });
+}
+
+function generateSpotsForDate(serviceId, providerId, roomId, duration, date, rangeStart, rangeEnd) {
+    // First, get existing bookings for that room/date
+    db.all("SELECT * FROM bookings WHERE roomId = ? AND date = ? AND status = 'Paid'", [roomId, date], (err, bookings) => {
+        if (err) {
+            console.error('Error getting bookings for spot generation:', err.message);
+            return;
+        }
+        
+        const spots = generateSpots(duration, rangeStart, rangeEnd, bookings || []);
+        console.log(`  Generated ${spots.length} spots for ${date}`);
+        
+        // Delete existing spots for this service/date/room
+        db.run("DELETE FROM service_schedules WHERE serviceId = ? AND roomId = ? AND date = ?", [serviceId, roomId, date], (err2) => {
+            if (err2) console.error('Error cleaning spots:', err2.message);
+            
+            // Insert new spots
+            const stmt = db.prepare("INSERT INTO service_schedules (id, serviceId, roomId, providerId, date, startTime, endTime, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            spots.forEach(spot => {
+                const spotId = 'spot-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                stmt.run(spotId, serviceId, roomId, providerId, date, spot.startTime, spot.endTime, spot.available ? 'available' : 'blocked');
+            });
+            stmt.finalize();
+            console.log(`  Inserted ${spots.length} spots into service_schedules`);
+        });
+    });
+}
+
+function formatDateStr(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
 
 app.delete('/api/services/:id', authenticateToken, (req, res) => {
     db.run("DELETE FROM services WHERE id = ?", [req.params.id], function(err) {
@@ -509,6 +625,307 @@ app.delete('/api/bookings/:id/purge', authenticateToken, (req, res) => {
     db.run("DELETE FROM bookings WHERE id = ?", [req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
+    });
+});
+
+// ----------------------------------------------------
+// REST API: SERVICE SCHEDULES (Spots)
+// ----------------------------------------------------
+app.post('/api/service-schedules/generate', authenticateToken, (req, res) => {
+    const { serviceId, roomId, providerId, date, startTime, endTime } = req.body;
+    
+    if (!serviceId || !roomId || !providerId || !date || !startTime || !endTime) {
+        return res.status(400).json({ error: 'Faltan datos requeridos para generar spots.' });
+    }
+    
+    db.get("SELECT duration FROM services WHERE id = ?", [serviceId], (err, service) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!service) return res.status(404).json({ error: 'Servicio no encontrado.' });
+        
+        const duration = service.duration;
+        
+        // Obtener bookings existentes para esa sala/fecha
+        db.all("SELECT * FROM bookings WHERE roomId = ? AND date = ? AND status = 'Paid'", 
+            [roomId, date], (err2, existingBookings) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            
+            // Generar spots
+            const spots = generateSpots(duration, startTime, endTime, existingBookings);
+            
+            // Si no hay spots disponibles, intentar con horarios extendidos
+            if (spots.every(s => !s.available)) {
+                // Intentar extender el rango en 30 min antes y después
+                const extendedStart = minutesToTime(Math.max(timeToMinutes(startTime) - 30, 0));
+                const extendedEnd = minutesToTime(Math.min(timeToMinutes(endTime) + 30, 1440));
+                const extendedSpots = generateSpots(duration, extendedStart, extendedEnd, existingBookings);
+                
+                if (extendedSpots.some(s => s.available)) {
+                    return res.json({ 
+                        spots: extendedSpots, 
+                        totalGenerated: extendedSpots.length, 
+                        available: extendedSpots.filter(s => s.available).length,
+                        extended: true,
+                        originalRange: { start: startTime, end: endTime },
+                        extendedRange: { start: extendedStart, end: extendedEnd }
+                    });
+                }
+            }
+            
+            // Eliminar spots existentes para esta sala/fecha/servicio
+            db.run("DELETE FROM service_schedules WHERE serviceId = ? AND roomId = ? AND date = ? AND providerId = ?",
+                [serviceId, roomId, date, providerId], (err3) => {
+                if (err3) console.error('Error cleaning old spots:', err3.message);
+                
+                // Guardar nuevos spots
+                const insertStmt = db.prepare("INSERT INTO service_schedules (id, serviceId, roomId, providerId, date, startTime, endTime, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                
+                spots.forEach(spot => {
+                    const spotId = 'spot-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+                    insertStmt.run(spotId, serviceId, roomId, providerId, date, spot.startTime, spot.endTime, spot.available ? 'available' : 'blocked');
+                });
+                
+                insertStmt.finalize((err4) => {
+                    if (err4) return res.status(500).json({ error: err4.message });
+                    res.json({ 
+                        spots, 
+                        totalGenerated: spots.length, 
+                        available: spots.filter(s => s.available).length 
+                    });
+                });
+            });
+        });
+    });
+});
+
+// Obtener agenda de una sala
+app.get('/api/rooms/:id/schedule', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    const { start, end } = req.query;
+    
+    if (!start || !end) {
+        return res.status(400).json({ error: 'Se requieren fechas start y end.' });
+    }
+    
+    // Obtener bookings de la sala en el rango
+    db.all(`SELECT b.*, s.name as serviceName, s.duration as serviceDuration, u.name as providerName 
+            FROM bookings b 
+            LEFT JOIN services s ON b.serviceId = s.id
+            LEFT JOIN users u ON b.providerId = u.id
+            WHERE b.roomId = ? AND b.date >= ? AND b.date <= ? AND b.status IN ('Paid', 'Pending_Payment')`,
+        [id, start, end], (err, bookings) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        // Obtener spots pre-generados
+        db.all(`SELECT ss.*, s.name as serviceName, s.duration as serviceDuration, u.name as providerName
+                FROM service_schedules ss
+                LEFT JOIN services s ON ss.serviceId = s.id
+                LEFT JOIN users u ON ss.providerId = u.id
+                WHERE ss.roomId = ? AND ss.date >= ? AND ss.date <= ?`,
+            [id, start, end], (err2, spots) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            
+            res.json({ bookings: bookings || [], spots: spots || [] });
+        });
+    });
+});
+
+// Obtener agenda de todas las salas (para vista dual)
+app.get('/api/rooms/schedule/all', authenticateToken, (req, res) => {
+    const { start, end } = req.query;
+    
+    if (!start || !end) {
+        return res.status(400).json({ error: 'Se requieren fechas start y end.' });
+    }
+    
+    // Obtener todas las salas
+    db.all("SELECT * FROM rooms", (err, rooms) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        // Obtener todos los bookings en el rango
+        db.all(`SELECT b.*, s.name as serviceName, s.duration as serviceDuration, u.name as providerName, r.name as roomName
+                FROM bookings b 
+                LEFT JOIN services s ON b.serviceId = s.id
+                LEFT JOIN users u ON b.providerId = u.id
+                LEFT JOIN rooms r ON b.roomId = r.id
+                WHERE b.date >= ? AND b.date <= ? AND b.status IN ('Paid', 'Pending_Payment')`,
+            [start, end], (err2, bookings) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            
+            // Obtener todos los spots en el rango
+            db.all(`SELECT ss.*, s.name as serviceName, s.duration as serviceDuration, u.name as providerName, r.name as roomName
+                    FROM service_schedules ss
+                    LEFT JOIN services s ON ss.serviceId = s.id
+                    LEFT JOIN users u ON ss.providerId = u.id
+                    LEFT JOIN rooms r ON ss.roomId = r.id
+                    WHERE ss.date >= ? AND ss.date <= ?`,
+                [start, end], (err3, spots) => {
+                if (err3) return res.status(500).json({ error: err3.message });
+                
+                res.json({ rooms: rooms || [], bookings: bookings || [], spots: spots || [] });
+            });
+        });
+    });
+});
+
+// Regenerate spots for a specific service
+app.post('/api/services/:id/generate-spots', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    
+    db.get("SELECT * FROM services WHERE id = ?", [id], (err, service) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!service) return res.status(404).json({ error: 'Servicio no encontrado.' });
+        if (!service.roomId) return res.status(400).json({ error: 'El servicio debe tener una sala asignada.' });
+        if (!service.recurrenceStartDate) return res.status(400).json({ error: 'El servicio debe tener una fecha de inicio.' });
+        
+        generateSpotsForService(
+            service.id, 
+            service.providerId, 
+            service.roomId, 
+            service.duration, 
+            service.recurrenceStartDate, 
+            service.recurrenceEndDate, 
+            service.recurrence, 
+            service.recurrenceDay, 
+            service.recurrenceStartTime, 
+            service.recurrenceEndTime
+        );
+        
+        res.json({ success: true, message: 'Spots generados correctamente.' });
+    });
+});
+
+// Generate spots for ALL services
+app.post('/api/services/generate-all-spots', authenticateToken, (req, res) => {
+    db.all("SELECT * FROM services WHERE roomId IS NOT NULL AND recurrenceStartDate IS NOT NULL", (err, services) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        let generated = 0;
+        services.forEach(service => {
+            generateSpotsForService(
+                service.id, 
+                service.providerId, 
+                service.roomId, 
+                service.duration, 
+                service.recurrenceStartDate, 
+                service.recurrenceEndDate, 
+                service.recurrence, 
+                service.recurrenceDay, 
+                service.recurrenceStartTime, 
+                service.recurrenceEndTime
+            );
+            generated++;
+        });
+        
+        res.json({ success: true, message: `Spots generados para ${generated} servicios.`, count: generated });
+    });
+});
+
+// Mover booking a otra sala/horario
+app.post('/api/bookings/:id/move', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    const { newRoomId, newDate, newStartTime, moveAll } = req.body;
+    
+    if (!newRoomId || !newDate || !newStartTime) {
+        return res.status(400).json({ error: 'Faltan datos para mover la reserva.' });
+    }
+    
+    // Obtener el booking actual
+    db.get("SELECT * FROM bookings WHERE id = ?", [id], (err, booking) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!booking) return res.status(404).json({ error: 'Reserva no encontrada.' });
+        
+        // Calcular nueva hora de fin
+        const newEndTime = minutesToTime(timeToMinutes(newStartTime) + booking.duration);
+        
+        // Obtener nombre de la nueva sala
+        db.get("SELECT name FROM rooms WHERE id = ?", [newRoomId], (err2, room) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            if (!room) return res.status(404).json({ error: 'Sala no encontrada.' });
+            
+            const newRoomName = room.name;
+            
+            // Verificar conflictos en nueva sala
+            db.all("SELECT * FROM bookings WHERE roomId = ? AND date = ? AND status = 'Paid' AND id != ?",
+                [newRoomId, newDate, id], (err3, existingBookings) => {
+                if (err3) return res.status(500).json({ error: err3.message });
+                
+                const hasConflict = existingBookings.some(b => {
+                    const bStart = timeToMinutes(b.startTime);
+                    const bEnd = timeToMinutes(b.endTime);
+                    const newStart = timeToMinutes(newStartTime);
+                    const newEnd = timeToMinutes(newEndTime);
+                    return newStart < bEnd && bStart < newEnd;
+                });
+                
+                if (hasConflict) {
+                    return res.status(400).json({ error: 'La sala tiene un conflicto de horario en ese momento.' });
+                }
+                
+                // Verificar que el prestador no tenga conflicto
+                db.all("SELECT * FROM bookings WHERE providerId = ? AND date = ? AND status = 'Paid' AND id != ?",
+                    [booking.providerId, newDate, id], (err4, providerBookings) => {
+                    if (err4) return res.status(500).json({ error: err4.message });
+                    
+                    const hasProviderConflict = providerBookings.some(b => {
+                        const bStart = timeToMinutes(b.startTime);
+                        const bEnd = timeToMinutes(b.endTime);
+                        const newStart = timeToMinutes(newStartTime);
+                        const newEnd = timeToMinutes(newEndTime);
+                        return newStart < bEnd && bStart < newEnd;
+                    });
+                    
+                    if (hasProviderConflict) {
+                        return res.status(400).json({ error: 'El prestador ya tiene una reserva en ese horario.' });
+                    }
+                    
+                    if (moveAll) {
+                        // Mover todas las instancias del mismo servicio/prestador/fecha original
+                        db.run(`UPDATE bookings 
+                            SET roomId = ?, roomName = ?, date = ?, startTime = ?, endTime = ? 
+                            WHERE serviceId = ? AND providerId = ? AND date = ? AND status = 'Paid'`,
+                            [newRoomId, newRoomName, newDate, newStartTime, newEndTime, 
+                             booking.serviceId, booking.providerId, booking.date],
+                            function(err5) {
+                                if (err5) return res.status(500).json({ error: err5.message });
+                                
+                                // Actualizar spots si existen
+                                db.run(`UPDATE service_schedules 
+                                    SET roomId = ?, date = ?, startTime = ?, endTime = ?
+                                    WHERE bookingId = ? OR (serviceId = ? AND providerId = ? AND date = ?)`,
+                                    [newRoomId, newDate, newStartTime, newEndTime,
+                                     id, booking.serviceId, booking.providerId, booking.date],
+                                    (err6) => {
+                                        if (err6) console.error('Error updating spots:', err6.message);
+                                    });
+                                
+                                res.json({ success: true, message: 'Todas las instancias movidas exitosamente.', moved: this.changes });
+                            }
+                        );
+                    } else {
+                        // Mover solo esta instancia
+                        db.run(`UPDATE bookings 
+                            SET roomId = ?, roomName = ?, date = ?, startTime = ?, endTime = ? 
+                            WHERE id = ?`,
+                            [newRoomId, newRoomName, newDate, newStartTime, newEndTime, id],
+                            function(err5) {
+                                if (err5) return res.status(500).json({ error: err5.message });
+                                
+                                // Actualizar spot si existe
+                                db.run(`UPDATE service_schedules 
+                                    SET roomId = ?, date = ?, startTime = ?, endTime = ?
+                                    WHERE bookingId = ?`,
+                                    [newRoomId, newDate, newStartTime, newEndTime, id],
+                                    (err6) => {
+                                        if (err6) console.error('Error updating spot:', err6.message);
+                                    });
+                                
+                                res.json({ success: true, message: 'Reserva movida exitosamente.', moved: 1 });
+                            }
+                        );
+                    }
+                });
+            });
+        });
     });
 });
 

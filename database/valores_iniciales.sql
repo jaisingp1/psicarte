@@ -54,23 +54,26 @@ INSERT OR REPLACE INTO provider_profiles (userId, blocks, bio) VALUES
 ('prov-macarena', '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}', 'Coordinación de ventas de obras y artes escénicas para empresas, centros educativos o particulares. Reuniones informativas de proyectos teatrales y artísticos en PsicArte.');
 
 -- 5. Seed Services
-INSERT OR REPLACE INTO services (id, providerId, name, price, duration, type, allowReschedule, maxReschedules) VALUES
--- Ivan Services
-('ivan-s1', 'prov-ivan', 'Coaching de Vida, Personal y Profesional Online', 20990, 50, 'Virtual', 1, 1),
-('ivan-s2', 'prov-ivan', 'Talleres: Teatro, expresión corporal, etc.', 20990, 120, 'Física', 0, 1),
-('ivan-s3', 'prov-ivan', 'Pack 4 Sesiones de Yoga Presencial', 25990, 50, 'Física', 1, 1),
-('ivan-s4', 'prov-ivan', 'Capacitaciones individuales: Habilidades blandas', 20990, 50, 'Virtual', 1, 1),
-('ivan-s5', 'prov-ivan', 'Capacitaciones grupales: Habilidades blandas', 60990, 90, 'Física', 1, 1),
-('ivan-s6', 'prov-ivan', 'Reunión informativa de capacitaciones', 0, 45, 'Virtual', 1, 1),
--- Valentina Services
-('val-s1', 'prov-valentina', 'Psicoterapia Online Preferencial', 20990, 50, 'Virtual', 1, 3),
-('val-s2', 'prov-valentina', 'Psicoterapia Online Habilidades Parentales', 25990, 50, 'Virtual', 1, 1),
-('val-s3', 'prov-valentina', 'Terapia de Parejas Online', 30990, 50, 'Virtual', 1, 1),
-('val-s4', 'prov-valentina', 'Terapia Online Flores de Bach', 20990, 45, 'Virtual', 1, 1),
-('val-s5', 'prov-valentina', 'Evaluación Psicológica Online (Relatores/OS-10)', 60990, 50, 'Virtual', 1, 1),
-('val-s6', 'prov-valentina', 'Informes y Certificados', 20990, 5, 'Virtual', 1, 1),
--- Macarena Services
-('maca-s1', 'prov-macarena', 'Reunión informativa: Venta de obras y artes escénicas', 0, 45, 'Virtual', 1, 1);
+INSERT OR REPLACE INTO services (id, providerId, name, price, duration, type, roomId, recurrence, recurrenceDay, recurrenceStartTime, recurrenceEndTime, recurrenceStartDate, recurrenceEndDate, allowReschedule, maxReschedules) VALUES
+-- Ivan Services (Virtual - Sala Virtual Zoom)
+('ivan-s1', 'prov-ivan', 'Coaching de Vida, Personal y Profesional Online', 20990, 50, 'Virtual', 'room-2', 'single', NULL, NULL, NULL, '2026-08-05', '2026-08-05', 1, 1),
+-- Ivan Services (Física - Sala 1)
+('ivan-s2', 'prov-ivan', 'Talleres: Teatro, expresión corporal, etc.', 20990, 120, 'Física', 'room-1', 'single', NULL, NULL, NULL, '2026-08-10', '2026-08-10', 0, 1),
+('ivan-s3', 'prov-ivan', 'Pack 4 Sesiones de Yoga Presencial', 25990, 50, 'Física', 'room-1', 'single', NULL, NULL, NULL, '2026-08-14', '2026-08-14', 1, 1),
+-- Ivan Services (Virtual - Sala Virtual Zoom)
+('ivan-s4', 'prov-ivan', 'Capacitaciones individuales: Habilidades blandas', 20990, 50, 'Virtual', 'room-2', 'single', NULL, NULL, NULL, '2026-08-07', '2026-08-07', 1, 1),
+-- Ivan Services (Física - Sala 1, recurrente)
+('ivan-s5', 'prov-ivan', 'Capacitaciones grupales: Habilidades blandas', 60990, 90, 'Física', 'room-1', 'weekly', 4, '09:00', '12:00', '2026-01-01', NULL, 1, 1),
+('ivan-s6', 'prov-ivan', 'Reunión informativa de capacitaciones', 0, 45, 'Virtual', 'room-2', 'single', NULL, NULL, NULL, '2026-08-12', '2026-08-12', 1, 1),
+-- Valentina Services (Virtual - Sala Virtual Zoom)
+('val-s1', 'prov-valentina', 'Psicoterapia Online Preferencial', 20990, 50, 'Virtual', 'room-2', 'single', NULL, NULL, NULL, '2026-08-06', '2026-08-06', 1, 3),
+('val-s2', 'prov-valentina', 'Psicoterapia Online Habilidades Parentales', 25990, 50, 'Virtual', 'room-2', 'single', NULL, NULL, NULL, '2026-08-08', '2026-08-08', 1, 1),
+('val-s3', 'prov-valentina', 'Terapia de Parejas Online', 30990, 50, 'Virtual', 'room-2', 'single', NULL, NULL, NULL, '2026-08-11', '2026-08-11', 1, 1),
+('val-s4', 'prov-valentina', 'Terapia Online Flores de Bach', 20990, 45, 'Virtual', 'room-2', 'single', NULL, NULL, NULL, '2026-08-13', '2026-08-13', 1, 1),
+('val-s5', 'prov-valentina', 'Evaluación Psicológica Online (Relatores/OS-10)', 60990, 50, 'Virtual', 'room-2', 'single', NULL, NULL, NULL, '2026-08-15', '2026-08-15', 1, 1),
+('val-s6', 'prov-valentina', 'Informes y Certificados', 20990, 5, 'Virtual', 'room-2', 'single', NULL, NULL, NULL, '2026-08-09', '2026-08-09', 1, 1),
+-- Macarena Services (Virtual - Sala Virtual Zoom)
+('maca-s1', 'prov-macarena', 'Reunión informativa: Venta de obras y artes escénicas', 0, 45, 'Virtual', 'room-2', 'single', NULL, NULL, NULL, '2026-08-16', '2026-08-16', 1, 1);
 
 -- 6. Seed Bookings
 INSERT OR REPLACE INTO bookings (id, providerId, serviceId, serviceName, price, duration, roomId, roomName, date, timeSlot, startTime, endTime, clientEmail, clientName, clientRut, clientPhone, status) VALUES

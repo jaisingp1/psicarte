@@ -152,3 +152,224 @@
     background-color: rgba(43, 108, 176, 0.15);
     color: var(--color-info);
 }
+
+/* ----------------------------------------------------
+   ROOM SCHEDULE STYLES
+   ---------------------------------------------------- */
+.room-schedule-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+    padding: 15px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+}
+
+.view-switcher {
+    display: flex;
+    gap: 5px;
+}
+
+.view-switcher .btn-secondary {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+
+.view-switcher .btn-secondary.active {
+    background: var(--color-accent);
+    color: white;
+}
+
+.date-navigator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.room-schedule-single {
+    overflow-x: auto;
+}
+
+.room-schedule-grid {
+    display: grid;
+    gap: 1px;
+    background: var(--color-border);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    min-width: 600px;
+}
+
+.schedule-grid-header {
+    display: grid;
+    background: var(--bg-secondary);
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.schedule-grid-body {
+    display: grid;
+    background: var(--bg-primary);
+}
+
+.time-col, .time-slot {
+    padding: 8px 12px;
+    text-align: center;
+    border-right: 1px solid var(--color-border);
+    min-width: 70px;
+}
+
+.date-col {
+    padding: 8px 12px;
+    text-align: center;
+    border-right: 1px solid var(--color-border);
+    min-width: 150px;
+}
+
+.schedule-cell {
+    min-height: 40px;
+    padding: 2px;
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    position: relative;
+    transition: background 0.15s;
+}
+
+.schedule-cell:hover {
+    background: var(--bg-secondary);
+}
+
+.schedule-cell.drag-over {
+    background: rgba(var(--color-accent-rgb, 191, 161, 95), 0.15);
+    outline: 2px dashed var(--color-accent);
+}
+
+/* Booking Draggable Items */
+.booking-draggable {
+    background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
+    color: white;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    cursor: grab;
+    transition: all 0.2s;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    overflow: hidden;
+    z-index: 10;
+}
+
+.booking-draggable:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    transform: scale(1.02);
+    z-index: 20;
+}
+
+.booking-draggable.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+    transform: scale(1.05);
+}
+
+.booking-title {
+    font-weight: 600;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.booking-provider {
+    font-size: 0.65rem;
+    opacity: 0.9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.booking-time {
+    font-size: 0.6rem;
+    opacity: 0.8;
+    margin-top: 2px;
+}
+
+/* Available Spots */
+.spot-available {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    color: var(--color-success);
+    font-size: 0.7rem;
+    opacity: 0.5;
+    cursor: pointer;
+}
+
+.spot-available:hover {
+    opacity: 1;
+    transform: scale(1.2);
+}
+
+/* Dual Room View */
+.dual-room-container {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.dual-room-panel {
+    overflow-x: auto;
+    min-width: 0;
+}
+
+.dual-room-divider {
+    width: 2px;
+    background: var(--color-border);
+    min-height: 400px;
+}
+
+/* Move Booking Modal */
+#move-booking-modal {
+    z-index: 1000;
+}
+
+#move-booking-info {
+    line-height: 1.6;
+}
+
+#move-booking-info strong {
+    color: var(--color-accent);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .dual-room-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .dual-room-divider {
+        width: 100%;
+        height: 2px;
+        min-height: auto;
+    }
+}
+
+@media (max-width: 768px) {
+    .room-schedule-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .date-navigator {
+        justify-content: center;
+    }
+    
+    .schedule-grid-body {
+        font-size: 0.8rem;
+    }
+}

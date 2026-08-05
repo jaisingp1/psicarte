@@ -44,6 +44,13 @@ CREATE TABLE IF NOT EXISTS services (
     price INTEGER,
     duration INTEGER,
     type TEXT,
+    roomId TEXT,
+    recurrence TEXT DEFAULT 'single',
+    recurrenceDay INTEGER,
+    recurrenceStartTime TEXT,
+    recurrenceEndTime TEXT,
+    recurrenceStartDate TEXT,
+    recurrenceEndDate TEXT,
     allowReschedule INTEGER DEFAULT 1,
     maxReschedules INTEGER DEFAULT 1
 );
@@ -73,7 +80,24 @@ CREATE TABLE IF NOT EXISTS bookings (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 7. Sickness Blocks table
+-- 7. Service Schedules (Spots pre-generados)
+CREATE TABLE IF NOT EXISTS service_schedules (
+    id TEXT PRIMARY KEY,
+    serviceId TEXT NOT NULL,
+    roomId TEXT NOT NULL,
+    providerId TEXT NOT NULL,
+    date TEXT NOT NULL,
+    startTime TEXT NOT NULL,
+    endTime TEXT NOT NULL,
+    status TEXT DEFAULT 'available',
+    bookingId TEXT,
+    generatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (serviceId) REFERENCES services(id),
+    FOREIGN KEY (roomId) REFERENCES rooms(id),
+    FOREIGN KEY (providerId) REFERENCES users(id)
+);
+
+-- 8. Sickness Blocks table
 CREATE TABLE IF NOT EXISTS sickness_blocks (
     id TEXT PRIMARY KEY,
     providerId TEXT,
@@ -82,7 +106,7 @@ CREATE TABLE IF NOT EXISTS sickness_blocks (
     reason TEXT
 );
 
--- 8. Activities table
+-- 9. Activities table
 CREATE TABLE IF NOT EXISTS activities (
     id TEXT PRIMARY KEY,
     title TEXT,
@@ -93,7 +117,7 @@ CREATE TABLE IF NOT EXISTS activities (
     capacity INTEGER DEFAULT 0
 );
 
--- 9. Activity Enrollments table
+-- 10. Activity Enrollments table
 CREATE TABLE IF NOT EXISTS activity_enrollments (
     id TEXT PRIMARY KEY,
     activityId TEXT,
@@ -103,13 +127,13 @@ CREATE TABLE IF NOT EXISTS activity_enrollments (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 10. Config table
+-- 11. Config table
 CREATE TABLE IF NOT EXISTS config (
     key TEXT PRIMARY KEY,
     value TEXT
 );
 
--- 11. Khipu Notifications Table
+-- 12. Khipu Notifications Table
 CREATE TABLE IF NOT EXISTS khipu_notifications (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,          -- 'payment_1.3', 'rendition_drn_2.0', 'transaction_dtn_1.0'

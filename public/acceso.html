@@ -295,6 +295,68 @@
                                         </div>
                                     </div>
                                     <div class="form-group">
+                                        <label for="adm-serv-room">Sala Asignada:</label>
+                                        <select id="adm-serv-room" class="form-control">
+                                            <option value="">Cualquier sala disponible</option>
+                                        </select>
+                                        <small style="color: var(--text-secondary);">Si se asigna una sala, los spots se generarán solo para esa sala.</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Tipo de Agendamiento:</label>
+                                        <div style="display: flex; gap: 15px; margin-top: 5px;">
+                                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                                <input type="radio" name="adm-serv-recurrence" value="single" checked onchange="toggleRecurrenceConfig()"> Fecha específica
+                                            </label>
+                                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                                <input type="radio" name="adm-serv-recurrence" value="weekly" onchange="toggleRecurrenceConfig()"> Recurrente semanal
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div id="single-date-config" style="background: var(--bg-secondary); padding: 15px; border-radius: var(--radius-sm); margin-bottom: 15px;">
+                                        <div class="form-group">
+                                            <label for="adm-serv-single-date">Fecha del Servicio:</label>
+                                            <input type="date" id="adm-serv-single-date" class="form-control">
+                                        </div>
+                                        <small style="color: var(--text-secondary);">Selecciona la fecha específica para este servicio.</small>
+                                    </div>
+                                    <div id="recurrence-config" style="display: none; background: var(--bg-secondary); padding: 15px; border-radius: var(--radius-sm); margin-bottom: 15px;">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="adm-serv-recurrence-day">Día de la Semana:</label>
+                                                <select id="adm-serv-recurrence-day" class="form-control">
+                                                    <option value="0">Domingo</option>
+                                                    <option value="1">Lunes</option>
+                                                    <option value="2">Martes</option>
+                                                    <option value="3">Miércoles</option>
+                                                    <option value="4">Jueves</option>
+                                                    <option value="5">Viernes</option>
+                                                    <option value="6">Sábado</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="adm-serv-recurrence-start">Hora Inicio Rango:</label>
+                                                <input type="time" id="adm-serv-recurrence-start" class="form-control" value="09:00">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="adm-serv-recurrence-end">Hora Fin Rango:</label>
+                                                <input type="time" id="adm-serv-recurrence-end" class="form-control" value="12:00">
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="adm-serv-recurrence-start-date">Fecha Inicio:</label>
+                                                <input type="date" id="adm-serv-recurrence-start-date" class="form-control">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="adm-serv-recurrence-end-date">Fecha Fin (vacío = para siempre):</label>
+                                                <input type="date" id="adm-serv-recurrence-end-date" class="form-control">
+                                            </div>
+                                        </div>
+                                        <small style="color: var(--text-secondary);">El sistema generará spots automáticamente cada semana en el rango horario definido.</small>
+                                    </div>
+                                    <div class="form-group">
                                         <label
                                             style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
                                             <input type="checkbox" id="adm-serv-allow-reschedule" checked> Permitir
@@ -312,8 +374,9 @@
                             </div>
 
                         <h4 style="margin-top: 30px; margin-bottom: 10px;">Listado de Prestadores y Servicios</h4>
-                        <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+                        <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                             <input type="text" id="adm-services-search" class="form-control" placeholder="Buscar por prestador o servicio..." oninput="renderProvidersServicesTable()" style="max-width: 400px;">
+                            <button class="btn-primary" onclick="generateAllSpots()"><i class="fa-solid fa-calendar-plus"></i> Generar Spots</button>
                             <button class="btn-secondary" onclick="exportProvidersServicesExcel()"><i class="fa-solid fa-file-excel"></i> Exportar Excel</button>
                         </div>
                         <div style="overflow-x: auto;">
@@ -627,6 +690,62 @@
                             </table>
                         </div>
                         <div id="adm-bookings-pagination" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;"></div>
+                    </div>
+
+                    <!-- ADMIN ROOM SCHEDULE PANE -->
+                    <div id="pane-admin-room-schedule" class="dashboard-pane">
+                        <h3>Agenda de Salas</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Visualiza y gestiona la agenda de todas las salas. Arrastra reservas para moverlas entre salas.</p>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <button class="btn-primary" onclick="generateAllSpots()"><i class="fa-solid fa-calendar-plus"></i> Generar Todos los Spots</button>
+                            <small style="color: var(--text-secondary); margin-left: 10px;">Genera los slots disponibles para todos los servicios configurados.</small>
+                        </div>
+                        
+                        <div id="room-schedule-controls-top" class="room-schedule-controls">
+                            <div class="view-switcher">
+                                <button class="btn-secondary active" data-view="day" onclick="setRoomScheduleView('day', this)"><i class="fa-solid fa-calendar-day"></i> Día</button>
+                                <button class="btn-secondary" data-view="week" onclick="setRoomScheduleView('week', this)"><i class="fa-solid fa-calendar-week"></i> Semana</button>
+                                <button class="btn-secondary" data-view="month" onclick="setRoomScheduleView('month', this)"><i class="fa-solid fa-calendar"></i> Mes</button>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <select id="room-schedule-select" class="form-control" onchange="changeRoomSchedule()" style="width: auto;">
+                                    <!-- Se llena dinámicamente -->
+                                </select>
+                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap;">
+                                    <input type="checkbox" id="dual-mode-toggle" onchange="toggleDualMode()"> Vista dual
+                                </label>
+                            </div>
+                            <div class="date-navigator">
+                                <button class="btn-icon" onclick="prevRoomSchedule()"><i class="fa-solid fa-chevron-left"></i></button>
+                                <span id="room-schedule-date-label" style="font-weight: 600; min-width: 200px; text-align: center;"></span>
+                                <button class="btn-icon" onclick="nextRoomSchedule()"><i class="fa-solid fa-chevron-right"></i></button>
+                                <button class="btn-secondary" onclick="goToTodayRoomSchedule()" style="margin-left: 5px;">Hoy</button>
+                            </div>
+                        </div>
+
+                        <div id="room-schedule-content">
+                            <!-- Se renderiza dinámicamente -->
+                        </div>
+
+                        <!-- Modal para mover reserva -->
+                        <div id="move-booking-modal" class="modal-overlay" style="display: none;">
+                            <div class="modal-container" style="max-width: 450px;">
+                                <div class="modal-header">
+                                    <h3>Mover Reserva</h3>
+                                    <button class="modal-close" onclick="closeMoveModal()"><i class="fa-solid fa-xmark"></i></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p>¿Cómo deseas mover esta reserva?</p>
+                                    <div id="move-booking-info" style="background: var(--bg-secondary); padding: 10px; border-radius: var(--radius-sm); margin: 10px 0; font-size: 0.9rem;"></div>
+                                </div>
+                                <div class="modal-footer" style="display: flex; gap: 10px;">
+                                    <button class="btn-secondary" onclick="closeMoveModal()">Cancelar</button>
+                                    <button class="btn-primary" id="btn-move-single" onclick="executeMoveBooking(false)">Solo este día</button>
+                                    <button class="btn-primary" id="btn-move-all" onclick="executeMoveBooking(true)">Todas las instancias</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- PANEL DE NOTIFICACIONES KHIPU -->

@@ -30,6 +30,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateAuthUI();
     renderFooterYear();
     renderWhatsAppButton();
+    
+    // Populate room selects for admin forms
+    if (typeof populateRoomSelects === 'function') {
+        populateRoomSelects();
+    }
 });
 
 // ----------------------------------------------------
@@ -44,6 +49,15 @@ addService = async function(e) {
         const name = document.getElementById("adm-serv-name").value;
         const price = Number(document.getElementById("adm-serv-price").value);
         const duration = Number(document.getElementById("adm-serv-duration").value);
+        const roomId = document.getElementById("adm-serv-room").value || null;
+        const serviceType = roomId ? (state.rooms.find(r => r.id === roomId)?.type || 'Presencial') : 'Virtual';
+        const recurrence = document.querySelector('input[name="adm-serv-recurrence"]:checked').value;
+        const singleDate = recurrence === 'single' ? document.getElementById("adm-serv-single-date").value : null;
+        const recurrenceDay = recurrence === 'weekly' ? Number(document.getElementById("adm-serv-recurrence-day").value) : null;
+        const recurrenceStartTime = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-start").value : null;
+        const recurrenceEndTime = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-end").value : null;
+        const recurrenceStartDate = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-start-date").value : singleDate;
+        const recurrenceEndDate = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-end-date").value || null : singleDate;
         const allowReschedule = document.getElementById("adm-serv-allow-reschedule").checked;
         const maxReschedules = Number(document.getElementById("adm-serv-max-reschedules").value) || 1;
         
@@ -51,15 +65,23 @@ addService = async function(e) {
             const res = await fetch('/api/services', {
                 method: 'POST',
                 headers: getAuthHeaders(),
-                body: JSON.stringify({ id: editingServiceId, providerId: provId, name, price, duration, type: "Virtual", allowReschedule, maxReschedules })
+                body: JSON.stringify({ 
+                    id: editingServiceId, providerId: provId, name, price, duration, 
+                    type: serviceType, roomId, recurrence, recurrenceDay, 
+                    recurrenceStartTime, recurrenceEndTime, recurrenceStartDate, recurrenceEndDate,
+                    allowReschedule, maxReschedules 
+                })
             });
+            const result = await res.json();
             if (res.ok) {
-                showToast("Servicio actualizado correctamente.", "success");
+                showToast(result.message || "Servicio actualizado correctamente.", "success");
                 editingServiceId = null;
                 document.getElementById("admin-service-form").reset();
                 document.getElementById("adm-serv-allow-reschedule").checked = true;
                 document.getElementById("adm-serv-max-reschedules").value = "1";
                 document.getElementById("adm-serv-max-reschedules-container").style.display = "block";
+                document.getElementById("recurrence-config").style.display = "none";
+                document.getElementById("single-date-config").style.display = "block";
                 const submitBtn = document.querySelector("#admin-service-form button[type='submit']");
                 if (submitBtn) submitBtn.innerHTML = 'Añadir Servicio';
                 await loadAllData();

@@ -27,6 +27,12 @@ function showDashboardView() {
         dashboardView.style.display = "block";
         renderSidebarMenu();
         renderDashboardPanes();
+        
+        // Populate room selects for admin forms
+        if (typeof populateRoomSelects === 'function') {
+            populateRoomSelects();
+        }
+        
         const firstTab = document.querySelector(".sidebar-btn");
         if (firstTab) firstTab.click();
     }
@@ -52,6 +58,7 @@ function renderSidebarMenu() {
             <li><button class="sidebar-btn active" onclick="switchDashboardPane('admin-my-bookings', this)"><i class="fa-solid fa-calendar-check"></i> Mis Reservas</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-my-profile', this)"><i class="fa-solid fa-user-gear"></i> Mis Datos</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-rooms', this)"><i class="fa-solid fa-building"></i> Salas</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-room-schedule', this)"><i class="fa-solid fa-calendar-days"></i> Agenda de Salas</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-providers', this)"><i class="fa-solid fa-user-doctor"></i> Servicios</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-bookings', this)"><i class="fa-solid fa-calendar-days"></i> Reservas Globales</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-users', this)"><i class="fa-solid fa-user-shield"></i> Gestión de Usuarios</button></li>
@@ -71,6 +78,10 @@ function switchDashboardPane(paneId, btn) {
     
     document.querySelectorAll(".dashboard-pane").forEach(p => p.classList.remove("active"));
     document.getElementById(`pane-${paneId}`).classList.add("active");
+    
+    if (paneId === 'admin-room-schedule') {
+        setTimeout(() => renderRoomSchedule(), 100);
+    }
 }
 
 function renderDashboardPanes() {
@@ -214,9 +225,18 @@ function renderDashboardPanes() {
                     if (dd) dd.innerHTML += `<option value="${p.id}">${p.name}</option>`;
                 });
             });
+            
+            // Also populate room select for services
+            populateRoomSelects();
         }
         
         renderProvidersServicesTable();
+        
+        // Ensure room select is populated for service form
+        const servRoomSelect = document.getElementById("adm-serv-room");
+        if (servRoomSelect && servRoomSelect.options.length <= 1) {
+            populateRoomSelects();
+        }
         
         const adminBlocksList = document.getElementById("admin-blocks-list");
         if (adminBlocksList) {
@@ -553,6 +573,9 @@ function renderProvidersServicesTable() {
     const paginationEl = document.getElementById("adm-services-pagination");
     if (!tbody) return;
 
+    // Populate room select when rendering services table
+    populateRoomSelects();
+
     const searchInput = document.getElementById("adm-services-search");
     const query = searchInput ? stripAccents(searchInput.value.toLowerCase().trim()) : '';
 
@@ -590,8 +613,9 @@ function renderProvidersServicesTable() {
                 : `<span style="color: var(--color-success);">Sí (máx. ${r.maxReschedules})</span>`;
             const actions = r.serviceId
                 ? `<div class="action-btns">
-                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editService('${r.providerId}', '${r.serviceId}')"><i class="fa-solid fa-pencil"></i></button>
-                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteService('${r.providerId}', '${r.serviceId}')"><i class="fa-solid fa-trash"></i></button>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editService('${r.providerId}', '${r.serviceId}')" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="generateServiceSpots('${r.serviceId}')" title="Generar Spots"><i class="fa-solid fa-calendar-plus"></i></button>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteService('${r.providerId}', '${r.serviceId}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
                     </div>`
                 : '<span style="color: var(--text-secondary); font-size: 0.85rem;">Sin servicios</span>';
             return `<tr>
@@ -703,6 +727,15 @@ async function addService(e) {
     const name = document.getElementById("adm-serv-name").value;
     const price = Number(document.getElementById("adm-serv-price").value);
     const duration = Number(document.getElementById("adm-serv-duration").value);
+    const roomId = document.getElementById("adm-serv-room").value || null;
+    const serviceType = roomId ? (state.rooms.find(r => r.id === roomId)?.type || 'Presencial') : 'Virtual';
+    const recurrence = document.querySelector('input[name="adm-serv-recurrence"]:checked').value;
+    const singleDate = recurrence === 'single' ? document.getElementById("adm-serv-single-date").value : null;
+    const recurrenceDay = recurrence === 'weekly' ? Number(document.getElementById("adm-serv-recurrence-day").value) : null;
+    const recurrenceStartTime = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-start").value : null;
+    const recurrenceEndTime = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-end").value : null;
+    const recurrenceStartDate = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-start-date").value : singleDate;
+    const recurrenceEndDate = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-end-date").value || null : singleDate;
     const allowReschedule = document.getElementById("adm-serv-allow-reschedule").checked;
     const maxReschedules = Number(document.getElementById("adm-serv-max-reschedules").value) || 1;
     
@@ -710,14 +743,22 @@ async function addService(e) {
         const res = await fetch('/api/services', {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ id: "serv-" + Date.now(), providerId: provId, name, price, duration, type: "Virtual", allowReschedule, maxReschedules })
+            body: JSON.stringify({ 
+                id: "serv-" + Date.now(), providerId: provId, name, price, duration, 
+                type: serviceType, roomId, recurrence, recurrenceDay,
+                recurrenceStartTime, recurrenceEndTime, recurrenceStartDate, recurrenceEndDate,
+                allowReschedule, maxReschedules 
+            })
         });
+        const result = await res.json();
         if (res.ok) {
-            showToast("Servicio asignado correctamente.", "success");
+            showToast(result.message || "Servicio asignado correctamente.", "success");
             document.getElementById("admin-service-form").reset();
             document.getElementById("adm-serv-allow-reschedule").checked = true;
             document.getElementById("adm-serv-max-reschedules").value = "1";
             document.getElementById("adm-serv-max-reschedules-container").style.display = "block";
+            document.getElementById("recurrence-config").style.display = "none";
+            document.getElementById("single-date-config").style.display = "block";
             await loadAllData();
             renderDashboardPanes();
             renderServicesSection();
@@ -740,7 +781,52 @@ async function deleteService(provId, servId) {
             renderServicesSection();
         }
     } catch (e) {
-        showToast("Error al eliminar servicio.", "error");
+        showToast("Error al eliminar.", "error");
+    }
+}
+
+// Generate spots for a specific service
+async function generateServiceSpots(serviceId) {
+    try {
+        showToast("Generando spots...", "info");
+        const res = await fetch(`/api/services/${serviceId}/generate-spots`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        const result = await res.json();
+        
+        if (res.ok) {
+            showToast("Spots generados correctamente.", "success");
+            await loadAllData();
+            renderDashboardPanes();
+        } else {
+            showToast(result.error || "Error al generar spots.", "error");
+        }
+    } catch (e) {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+// Generate spots for ALL services
+async function generateAllSpots() {
+    try {
+        showToast("Generando spots para todos los servicios...", "info");
+        const res = await fetch('/api/services/generate-all-spots', {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        const result = await res.json();
+        
+        if (res.ok) {
+            showToast(result.message || "Spots generados.", "success");
+            await loadAllData();
+            renderDashboardPanes();
+            renderRoomSchedule();
+        } else {
+            showToast(result.error || "Error al generar spots.", "error");
+        }
+    } catch (e) {
+        showToast("Error de conexión.", "error");
     }
 }
 
@@ -1064,6 +1150,46 @@ function editService(provId, servId) {
     document.getElementById("adm-serv-name").value = service.name;
     document.getElementById("adm-serv-price").value = service.price;
     document.getElementById("adm-serv-duration").value = service.duration;
+    
+    // Set room
+    const roomSelect = document.getElementById("adm-serv-room");
+    if (roomSelect) roomSelect.value = service.roomId || '';
+    
+    // Set recurrence
+    const recurrence = service.recurrence || 'single';
+    const recurrenceRadio = document.querySelector(`input[name="adm-serv-recurrence"][value="${recurrence}"]`);
+    if (recurrenceRadio) recurrenceRadio.checked = true;
+    
+    const singleDateConfig = document.getElementById("single-date-config");
+    const recurrenceConfig = document.getElementById("recurrence-config");
+    
+    if (singleDateConfig) {
+        singleDateConfig.style.display = recurrence === 'single' ? 'block' : 'none';
+    }
+    if (recurrenceConfig) {
+        recurrenceConfig.style.display = recurrence === 'weekly' ? 'block' : 'none';
+    }
+    
+    // Set single date
+    const singleDateInput = document.getElementById("adm-serv-single-date");
+    if (singleDateInput && recurrence === 'single') {
+        singleDateInput.value = service.recurrenceStartDate || '';
+    }
+    
+    if (recurrence === 'weekly') {
+        const daySelect = document.getElementById("adm-serv-recurrence-day");
+        const startInput = document.getElementById("adm-serv-recurrence-start");
+        const endInput = document.getElementById("adm-serv-recurrence-end");
+        const startDateInput = document.getElementById("adm-serv-recurrence-start-date");
+        const endDateInput = document.getElementById("adm-serv-recurrence-end-date");
+        
+        if (daySelect) daySelect.value = service.recurrenceDay || 1;
+        if (startInput) startInput.value = service.recurrenceStartTime || '09:00';
+        if (endInput) endInput.value = service.recurrenceEndTime || '12:00';
+        if (startDateInput) startDateInput.value = service.recurrenceStartDate || '';
+        if (endDateInput) endDateInput.value = service.recurrenceEndDate || '';
+    }
+    
     document.getElementById("adm-serv-allow-reschedule").checked = service.allowReschedule !== 0;
     document.getElementById("adm-serv-max-reschedules").value = service.maxReschedules || 1;
     document.getElementById("adm-serv-max-reschedules-container").style.display = service.allowReschedule !== 0 ? "block" : "none";
@@ -1539,3 +1665,489 @@ async function saveInlineConfig(key) {
         // Error toast already shown by saveConfig
     }
 }
+
+// ----------------------------------------------------
+// ROOM SCHEDULE - CALENDARIO DE SALAS
+// ----------------------------------------------------
+function timeToMinutes(timeStr) {
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    return hours * 60 + minutes;
+}
+
+function minutesToTime(totalMinutes) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+const roomScheduleState = {
+    view: 'day',
+    currentDate: new Date(),
+    selectedRoomId: null,
+    dualMode: false,
+    secondRoomId: null,
+    roomScheduleData: { rooms: [], bookings: [], spots: [] }
+};
+
+// Drag and Drop state
+let draggedBookingData = null;
+let moveBookingContext = null;
+
+function toggleRecurrenceConfig() {
+    const recurrence = document.querySelector('input[name="adm-serv-recurrence"]:checked').value;
+    const singleDateConfig = document.getElementById('single-date-config');
+    const recurrenceConfig = document.getElementById('recurrence-config');
+    
+    if (singleDateConfig) {
+        singleDateConfig.style.display = recurrence === 'single' ? 'block' : 'none';
+    }
+    if (recurrenceConfig) {
+        recurrenceConfig.style.display = recurrence === 'weekly' ? 'block' : 'none';
+    }
+}
+
+function populateRoomSelects() {
+    const mainSelect = document.getElementById('room-schedule-select');
+    if (mainSelect && state.rooms.length > 0) {
+        mainSelect.innerHTML = state.rooms.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+        if (!roomScheduleState.selectedRoomId || !state.rooms.find(r => r.id === roomScheduleState.selectedRoomId)) {
+            roomScheduleState.selectedRoomId = state.rooms[0].id;
+        }
+        mainSelect.value = roomScheduleState.selectedRoomId;
+    }
+    
+    // Also populate the service form room select
+    const servRoomSelect = document.getElementById('adm-serv-room');
+    if (servRoomSelect) {
+        servRoomSelect.innerHTML = '<option value="">Cualquier sala disponible</option>' + 
+            state.rooms.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    }
+}
+
+function setRoomScheduleView(view, btn) {
+    roomScheduleState.view = view;
+    document.querySelectorAll('#room-schedule-controls-top .view-switcher .btn-secondary').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderRoomSchedule();
+}
+
+function changeRoomSchedule() {
+    const select = document.getElementById('room-schedule-select');
+    if (select) {
+        roomScheduleState.selectedRoomId = select.value;
+        renderRoomSchedule();
+    }
+}
+
+function toggleDualMode() {
+    const toggle = document.getElementById('dual-mode-toggle');
+    roomScheduleState.dualMode = toggle ? toggle.checked : false;
+    renderRoomSchedule();
+}
+
+function prevRoomSchedule() {
+    const d = roomScheduleState.currentDate;
+    if (roomScheduleState.view === 'day') {
+        roomScheduleState.currentDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+    } else if (roomScheduleState.view === 'week') {
+        roomScheduleState.currentDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7);
+    } else {
+        roomScheduleState.currentDate = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    }
+    renderRoomSchedule();
+}
+
+function nextRoomSchedule() {
+    const d = roomScheduleState.currentDate;
+    if (roomScheduleState.view === 'day') {
+        roomScheduleState.currentDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    } else if (roomScheduleState.view === 'week') {
+        roomScheduleState.currentDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7);
+    } else {
+        roomScheduleState.currentDate = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    }
+    renderRoomSchedule();
+}
+
+function goToTodayRoomSchedule() {
+    roomScheduleState.currentDate = new Date();
+    renderRoomSchedule();
+}
+
+function getRoomScheduleDateRange() {
+    const d = roomScheduleState.currentDate;
+    let start, end;
+    
+    if (roomScheduleState.view === 'day') {
+        start = end = formatDate(d);
+    } else if (roomScheduleState.view === 'week') {
+        const dayOfWeek = d.getDay();
+        const monday = new Date(d);
+        monday.setDate(d.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+        start = formatDate(monday);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        end = formatDate(sunday);
+    } else {
+        start = formatDate(new Date(d.getFullYear(), d.getMonth(), 1));
+        end = formatDate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    }
+    
+    return { start, end };
+}
+
+function formatDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function formatDateLabel() {
+    const d = roomScheduleState.currentDate;
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    
+    if (roomScheduleState.view === 'day') {
+        return d.toLocaleDateString('es-CL', options);
+    } else if (roomScheduleState.view === 'week') {
+        const dayOfWeek = d.getDay();
+        const monday = new Date(d);
+        monday.setDate(d.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        return `${monday.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })} - ${sunday.toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    } else {
+        return d.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+    }
+}
+
+async function renderRoomSchedule() {
+    populateRoomSelects();
+    
+    const label = document.getElementById('room-schedule-date-label');
+    if (label) label.textContent = formatDateLabel();
+    
+    const container = document.getElementById('room-schedule-content');
+    if (!container) return;
+    
+    const { start, end } = getRoomScheduleDateRange();
+    
+    try {
+        const res = await fetch(`/api/rooms/schedule/all?start=${start}&end=${end}`, { headers: getAuthHeaders() });
+        if (!res.ok) throw new Error('Error loading schedule');
+        roomScheduleState.roomScheduleData = await res.json();
+    } catch (e) {
+        container.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">Error al cargar la agenda.</p>';
+        return;
+    }
+    
+    if (roomScheduleState.dualMode) {
+        renderDualRoomView(container);
+    } else {
+        renderSingleRoomView(container);
+    }
+}
+
+function renderSingleRoomView(container) {
+    const roomId = roomScheduleState.selectedRoomId;
+    const room = state.rooms.find(r => r.id === roomId);
+    if (!room) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">Selecciona una sala.</p>';
+        return;
+    }
+    
+    const html = `
+        <div class="room-schedule-single">
+            <h4 style="margin-bottom: 10px;"><i class="fa-solid fa-building"></i> ${room.name} <small style="color: var(--text-secondary);">(${room.openTime} - ${room.closeTime})</small></h4>
+            <div class="room-schedule-grid" id="room-schedule-grid-main" data-room-id="${roomId}">
+                ${renderScheduleGrid(roomId, room)}
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    initDragAndDrop();
+}
+
+function renderDualRoomView(container) {
+    const room1Id = roomScheduleState.selectedRoomId;
+    const room2Id = roomScheduleState.secondRoomId || state.rooms.find(r => r.id !== room1Id)?.id || room1Id;
+    roomScheduleState.secondRoomId = room2Id;
+    
+    const room1 = state.rooms.find(r => r.id === room1Id);
+    const room2 = state.rooms.find(r => r.id === room2Id);
+    
+    const html = `
+        <div class="dual-room-container">
+            <div class="dual-room-panel">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <select id="dual-room-select-1" class="form-control" onchange="changeDualRoom(1, this.value)" style="width: auto;">
+                        ${state.rooms.map(r => `<option value="${r.id}" ${r.id === room1Id ? 'selected' : ''}>${r.name}</option>`).join('')}
+                    </select>
+                    <small style="color: var(--text-secondary);">${room1 ? room1.openTime + ' - ' + room1.closeTime : ''}</small>
+                </div>
+                <div class="room-schedule-grid" id="dual-grid-1" data-room-id="${room1Id}">
+                    ${room1 ? renderScheduleGrid(room1Id, room1) : '<p>Selecciona una sala</p>'}
+                </div>
+            </div>
+            <div class="dual-room-divider"></div>
+            <div class="dual-room-panel">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <select id="dual-room-select-2" class="form-control" onchange="changeDualRoom(2, this.value)" style="width: auto;">
+                        ${state.rooms.map(r => `<option value="${r.id}" ${r.id === room2Id ? 'selected' : ''}>${r.name}</option>`).join('')}
+                    </select>
+                    <small style="color: var(--text-secondary);">${room2 ? room2.openTime + ' - ' + room2.closeTime : ''}</small>
+                </div>
+                <div class="room-schedule-grid" id="dual-grid-2" data-room-id="${room2Id}">
+                    ${room2 ? renderScheduleGrid(room2Id, room2) : '<p>Selecciona una sala</p>'}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    initDragAndDrop();
+}
+
+function changeDualRoom(panel, roomId) {
+    if (panel === 1) {
+        roomScheduleState.selectedRoomId = roomId;
+    } else {
+        roomScheduleState.secondRoomId = roomId;
+    }
+    renderRoomSchedule();
+}
+
+function renderScheduleGrid(roomId, room) {
+    const data = roomScheduleState.roomScheduleData;
+    const { start, end } = getRoomScheduleDateRange();
+    
+    // Get dates to render
+    let dates = [];
+    if (roomScheduleState.view === 'day') {
+        dates = [start];
+    } else if (roomScheduleState.view === 'week') {
+        const current = new Date(start + 'T00:00:00');
+        const endDate = new Date(end + 'T00:00:00');
+        while (current <= endDate) {
+            dates.push(formatDate(current));
+            current.setDate(current.getDate() + 1);
+        }
+    } else {
+        // Month view - show all days
+        const current = new Date(start + 'T00:00:00');
+        const endDate = new Date(end + 'T00:00:00');
+        while (current <= endDate) {
+            dates.push(formatDate(current));
+            current.setDate(current.getDate() + 1);
+        }
+    }
+    
+    // Generate time slots from room open to close
+    const openMin = timeToMinutes(room.openTime);
+    const closeMin = timeToMinutes(room.closeTime);
+    const timeSlots = [];
+    for (let m = openMin; m < closeMin; m += 30) {
+        timeSlots.push(minutesToTime(m));
+    }
+    
+    // Get bookings and spots for this room
+    const roomBookings = data.bookings.filter(b => b.roomId === roomId && b.status === 'Paid');
+    const roomSpots = data.spots.filter(s => s.roomId === roomId);
+    
+    // Calculate grid columns: 1 time column + N date columns
+    const totalCols = 1 + dates.length;
+    const gridTemplate = `70px repeat(${dates.length}, minmax(120px, 1fr))`;
+    
+    let html = `<div class="schedule-grid-header" style="display: grid; grid-template-columns: ${gridTemplate};"><div class="time-col">Hora</div>`;
+    dates.forEach(d => {
+        const dateObj = new Date(d + 'T00:00:00');
+        const dayName = dateObj.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric' });
+        html += `<div class="date-col">${dayName}</div>`;
+    });
+    html += '</div>';
+    
+    html += `<div class="schedule-grid-body" style="display: grid; grid-template-columns: ${gridTemplate};">`;
+    timeSlots.forEach(time => {
+        html += `<div class="time-slot">${time}</div>`;
+        dates.forEach(date => {
+            const cellBookings = roomBookings.filter(b => {
+                if (b.date !== date) return false;
+                const bStart = timeToMinutes(b.startTime);
+                const bSlot = timeToMinutes(time);
+                return bStart === bSlot;
+            });
+            
+            const cellSpots = roomSpots.filter(s => {
+                if (s.date !== date) return false;
+                const sStart = timeToMinutes(s.startTime);
+                const sSlot = timeToMinutes(time);
+                return sStart === sSlot;
+            });
+            
+            html += `<div class="schedule-cell" data-room-id="${roomId}" data-date="${date}" data-time="${time}" ondragover="handleCellDragOver(event)" ondrop="handleCellDrop(event)">`;
+            
+            cellBookings.forEach(bk => {
+                const duration = bk.duration || bk.serviceDuration || 50;
+                const heightSlots = Math.ceil(duration / 30);
+                html += `
+                    <div class="booking-draggable" 
+                         draggable="true" 
+                         data-booking-id="${bk.id}"
+                         data-room-id="${roomId}"
+                         data-date="${date}"
+                         data-start-time="${bk.startTime}"
+                         data-end-time="${bk.endTime}"
+                         data-service="${bk.serviceName}"
+                         data-provider="${bk.providerName}"
+                         ondragstart="handleBookingDragStart(event)"
+                         ondragend="handleBookingDragEnd(event)"
+                         style="height: ${heightSlots * 40 - 4}px;">
+                        <div class="booking-title">${bk.serviceName}</div>
+                        <div class="booking-provider">${bk.providerName}</div>
+                        <div class="booking-time">${bk.startTime} - ${bk.endTime}</div>
+                    </div>
+                `;
+            });
+            
+            cellSpots.forEach(spot => {
+                if (spot.status === 'available') {
+                    html += `
+                        <div class="spot-available" title="Spot disponible: ${spot.startTime} - ${spot.endTime}">
+                            <i class="fa-solid fa-plus-circle"></i>
+                        </div>
+                    `;
+                }
+            });
+            
+            html += '</div>';
+        });
+    });
+    html += '</div>';
+    
+    return html;
+}
+
+// ----------------------------------------------------
+// DRAG AND DROP FOR BOOKINGS
+// ----------------------------------------------------
+function initDragAndDrop() {
+    // Bookings are already set as draggable via HTML attributes
+}
+
+function handleBookingDragStart(e) {
+    const el = e.target.closest('.booking-draggable');
+    if (!el) return;
+    
+    draggedBookingData = {
+        bookingId: el.dataset.bookingId,
+        roomId: el.dataset.roomId,
+        date: el.dataset.date,
+        startTime: el.dataset.startTime,
+        endTime: el.dataset.endTime,
+        service: el.dataset.service,
+        provider: el.dataset.provider
+    };
+    
+    el.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', el.dataset.bookingId);
+}
+
+function handleBookingDragEnd(e) {
+    const el = e.target.closest('.booking-draggable');
+    if (el) el.classList.remove('dragging');
+    draggedBookingData = null;
+}
+
+function handleCellDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const cell = e.target.closest('.schedule-cell');
+    if (cell) cell.classList.add('drag-over');
+}
+
+function handleCellDrop(e) {
+    e.preventDefault();
+    const cell = e.target.closest('.schedule-cell');
+    if (cell) cell.classList.remove('drag-over');
+    
+    if (!draggedBookingData) return;
+    
+    const targetRoomId = cell.dataset.roomId;
+    const targetDate = cell.dataset.date;
+    const targetTime = cell.dataset.time;
+    
+    // Check if actually moving to a different room or time
+    if (draggedBookingData.roomId === targetRoomId && 
+        draggedBookingData.date === targetDate && 
+        draggedBookingData.startTime === targetTime) {
+        return; // No change
+    }
+    
+    // Show move modal
+    moveBookingContext = {
+        bookingId: draggedBookingData.bookingId,
+        newRoomId: targetRoomId,
+        newDate: targetDate,
+        newStartTime: targetTime,
+        originalRoom: draggedBookingData.roomId,
+        originalDate: draggedBookingData.date,
+        service: draggedBookingData.service,
+        provider: draggedBookingData.provider
+    };
+    
+    showMoveBookingModal();
+}
+
+function showMoveBookingModal() {
+    const modal = document.getElementById('move-booking-modal');
+    const infoDiv = document.getElementById('move-booking-info');
+    
+    if (!modal || !infoDiv || !moveBookingContext) return;
+    
+    const newRoom = state.rooms.find(r => r.id === moveBookingContext.newRoomId);
+    
+    infoDiv.innerHTML = `
+        <strong>Servicio:</strong> ${moveBookingContext.service}<br>
+        <strong>Prestador:</strong> ${moveBookingContext.provider}<br>
+        <strong>Desde:</strong> ${moveBookingContext.originalDate} (${moveBookingContext.startTime}) en ${state.rooms.find(r => r.id === moveBookingContext.originalRoom)?.name || 'N/A'}<br>
+        <strong>Hasta:</strong> ${moveBookingContext.newDate} (${moveBookingContext.newStartTime}) en ${newRoom?.name || 'N/A'}
+    `;
+    
+    modal.style.display = 'flex';
+}
+
+function closeMoveModal() {
+    const modal = document.getElementById('move-booking-modal');
+    if (modal) modal.style.display = 'none';
+    moveBookingContext = null;
+}
+
+async function executeMoveBooking(moveAll) {
+    if (!moveBookingContext) return;
+    
+    const { bookingId, newRoomId, newDate, newStartTime } = moveBookingContext;
+    
+    try {
+        const res = await fetch(`/api/bookings/${bookingId}/move`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ newRoomId, newDate, newStartTime, moveAll })
+        });
+        
+        const result = await res.json();
+        
+        if (res.ok) {
+            showToast(result.message || "Reserva movida exitosamente.", "success");
+            closeMoveModal();
+            await loadAllData();
+            renderRoomSchedule();
+        } else {
+            showToast(result.error || "Error al mover la reserva.", "error");
+        }
+    } catch (e) {
+        showToast("Error de conexión al mover reserva.", "error");
+    }
+}
+

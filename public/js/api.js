@@ -14,6 +14,15 @@ async function loadAllData() {
         } catch (e) {
             state.activityEnrollments = [];
         }
+
+        if (state.currentUser && state.currentUser.role === 'administrador') {
+            try {
+                state.khipuNotifications = await (await fetch('/api/admin/khipu-notifications')).json();
+            } catch (e) {
+                console.error("Error loading Khipu notifications:", e);
+                state.khipuNotifications = [];
+            }
+        }
         
         const cfg = await (await fetch('/api/config')).json();
         state.popupConfig = {

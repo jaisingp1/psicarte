@@ -147,3 +147,8 @@
     background-color: rgba(197, 48, 48, 0.15);
     color: var(--color-error);
 }
+
+.badge-info {
+    background-color: rgba(43, 108, 176, 0.15);
+    color: var(--color-info);
+}

@@ -623,6 +623,29 @@
                         </div>
                     </div>
 
+                    <!-- PANEL DE NOTIFICACIONES KHIPU -->
+                    <div id="pane-admin-khipu-notifications" class="dashboard-pane">
+                        <h3>Registro de Notificaciones Khipu</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                            Monitorea las notificaciones instantáneas de pago (API 1.3), reportes diarios de rendición (DRN-2.0) y reportes diarios de transacciones (DTN-1.0) recibidos desde la pasarela de pagos Khipu.
+                        </p>
+                        
+                        <div class="table-responsive">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha de Recepción</th>
+                                        <th>Tipo / Versión API</th>
+                                        <th>IP de Origen</th>
+                                        <th>Detalles del Contenido</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-khipu-notifications-table"></tbody>
+                            </table>
+                        </div>
+                        <p id="admin-khipu-notifications-empty" style="text-align: center; color: var(--text-secondary); display: none; margin-top: 20px;">No se han recibido notificaciones.</p>
+                    </div>
+
                 </div>
             </div>
         </section>

@@ -106,3 +106,14 @@ CREATE TABLE IF NOT EXISTS config (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- 11. Khipu Notifications Table
+CREATE TABLE IF NOT EXISTS khipu_notifications (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,          -- 'payment_1.3', 'rendition_drn_2.0', 'transaction_dtn_1.0'
+    headers TEXT,                -- JSON string of headers
+    query_params TEXT,           -- JSON string of query params
+    body TEXT,                   -- JSON string or raw text of the POST body
+    ip_address TEXT,             -- Sender's IP address
+    received_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

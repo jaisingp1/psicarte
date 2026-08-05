@@ -747,6 +747,21 @@ app.post('/api/khipu/notify', (req, res) => {
         return res.status(400).send('Falta notification_token.');
     }
     
+    // Log the notification to the database
+    const notifId = crypto.randomUUID();
+    const type = 'payment_1.3';
+    const headersStr = JSON.stringify(req.headers);
+    const queryStr = JSON.stringify(req.query);
+    const bodyStr = JSON.stringify(req.body);
+    const ipStr = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    
+    db.run("INSERT INTO khipu_notifications (id, type, headers, query_params, body, ip_address) VALUES (?, ?, ?, ?, ?, ?)",
+        [notifId, type, headersStr, queryStr, bodyStr, ipStr],
+        (err) => {
+            if (err) console.error('Error logging payment notification to database:', err.message);
+        }
+    );
+    
     // Fetch payment details from Khipu
     callKhipuApi('GET', `/payments`, { notification_token })
         .then(payment => {
@@ -790,20 +805,73 @@ app.post('/api/khipu/notify', (req, res) => {
                             db.run("UPDATE bookings SET status = ? WHERE id = ?", [finalStatus, bookingId], (errUpdate) => {
                                 if (errUpdate) {
                                     console.error('Webhook: failed to update booking status:', errUpdate.message);
+                                    return res.status(500).send('Error updating booking');
                                 } else {
                                     console.log(`Webhook: booking ${bookingId} successfully updated to ${finalStatus}`);
+                                    return res.status(200).send('Notification received and processed');
                                 }
                             });
                         });
                     });
                 });
+            } else {
+                res.status(200).send('Notification received (payment not done)');
             }
-            res.status(200).send('Notification received');
         })
         .catch(error => {
             console.error('Webhook: Khipu verification failed:', error);
             res.status(500).send('Verification failed');
         });
+});
+
+app.post('/api/khipu/notify/rendition', (req, res) => {
+    const notifId = crypto.randomUUID();
+    const type = 'rendition_drn_2.0';
+    const headersStr = JSON.stringify(req.headers);
+    const queryStr = JSON.stringify(req.query);
+    const bodyStr = typeof req.body === 'object' ? JSON.stringify(req.body) : String(req.body);
+    const ipStr = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    
+    db.run("INSERT INTO khipu_notifications (id, type, headers, query_params, body, ip_address) VALUES (?, ?, ?, ?, ?, ?)",
+        [notifId, type, headersStr, queryStr, bodyStr, ipStr],
+        (err) => {
+            if (err) {
+                console.error('Error logging rendition notification to database:', err.message);
+                return res.status(500).send('Error saving notification');
+            }
+            res.status(200).send('Rendition notification logged successfully');
+        }
+    );
+});
+
+app.post('/api/khipu/notify/transactions', (req, res) => {
+    const notifId = crypto.randomUUID();
+    const type = 'transaction_dtn_1.0';
+    const headersStr = JSON.stringify(req.headers);
+    const queryStr = JSON.stringify(req.query);
+    const bodyStr = typeof req.body === 'object' ? JSON.stringify(req.body) : String(req.body);
+    const ipStr = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    
+    db.run("INSERT INTO khipu_notifications (id, type, headers, query_params, body, ip_address) VALUES (?, ?, ?, ?, ?, ?)",
+        [notifId, type, headersStr, queryStr, bodyStr, ipStr],
+        (err) => {
+            if (err) {
+                console.error('Error logging transaction notification to database:', err.message);
+                return res.status(500).send('Error saving notification');
+            }
+            res.status(200).send('Transaction notification logged successfully');
+        }
+    );
+});
+
+app.get('/api/admin/khipu-notifications', (req, res) => {
+    db.all("SELECT * FROM khipu_notifications ORDER BY received_at DESC", (err, rows) => {
+        if (err) {
+            console.error('Error fetching notifications from database:', err.message);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows);
+    });
 });
 
 app.get('/api/bookings/:id/payment-status', (req, res) => {

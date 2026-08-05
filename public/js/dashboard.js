@@ -57,6 +57,7 @@ function renderSidebarMenu() {
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-popups', this)"><i class="fa-solid fa-bullhorn"></i> Alertas y Pop-ups</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-calendar', this)"><i class="fa-solid fa-calendar-week"></i> Calendario Comun.</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-content', this)"><i class="fa-solid fa-file-pen"></i> Personalizar Textos</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-khipu-notifications', this)"><i class="fa-solid fa-bell"></i> Notificaciones Khipu</button></li>
         `;
     }
 }
@@ -317,6 +318,7 @@ function renderDashboardPanes() {
         
         renderAdminBookings();
         renderAdminClients();
+        renderAdminKhipuNotifications();
     }
 }
 
@@ -945,4 +947,118 @@ function editService(provId, servId) {
     if (submitBtn) submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> Guardar Cambios';
     
     document.getElementById("pane-admin-providers").scrollIntoView({ behavior: 'smooth' });
+}
+
+// ----------------------------------------------------
+// KHIPU NOTIFICATIONS PANEL RENDERER
+// ----------------------------------------------------
+function renderAdminKhipuNotifications() {
+    const tbody = document.getElementById("admin-khipu-notifications-table");
+    const emptyMsg = document.getElementById("admin-khipu-notifications-empty");
+    if (!tbody) return;
+
+    const notifs = state.khipuNotifications || [];
+
+    if (notifs.length === 0) {
+        tbody.innerHTML = "";
+        if (emptyMsg) emptyMsg.style.display = "block";
+        return;
+    }
+
+    if (emptyMsg) emptyMsg.style.display = "none";
+    tbody.innerHTML = "";
+
+    notifs.forEach(notif => {
+        let typeBadge = "";
+        let summaryText = "";
+
+        if (notif.type === "payment_1.3") {
+            typeBadge = '<span class="badge badge-paid">Pago (API 1.3)</span>';
+            try {
+                const bodyObj = JSON.parse(notif.body);
+                summaryText = `Token: <code>${bodyObj.notification_token || "N/A"}</code>`;
+            } catch (e) {
+                summaryText = "Detalles del pago no disponibles";
+            }
+        } else if (notif.type === "rendition_drn_2.0") {
+            typeBadge = '<span class="badge badge-info">Rendición (DRN-2.0)</span>';
+            try {
+                const bodyObj = JSON.parse(notif.body);
+                summaryText = `Reporte ID: <code>${bodyObj.report_id || "N/A"}</code> | Estado: ${bodyObj.status || "N/A"}`;
+            } catch (e) {
+                summaryText = "Detalles del reporte DRN no disponibles";
+            }
+        } else if (notif.type === "transaction_dtn_1.0") {
+            typeBadge = '<span class="badge badge-pending">Transacciones (DTN-1.0)</span>';
+            try {
+                const bodyObj = JSON.parse(notif.body);
+                summaryText = `Reporte ID: <code>${bodyObj.report_id || "N/A"}</code>`;
+            } catch (e) {
+                summaryText = "Detalles del reporte DTN no disponibles";
+            }
+        } else {
+            typeBadge = `<span class="badge badge-secondary">${notif.type}</span>`;
+            summaryText = "Notificación genérica";
+        }
+
+        // Format Date/Time nicely
+        const dateObj = new Date(notif.received_at);
+        const formattedDate = isNaN(dateObj.getTime()) 
+            ? notif.received_at 
+            : dateObj.toLocaleString("es-CL", { dateStyle: "short", timeStyle: "medium" });
+
+        // Pretty print JSON structures
+        let prettyHeaders = "";
+        let prettyQuery = "";
+        let prettyBody = "";
+        try {
+            prettyHeaders = JSON.stringify(JSON.parse(notif.headers || "{}"), null, 2);
+        } catch(e) {
+            prettyHeaders = String(notif.headers || "{}");
+        }
+        try {
+            prettyQuery = JSON.stringify(JSON.parse(notif.query_params || "{}"), null, 2);
+        } catch(e) {
+            prettyQuery = String(notif.query_params || "{}");
+        }
+        try {
+            prettyBody = JSON.stringify(JSON.parse(notif.body || "{}"), null, 2);
+        } catch(e) {
+            prettyBody = String(notif.body || "{}");
+        }
+
+        tbody.innerHTML += `
+            <tr style="vertical-align: top;">
+                <td style="white-space: nowrap;"><strong>${formattedDate}</strong></td>
+                <td>${typeBadge}</td>
+                <td><code>${notif.ip_address || "N/A"}</code></td>
+                <td>
+                    <div style="margin-bottom: 8px;">${summaryText}</div>
+                    <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="toggleNotifDetails('${notif.id}')">
+                        <i class="fa-solid fa-eye"></i> Ver Contenido Completo
+                    </button>
+                    <div id="notif-details-${notif.id}" style="display: none; margin-top: 10px; text-align: left; background: var(--bg-secondary); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); font-family: monospace; font-size: 0.85rem; max-width: 650px; overflow-x: auto; white-space: pre-wrap;">
+                        <h5 style="margin: 0 0 5px 0; color: var(--color-accent);">Cabeceras (Headers):</h5>
+                        <pre style="margin: 0 0 10px 0; background: var(--bg-primary); padding: 8px; border-radius: 4px; border: 1px solid var(--color-border);">${prettyHeaders}</pre>
+                        
+                        <h5 style="margin: 0 0 5px 0; color: var(--color-accent);">Parámetros Query:</h5>
+                        <pre style="margin: 0 0 10px 0; background: var(--bg-primary); padding: 8px; border-radius: 4px; border: 1px solid var(--color-border);">${prettyQuery}</pre>
+                        
+                        <h5 style="margin: 0 0 5px 0; color: var(--color-accent);">Cuerpo (POST Body):</h5>
+                        <pre style="margin: 0; background: var(--bg-primary); padding: 8px; border-radius: 4px; border: 1px solid var(--color-border);">${prettyBody}</pre>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function toggleNotifDetails(id) {
+    const el = document.getElementById(`notif-details-${id}`);
+    if (!el) return;
+    if (el.style.display === "none") {
+        el.style.display = "block";
+    } else {
+        el.style.display = "none";
+    }
 }

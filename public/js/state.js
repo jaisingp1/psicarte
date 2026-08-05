@@ -13,6 +13,7 @@ const state = {
     popupConfig: { active: false, title: "", text: "" },
     bannerConfig: { active: false, text: "" },
     whatsappConfig: { enabled: false, number: "" },
+    khipuNotifications: [],
     currentUser: JSON.parse(sessionStorage.getItem("psicarte_user")) || null
 };
 

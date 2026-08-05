@@ -60,7 +60,7 @@
                 </div>
                 <div class="form-group">
                     <label for="login-password">Contraseña:</label>
-                    <input type="password" id="login-password" class="form-control" placeholder="••••••••">
+                    <input type="password" id="login-password" class="form-control" placeholder="••••••••" onkeydown="if(event.key==='Enter')processLogin()">
                 </div>
 
                 <div style="text-align: right; margin-bottom: 20px;">
@@ -273,30 +273,7 @@
                         <p style="color: var(--text-secondary); margin-bottom: 20px;">Configura los prestadores y los
                             servicios que ofrece cada uno.</p>
 
-                        <div class="grid-2">
-                            <div class="card" style="box-shadow: none;">
-                                <h4>Añadir Prestador</h4>
-                                <form id="admin-provider-form" onsubmit="addProvider(event)" style="margin-top: 15px;">
-                                    <div class="form-group">
-                                        <label for="adm-prov-name">Nombre:</label>
-                                        <input type="text" id="adm-prov-name" class="form-control"
-                                            placeholder="Nombre completo" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="adm-prov-role">Especialidad/Rol:</label>
-                                        <input type="text" id="adm-prov-role" class="form-control"
-                                            placeholder="Ej: Psicólogo Clínico" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="adm-prov-bio">Biografía / Descripción:</label>
-                                        <textarea id="adm-prov-bio" class="form-control edit-content-textarea"
-                                            placeholder="Breve descripción del profesional..."></textarea>
-                                    </div>
-                                    <button type="submit" class="btn-primary" style="width: 100%;">Crear
-                                        Prestador</button>
-                                </form>
-                            </div>
-                            <div class="card" style="box-shadow: none;">
+                        <div class="card" style="box-shadow: none;">
                                 <h4>Añadir Servicio a Prestador</h4>
                                 <form id="admin-service-form" onsubmit="addService(event)" style="margin-top: 15px;">
                                     <div class="form-group">
@@ -333,10 +310,29 @@
                                         Servicio</button>
                                 </form>
                             </div>
-                        </div>
 
                         <h4 style="margin-top: 30px; margin-bottom: 10px;">Listado de Prestadores y Servicios</h4>
-                        <div id="admin-providers-services-list"></div>
+                        <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+                            <input type="text" id="adm-services-search" class="form-control" placeholder="Buscar por prestador o servicio..." oninput="renderProvidersServicesTable()" style="max-width: 400px;">
+                            <button class="btn-secondary" onclick="exportProvidersServicesExcel()"><i class="fa-solid fa-file-excel"></i> Exportar Excel</button>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="admin-table" id="adm-services-table">
+                                <thead>
+                                    <tr>
+                                        <th style="cursor: pointer;" onclick="sortProvidersServicesTable('providerName')">Prestador <i class="fa-solid fa-sort"></i></th>
+                                        <th style="cursor: pointer;" onclick="sortProvidersServicesTable('serviceName')">Servicio <i class="fa-solid fa-sort"></i></th>
+                                        <th style="cursor: pointer;" onclick="sortProvidersServicesTable('price')">Precio <i class="fa-solid fa-sort"></i></th>
+                                        <th style="cursor: pointer;" onclick="sortProvidersServicesTable('duration')">Duración <i class="fa-solid fa-sort"></i></th>
+                                        <th style="cursor: pointer;" onclick="sortProvidersServicesTable('type')">Tipo <i class="fa-solid fa-sort"></i></th>
+                                        <th>Reagendable</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adm-services-tbody"></tbody>
+                            </table>
+                        </div>
+                        <div id="adm-services-pagination" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;"></div>
                     </div>
 
                     <div id="pane-admin-blocks" class="dashboard-pane">
@@ -611,24 +607,26 @@
                             </div>
                             <button class="btn-primary" onclick="startAdminBooking()"><i class="fa-solid fa-plus"></i>
                                 Nueva Reserva</button>
+                            <button class="btn-secondary" onclick="exportAdminBookingsExcel()"><i class="fa-solid fa-file-excel"></i> Exportar Excel</button>
                         </div>
 
                         <div class="table-responsive">
-                            <table class="admin-table">
+                            <table class="admin-table" id="adm-bookings-table">
                                 <thead>
                                     <tr>
-                                        <th>Fecha/Hora</th>
-                                        <th>Cliente</th>
-                                        <th>Prestador</th>
-                                        <th>Servicio</th>
-                                        <th>Sala</th>
-                                        <th>Estado</th>
+                                        <th style="cursor: pointer;" onclick="sortAdminBookingsTable('date')">Fecha/Hora <i class="fa-solid fa-sort"></i></th>
+                                        <th style="cursor: pointer;" onclick="sortAdminBookingsTable('clientName')">Cliente <i class="fa-solid fa-sort"></i></th>
+                                        <th style="cursor: pointer;" onclick="sortAdminBookingsTable('providerName')">Prestador <i class="fa-solid fa-sort"></i></th>
+                                        <th style="cursor: pointer;" onclick="sortAdminBookingsTable('serviceName')">Servicio <i class="fa-solid fa-sort"></i></th>
+                                        <th style="cursor: pointer;" onclick="sortAdminBookingsTable('roomName')">Sala <i class="fa-solid fa-sort"></i></th>
+                                        <th style="cursor: pointer;" onclick="sortAdminBookingsTable('status')">Estado <i class="fa-solid fa-sort"></i></th>
                                         <th>Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody id="admin-bookings-table"></tbody>
                             </table>
                         </div>
+                        <div id="adm-bookings-pagination" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;"></div>
                     </div>
 
                     <!-- PANEL DE NOTIFICACIONES KHIPU -->

@@ -52,7 +52,7 @@ function renderSidebarMenu() {
             <li><button class="sidebar-btn active" onclick="switchDashboardPane('admin-my-bookings', this)"><i class="fa-solid fa-calendar-check"></i> Mis Reservas</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-my-profile', this)"><i class="fa-solid fa-user-gear"></i> Mis Datos</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-rooms', this)"><i class="fa-solid fa-building"></i> Salas</button></li>
-            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-providers', this)"><i class="fa-solid fa-user-doctor"></i> Prestadores</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-providers', this)"><i class="fa-solid fa-user-doctor"></i> Servicios</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-bookings', this)"><i class="fa-solid fa-calendar-days"></i> Reservas Globales</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-users', this)"><i class="fa-solid fa-user-shield"></i> Gestión de Usuarios</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-blocks', this)"><i class="fa-solid fa-calendar-minus"></i> Bloqueos Horarios</button></li>
@@ -203,52 +203,20 @@ function renderDashboardPanes() {
         }
         
         const provServicesList = document.getElementById("admin-providers-services-list");
-        if (provServicesList) {
-            provServicesList.innerHTML = "";
-            
+        if (!provServicesList) {
             const dropdowns = [
                 document.getElementById("adm-serv-provider"),
                 document.getElementById("adm-block-provider")
             ];
-            
-            dropdowns.forEach(dd => {
-                if (dd) dd.innerHTML = "";
-            });
-            
+            dropdowns.forEach(dd => { if (dd) dd.innerHTML = ""; });
             state.providers.forEach(p => {
                 dropdowns.forEach(dd => {
                     if (dd) dd.innerHTML += `<option value="${p.id}">${p.name}</option>`;
                 });
-                
-                let servicesListHTML = "";
-                p.services.forEach(s => {
-                    const rescheduleInfo = s.allowReschedule === 0 
-                        ? '<span style="color: var(--color-error);">Reagendable: No</span>' 
-                        : `<span style="color: var(--color-success);">Reagendable: Sí (máx. ${s.maxReschedules})</span>`;
-                    servicesListHTML += `
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border); padding: 8px 0;">
-                            <span>${s.name} ($${s.price.toLocaleString("es-CL")} - ${s.duration} min) - <em>${s.type}</em> | ${rescheduleInfo}</span>
-                            <div class="action-btns">
-                                <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editService('${p.id}', '${s.id}')"><i class="fa-solid fa-pencil"></i></button>
-                                <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteService('${p.id}', '${s.id}')"><i class="fa-solid fa-trash"></i></button>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                provServicesList.innerHTML += `
-                    <div class="card" style="margin-bottom: 20px; box-shadow: none;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--color-border); padding-bottom: 8px; margin-bottom: 10px;">
-                            <h4 style="color: var(--color-accent);">${p.name}</h4>
-                            <button class="btn-secondary" style="padding: 6px 10px; font-size: 0.85rem;" onclick="deleteProvider('${p.id}')"><i class="fa-solid fa-user-minus"></i> Eliminar Prestador</button>
-                        </div>
-                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 15px;">Rol: ${p.role}</p>
-                        <h5>Servicios Asignados</h5>
-                        ${servicesListHTML || '<p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 5px;">Sin servicios asignados.</p>'}
-                    </div>
-                `;
             });
         }
+        
+        renderProvidersServicesTable();
         
         const adminBlocksList = document.getElementById("admin-blocks-list");
         if (adminBlocksList) {
@@ -522,32 +490,6 @@ async function deleteRoom(id) {
 }
 
 // Providers & Services Admin
-async function addProvider(e) {
-    e.preventDefault();
-    const name = document.getElementById("adm-prov-name").value;
-    const role = document.getElementById("adm-prov-role").value;
-    const bio = document.getElementById("adm-prov-bio").value;
-    const email = `${name.toLowerCase().replace(/ /g, "")}@psicarte.cl`;
-    
-    try {
-        const res = await fetch('/api/providers', {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ id: "prov-" + Date.now(), name, role, email, bio })
-        });
-        if (res.ok) {
-            showToast("Prestador creado con éxito.", "success");
-            document.getElementById("admin-provider-form").reset();
-            await loadAllData();
-            renderDashboardPanes();
-            renderServicesSection();
-            initBookingWidget();
-        }
-    } catch (e) {
-        showToast("Error al crear prestador.", "error");
-    }
-}
-
 async function deleteProvider(id) {
     if (confirm("¿Estás seguro de eliminar este prestador? Se eliminarán todos sus servicios asociados.")) {
         try {
@@ -566,6 +508,193 @@ async function deleteProvider(id) {
             showToast("Error al eliminar.", "error");
         }
     }
+}
+
+function stripAccents(str) {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function getFlatProvidersServices() {
+    const rows = [];
+    state.providers.forEach(p => {
+        if (p.services && p.services.length > 0) {
+            p.services.forEach(s => {
+                rows.push({
+                    providerId: p.id,
+                    providerName: p.name,
+                    serviceId: s.id,
+                    serviceName: s.name,
+                    price: s.price,
+                    duration: s.duration,
+                    type: s.type,
+                    allowReschedule: s.allowReschedule,
+                    maxReschedules: s.maxReschedules
+                });
+            });
+        } else {
+            rows.push({
+                providerId: p.id,
+                providerName: p.name,
+                serviceId: null,
+                serviceName: '-',
+                price: 0,
+                duration: 0,
+                type: '-',
+                allowReschedule: 0,
+                maxReschedules: 0
+            });
+        }
+    });
+    return rows;
+}
+
+function renderProvidersServicesTable() {
+    const tbody = document.getElementById("adm-services-tbody");
+    const paginationEl = document.getElementById("adm-services-pagination");
+    if (!tbody) return;
+
+    const searchInput = document.getElementById("adm-services-search");
+    const query = searchInput ? stripAccents(searchInput.value.toLowerCase().trim()) : '';
+
+    let rows = getFlatProvidersServices();
+
+    if (query) {
+        rows = rows.filter(r =>
+            stripAccents(r.providerName.toLowerCase()).includes(query) ||
+            stripAccents(r.serviceName.toLowerCase()).includes(query) ||
+            stripAccents(r.type.toLowerCase()).includes(query)
+        );
+    }
+
+    const { key, dir } = providersServicesSort;
+    rows.sort((a, b) => {
+        let va = a[key], vb = b[key];
+        if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+        if (va < vb) return dir === 'asc' ? -1 : 1;
+        if (va > vb) return dir === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    const total = rows.length;
+    const totalPages = Math.max(1, Math.ceil(total / PROVIDERS_SERVICES_PER_PAGE));
+    if (providersServicesPage > totalPages) providersServicesPage = totalPages;
+    const start = (providersServicesPage - 1) * PROVIDERS_SERVICES_PER_PAGE;
+    const pageRows = rows.slice(start, start + PROVIDERS_SERVICES_PER_PAGE);
+
+    if (pageRows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 20px;">No hay servicios registrados.</td></tr>`;
+    } else {
+        tbody.innerHTML = pageRows.map(r => {
+            const rescheduleInfo = r.allowReschedule === 0
+                ? '<span style="color: var(--color-error);">No</span>'
+                : `<span style="color: var(--color-success);">Sí (máx. ${r.maxReschedules})</span>`;
+            const actions = r.serviceId
+                ? `<div class="action-btns">
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editService('${r.providerId}', '${r.serviceId}')"><i class="fa-solid fa-pencil"></i></button>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteService('${r.providerId}', '${r.serviceId}')"><i class="fa-solid fa-trash"></i></button>
+                    </div>`
+                : '<span style="color: var(--text-secondary); font-size: 0.85rem;">Sin servicios</span>';
+            return `<tr>
+                <td><strong>${r.providerName}</strong></td>
+                <td>${r.serviceName}</td>
+                <td>${r.price > 0 ? '$' + r.price.toLocaleString("es-CL") : '-'}</td>
+                <td>${r.duration > 0 ? r.duration + ' min' : '-'}</td>
+                <td>${r.type !== '-' ? '<em>' + r.type + '</em>' : '-'}</td>
+                <td>${rescheduleInfo}</td>
+                <td>${actions}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    if (paginationEl) {
+        const showing = total === 0 ? 0 : start + 1;
+        const showingEnd = Math.min(start + PROVIDERS_SERVICES_PER_PAGE, total);
+        paginationEl.innerHTML = `
+            <span style="font-size: 0.85rem; color: var(--text-secondary);">Mostrando ${showing}-${showingEnd} de ${total}</span>
+            <div style="display: flex; gap: 6px;">
+                <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.85rem;" onclick="paginateProvidersServicesTable(1)" ${providersServicesPage === 1 ? 'disabled' : ''}><i class="fa-solid fa-angles-left"></i></button>
+                <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.85rem;" onclick="paginateProvidersServicesTable(${providersServicesPage - 1})" ${providersServicesPage === 1 ? 'disabled' : ''}><i class="fa-solid fa-angle-left"></i></button>
+                <span style="padding: 4px 10px; font-size: 0.85rem; color: var(--text-secondary);">Página ${providersServicesPage} de ${totalPages}</span>
+                <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.85rem;" onclick="paginateProvidersServicesTable(${providersServicesPage + 1})" ${providersServicesPage === totalPages ? 'disabled' : ''}><i class="fa-solid fa-angle-right"></i></button>
+                <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.85rem;" onclick="paginateProvidersServicesTable(${totalPages})" ${providersServicesPage === totalPages ? 'disabled' : ''}><i class="fa-solid fa-angles-right"></i></button>
+            </div>
+        `;
+    }
+}
+
+function sortProvidersServicesTable(key) {
+    if (providersServicesSort.key === key) {
+        providersServicesSort.dir = providersServicesSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        providersServicesSort.key = key;
+        providersServicesSort.dir = 'asc';
+    }
+    providersServicesPage = 1;
+    renderProvidersServicesTable();
+}
+
+function paginateProvidersServicesTable(page) {
+    providersServicesPage = page;
+    renderProvidersServicesTable();
+}
+
+function getFilteredProvidersServices() {
+    const searchInput = document.getElementById("adm-services-search");
+    const query = searchInput ? stripAccents(searchInput.value.toLowerCase().trim()) : '';
+    let rows = getFlatProvidersServices();
+    if (query) {
+        rows = rows.filter(r =>
+            stripAccents(r.providerName.toLowerCase()).includes(query) ||
+            stripAccents(r.serviceName.toLowerCase()).includes(query) ||
+            stripAccents(r.type.toLowerCase()).includes(query)
+        );
+    }
+    const { key, dir } = providersServicesSort;
+    rows.sort((a, b) => {
+        let va = a[key], vb = b[key];
+        if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+        if (va < vb) return dir === 'asc' ? -1 : 1;
+        if (va > vb) return dir === 'asc' ? 1 : -1;
+        return 0;
+    });
+    return rows;
+}
+
+function exportProvidersServicesExcel() {
+    const rows = getFilteredProvidersServices();
+    if (rows.length === 0) {
+        showToast("No hay datos para exportar.", "error");
+        return;
+    }
+
+    const headers = ['Prestador', 'Servicio', 'Precio', 'Duración (min)', 'Tipo', 'Reagendable', 'Máx. Reagendamientos'];
+    const csvRows = [headers.join(';')];
+
+    rows.forEach(r => {
+        const reschedule = r.allowReschedule === 0 ? 'No' : `Sí (${r.maxReschedules})`;
+        const price = r.price > 0 ? r.price : '';
+        const duration = r.duration > 0 ? r.duration : '';
+        const line = [
+            `"${r.providerName}"`,
+            `"${r.serviceName}"`,
+            price,
+            duration,
+            `"${r.type}"`,
+            reschedule,
+            r.maxReschedules || ''
+        ].join(';');
+        csvRows.push(line);
+    });
+
+    const csvContent = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `prestadores_servicios_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exportadas ${rows.length} filas.`, "success");
 }
 
 async function addService(e) {
@@ -742,10 +871,7 @@ async function saveContentCustomizations(e) {
 // ----------------------------------------------------
 // ADMIN BOOKINGS MANAGEMENT
 // ----------------------------------------------------
-function renderAdminBookings() {
-    const tbody = document.getElementById("admin-bookings-table");
-    if (!tbody) return;
-    
+function getFilteredAdminBookings() {
     const provFilter = document.getElementById("adm-booking-provider-filter");
     const searchInput = document.getElementById("adm-booking-search");
     
@@ -756,7 +882,7 @@ function renderAdminBookings() {
     }
     
     const filterProv = provFilter ? provFilter.value : 'all';
-    const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
+    const searchQuery = searchInput ? stripAccents(searchInput.value.toLowerCase().trim()) : '';
     
     let filtered = [...state.bookings];
     if (filterProv !== 'all') {
@@ -764,43 +890,139 @@ function renderAdminBookings() {
     }
     if (searchQuery) {
         filtered = filtered.filter(b => 
-            (b.clientName && b.clientName.toLowerCase().includes(searchQuery)) ||
-            (b.clientEmail && b.clientEmail.toLowerCase().includes(searchQuery)) ||
-            (b.serviceName && b.serviceName.toLowerCase().includes(searchQuery))
+            stripAccents((b.clientName || '').toLowerCase()).includes(searchQuery) ||
+            stripAccents((b.clientEmail || '').toLowerCase()).includes(searchQuery) ||
+            stripAccents((b.serviceName || '').toLowerCase()).includes(searchQuery) ||
+            stripAccents((b.roomName || '').toLowerCase()).includes(searchQuery)
         );
     }
     
-    filtered.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const { key, dir } = adminBookingsSort;
+    filtered.sort((a, b) => {
+        let va = a[key] || '', vb = b[key] || '';
+        if (key === 'providerName') {
+            va = state.providers.find(p => p.id === a.providerId)?.name || '';
+            vb = state.providers.find(p => p.id === b.providerId)?.name || '';
+        }
+        if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+        if (va < vb) return dir === 'asc' ? -1 : 1;
+        if (va > vb) return dir === 'asc' ? 1 : -1;
+        return 0;
+    });
     
-    if (filtered.length === 0) {
+    return filtered;
+}
+
+function renderAdminBookings() {
+    const tbody = document.getElementById("admin-bookings-table");
+    const paginationEl = document.getElementById("adm-bookings-pagination");
+    if (!tbody) return;
+    
+    const filtered = getFilteredAdminBookings();
+    
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / ADMIN_BOOKINGS_PER_PAGE));
+    if (adminBookingsPage > totalPages) adminBookingsPage = totalPages;
+    const start = (adminBookingsPage - 1) * ADMIN_BOOKINGS_PER_PAGE;
+    const pageRows = filtered.slice(start, start + ADMIN_BOOKINGS_PER_PAGE);
+    
+    if (pageRows.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);">No hay reservas registradas.</td></tr>';
-        return;
+    } else {
+        tbody.innerHTML = "";
+        pageRows.forEach(bk => {
+            const provName = state.providers.find(p => p.id === bk.providerId)?.name || 'Prestador';
+            const isCancelled = bk.status === 'Cancelled';
+            const statusBadge = isCancelled 
+                ? '<span class="badge badge-cancelled">Cancelada</span>' 
+                : bk.status === 'Paid' ? '<span class="badge badge-paid">Pagada</span>' : (bk.status === 'Pending_Payment' ? '<span class="badge badge-warning">Procesando Pago</span>' : '<span class="badge badge-pending">Pendiente</span>');
+            
+            const actionBtns = isCancelled 
+                ? `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="purgeBooking('${bk.id}')"><i class="fa-solid fa-trash"></i> Eliminar</button>`
+                : `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="cancelBooking('${bk.id}')"><i class="fa-solid fa-ban"></i></button>`;
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td><strong>${bk.date}</strong><br>${bk.timeSlot}</td>
+                    <td>${bk.clientName}<br><small>${bk.clientEmail}</small></td>
+                    <td>${provName}</td>
+                    <td>${bk.serviceName}</td>
+                    <td>${bk.roomName}</td>
+                    <td>${statusBadge}</td>
+                    <td>${actionBtns}</td>
+                </tr>
+            `;
+        });
     }
     
-    tbody.innerHTML = "";
-    filtered.forEach(bk => {
-        const provName = state.providers.find(p => p.id === bk.providerId)?.name || 'Prestador';
-        const isCancelled = bk.status === 'Cancelled';
-        const statusBadge = isCancelled 
-            ? '<span class="badge badge-cancelled">Cancelada</span>' 
-            : bk.status === 'Paid' ? '<span class="badge badge-paid">Pagada</span>' : (bk.status === 'Pending_Payment' ? '<span class="badge badge-warning">Procesando Pago</span>' : '<span class="badge badge-pending">Pendiente</span>');
-        
-        const actionBtns = isCancelled 
-            ? `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="purgeBooking('${bk.id}')"><i class="fa-solid fa-trash"></i> Eliminar</button>`
-            : `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="cancelBooking('${bk.id}')"><i class="fa-solid fa-ban"></i></button>`;
-        
-        tbody.innerHTML += `
-            <tr>
-                <td><strong>${bk.date}</strong><br>${bk.timeSlot}</td>
-                <td>${bk.clientName}<br><small>${bk.clientEmail}</small></td>
-                <td>${provName}</td>
-                <td>${bk.serviceName}</td>
-                <td>${bk.roomName}</td>
-                <td>${statusBadge}</td>
-                <td>${actionBtns}</td>
-            </tr>
+    if (paginationEl) {
+        const showing = total === 0 ? 0 : start + 1;
+        const showingEnd = Math.min(start + ADMIN_BOOKINGS_PER_PAGE, total);
+        paginationEl.innerHTML = `
+            <span style="font-size: 0.85rem; color: var(--text-secondary);">Mostrando ${showing}-${showingEnd} de ${total}</span>
+            <div style="display: flex; gap: 6px;">
+                <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.85rem;" onclick="paginateAdminBookingsTable(1)" ${adminBookingsPage === 1 ? 'disabled' : ''}><i class="fa-solid fa-angles-left"></i></button>
+                <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.85rem;" onclick="paginateAdminBookingsTable(${adminBookingsPage - 1})" ${adminBookingsPage === 1 ? 'disabled' : ''}><i class="fa-solid fa-angle-left"></i></button>
+                <span style="padding: 4px 10px; font-size: 0.85rem; color: var(--text-secondary);">Página ${adminBookingsPage} de ${totalPages}</span>
+                <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.85rem;" onclick="paginateAdminBookingsTable(${adminBookingsPage + 1})" ${adminBookingsPage === totalPages ? 'disabled' : ''}><i class="fa-solid fa-angle-right"></i></button>
+                <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.85rem;" onclick="paginateAdminBookingsTable(${totalPages})" ${adminBookingsPage === totalPages ? 'disabled' : ''}><i class="fa-solid fa-angles-right"></i></button>
+            </div>
         `;
+    }
+}
+
+function sortAdminBookingsTable(key) {
+    if (adminBookingsSort.key === key) {
+        adminBookingsSort.dir = adminBookingsSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        adminBookingsSort.key = key;
+        adminBookingsSort.dir = 'asc';
+    }
+    adminBookingsPage = 1;
+    renderAdminBookings();
+}
+
+function paginateAdminBookingsTable(page) {
+    adminBookingsPage = page;
+    renderAdminBookings();
+}
+
+function exportAdminBookingsExcel() {
+    const rows = getFilteredAdminBookings();
+    if (rows.length === 0) {
+        showToast("No hay datos para exportar.", "error");
+        return;
+    }
+
+    const statusMap = { 'Cancelled': 'Cancelada', 'Paid': 'Pagada', 'Pending_Payment': 'Procesando Pago' };
+    const headers = ['Fecha', 'Hora', 'Cliente', 'Email', 'Prestador', 'Servicio', 'Sala', 'Estado'];
+    const csvRows = [headers.join(';')];
+
+    rows.forEach(bk => {
+        const provName = state.providers.find(p => p.id === bk.providerId)?.name || '';
+        const status = statusMap[bk.status] || 'Pendiente';
+        const line = [
+            `"${bk.date || ''}"`,
+            `"${bk.timeSlot || ''}"`,
+            `"${bk.clientName || ''}"`,
+            `"${bk.clientEmail || ''}"`,
+            `"${provName}"`,
+            `"${bk.serviceName || ''}"`,
+            `"${bk.roomName || ''}"`,
+            `"${status}"`
+        ].join(';');
+        csvRows.push(line);
     });
+
+    const csvContent = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `reservas_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exportadas ${rows.length} reservas.`, "success");
 }
 
 async function purgeBooking(id) {

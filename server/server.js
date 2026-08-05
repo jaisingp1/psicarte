@@ -201,7 +201,22 @@ app.post('/api/users', authenticateToken, (req, res) => {
             [id, email, hash, name, role, rut || '', phone || ''],
             function(err2) {
                 if (err2) return res.status(500).json({ error: err2.message });
-                res.json({ success: true, id });
+                
+                if (role === 'prestador') {
+                    const defaultBlocks = JSON.stringify({
+                        2: ["20:00-21:00", "21:00-22:00"],
+                        4: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"],
+                        5: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"]
+                    });
+                    db.run("INSERT INTO provider_profiles (userId, blocks, bio) VALUES (?, ?, ?)",
+                        [id, defaultBlocks, ''], (err3) => {
+                            if (err3) return res.status(500).json({ error: err3.message });
+                            res.json({ success: true, id });
+                        }
+                    );
+                } else {
+                    res.json({ success: true, id });
+                }
             }
         );
     });
@@ -358,36 +373,6 @@ app.get('/api/providers', (req, res) => {
             });
             res.json(nested);
         });
-    });
-});
-
-app.post('/api/providers', authenticateToken, (req, res) => {
-    const { id, name, role, email, blocks, bio } = req.body;
-    const blocksStr = JSON.stringify(blocks || {
-        2: ["20:00-21:00", "21:00-22:00"],
-        4: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"],
-        5: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"]
-    });
-    
-    // Insert into users table first
-    const providerId = id || 'prov-' + Date.now();
-    const tempPassword = 'temp-' + Date.now();
-    bcrypt.hash(tempPassword, 10, (err, hash) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        db.run("INSERT INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, ?, ?, 'prestador', '', '')",
-            [providerId, email, hash, name], (err2) => {
-                if (err2) return res.status(500).json({ error: err2.message });
-                
-                // Insert provider profile
-                db.run("INSERT INTO provider_profiles (userId, blocks, bio) VALUES (?, ?, ?)",
-                    [providerId, blocksStr, bio || ''], (err3) => {
-                        if (err3) return res.status(500).json({ error: err3.message });
-                        res.json({ success: true, id: providerId });
-                    }
-                );
-            }
-        );
     });
 });
 

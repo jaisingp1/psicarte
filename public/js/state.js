@@ -63,3 +63,13 @@ let activityYear = new Date().getFullYear();
 let activityMonth = new Date().getMonth();
 let selectedActivityDate = null;
 const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+// Admin Providers-Services Table State
+let providersServicesSort = { key: 'providerName', dir: 'asc' };
+let providersServicesPage = 1;
+const PROVIDERS_SERVICES_PER_PAGE = 20;
+
+// Admin Bookings Table State
+let adminBookingsSort = { key: 'date', dir: 'desc' };
+let adminBookingsPage = 1;
+const ADMIN_BOOKINGS_PER_PAGE = 20;

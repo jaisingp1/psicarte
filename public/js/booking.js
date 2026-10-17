@@ -120,6 +120,8 @@ function goToStep(stepNum) {
         }
         
         bookingState.room = null; // Automatically determined per slot
+        bookingState.selectedSpotId = null;
+        bookingState.availableSpots = [];
         
         renderCalendar();
         updateSlotsView();
@@ -186,92 +188,17 @@ function goToStep(stepNum) {
     bookingState.step = stepNum;
 }
 
-// checkDateAvailability helper to verify if a date has any available slots for a provider & service type
+// checkDateAvailability helper — checks if any cached available spots exist for a given date
 function checkDateAvailability(dateStr, providerId, serviceType, bookingIdToIgnore = null) {
-    const provider = state.providers.find(p => p.id === providerId);
-    if (!provider) return { available: false, reason: "Profesional no encontrado" };
-
-    const [year, month, day] = dateStr.split("-").map(Number);
-    const dateObj = new Date(year, month - 1, day);
-    const dayOfWeekIdx = dateObj.getDay();
-
-    const dayShifts = provider.blocks[dayOfWeekIdx] || [];
-    if (dayShifts.length === 0) {
-        return { available: false, reason: "El profesional no atiende este día" };
+    if (!bookingState.availableSpots || bookingState.availableSpots.length === 0) {
+        return { available: false, reason: "Cargando disponibilidad..." };
     }
 
-    const matchingRooms = state.rooms.filter(r => r.type === serviceType);
-    if (matchingRooms.length === 0) {
-        return { available: false, reason: "No hay salas de este tipo disponibles" };
-    }
-
-    let hasAtLeastOneSlot = false;
-
-    for (const slot of dayShifts) {
-        const [slotStart, slotEnd] = slot.split("-");
-        const slotStartMin = timeToMinutes(slotStart);
-        const slotEndMin = timeToMinutes(slotEnd);
-
-        // 1. Licencia/Enfermedad
-        const sicknessBlock = state.sicknessBlocks.find(sb => 
-            sb.providerId === providerId && 
-            sb.date === dateStr && 
-            (sb.timeSlot === "all" || sb.timeSlot === slot)
-        );
-        if (sicknessBlock) continue;
-
-        // 2. Traslape de reserva del profesional
-        const overlappingBooking = state.bookings.find(bk => {
-            if (bk.providerId !== providerId || bk.date !== dateStr || bk.status === "Cancelled") {
-                return false;
-            }
-            if (bookingIdToIgnore && bk.id === bookingIdToIgnore) {
-                return false;
-            }
-            const bkStart = timeToMinutes(bk.startTime);
-            const bkEnd = timeToMinutes(bk.endTime);
-            return (slotStartMin < bkEnd && bkStart < slotEndMin);
-        });
-        if (overlappingBooking) continue;
-
-        // 3. Buscar al menos una sala disponible
-        let roomAvailable = false;
-        for (const room of matchingRooms) {
-            const roomOpenMin = timeToMinutes(room.openTime);
-            const roomCloseMin = timeToMinutes(room.closeTime);
-
-            if (slotStartMin < roomOpenMin || slotEndMin > roomCloseMin) {
-                continue;
-            }
-
-            const roomConflict = state.bookings.find(bk => {
-                if (bk.roomId !== room.id || bk.date !== dateStr || bk.status === "Cancelled") {
-                    return false;
-                }
-                if (bookingIdToIgnore && bk.id === bookingIdToIgnore) {
-                    return false;
-                }
-                const bkStart = timeToMinutes(bk.startTime);
-                const bkEnd = timeToMinutes(bk.endTime);
-                return (slotStartMin < bkEnd && bkStart < slotEndMin);
-            });
-            if (roomConflict) continue;
-
-            roomAvailable = true;
-            break;
-        }
-
-        if (roomAvailable) {
-            hasAtLeastOneSlot = true;
-            break;
-        }
-    }
-
-    if (hasAtLeastOneSlot) {
+    const hasSpot = bookingState.availableSpots.some(spot => spot.date === dateStr);
+    if (hasSpot) {
         return { available: true, reason: "" };
-    } else {
-        return { available: false, reason: "No hay bloques horarios disponibles para este día" };
     }
+    return { available: false, reason: "No hay bloques horarios disponibles para este día" };
 }
 
 // Calendar Gen
@@ -356,13 +283,18 @@ function nextMonth() {
 function selectDate(dateStr, element) {
     if (element.classList.contains("disabled")) return;
     bookingState.date = dateStr;
+    bookingState.timeSlot = null;
+    bookingState.startTime = null;
+    bookingState.endTime = null;
+    bookingState.selectedSpotId = null;
+    bookingState.room = null;
     document.querySelectorAll(".calendar-cell").forEach(c => c.classList.remove("selected"));
     element.classList.add("selected");
     updateSlotsView();
 }
 
-// Calculate slots incorporating backend overlaps and matching room requirements automatically
-function updateSlotsView() {
+// Fetch available spots from the agenda API and render them for the selected date
+async function updateSlotsView() {
     const slotsGrid = document.getElementById("booking-slots");
     const label = document.getElementById("selected-date-label");
     if (!slotsGrid || !label) return;
@@ -375,113 +307,70 @@ function updateSlotsView() {
     
     const [year, month, day] = bookingState.date.split("-");
     const dateObj = new Date(year, parseInt(month) - 1, day);
-    const dayOfWeekIdx = dateObj.getDay();
     const friendlyDate = dateObj.toLocaleDateString("es-CL", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     label.innerText = `Horas para: ${friendlyDate}`;
     
-    const dayShifts = bookingState.provider.blocks[dayOfWeekIdx] || [];
+    // Fetch spots if not already loaded for this provider+service combo
+    const needFetch = bookingState.availableSpots.length === 0;
+    if (needFetch) {
+        slotsGrid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary);">Cargando horarios disponibles...</div>';
+        try {
+            const params = new URLSearchParams({
+                providerId: bookingState.provider.id,
+                serviceId: bookingState.service.id
+            });
+            const response = await fetch(`/api/spots/available?${params}`);
+            if (!response.ok) {
+                slotsGrid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary);">Error al cargar disponibilidad.</div>';
+                return;
+            }
+            bookingState.availableSpots = await response.json();
+            // Re-render calendar to reflect available dates
+            renderCalendar();
+        } catch (e) {
+            slotsGrid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary);">Error de conexión al cargar disponibilidad.</div>';
+            return;
+        }
+    }
     
-    if (dayShifts.length === 0) {
-        slotsGrid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary);">El profesional no atiende este día.</div>';
+    // Filter spots for the selected date
+    const dateSpots = bookingState.availableSpots.filter(s => s.date === bookingState.date);
+    
+    if (dateSpots.length === 0) {
+        slotsGrid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary);">No hay horarios disponibles para este día.</div>';
         return;
     }
     
+    // Sort by start_time
+    dateSpots.sort((a, b) => a.start_time.localeCompare(b.start_time));
+    
     slotsGrid.innerHTML = "";
     
-    dayShifts.forEach(slot => {
-        const [slotStart, slotEnd] = slot.split("-");
-        const slotStartMin = timeToMinutes(slotStart);
-        const slotEndMin = timeToMinutes(slotEnd);
-        
-        const matchingRooms = state.rooms.filter(r => r.type === bookingState.service.type);
-        
-        let isAvailable = false;
-        let selectedRoomForSlot = null;
-        let blockReason = "No hay salas de este tipo disponibles";
-        
-        // 1. Professional global blocks (sickness/licencia)
-        const sicknessBlock = state.sicknessBlocks.find(sb => 
-            sb.providerId === bookingState.provider.id && 
-            sb.date === bookingState.date && 
-            (sb.timeSlot === "all" || sb.timeSlot === slot)
-        );
-        
-        // 2. Overlap check for Provider (regardless of room)
-        const overlappingBooking = state.bookings.find(bk => {
-            if (bk.providerId !== bookingState.provider.id || bk.date !== bookingState.date || bk.status === "Cancelled") {
-                return false;
-            }
-            const bkStart = timeToMinutes(bk.startTime);
-            const bkEnd = timeToMinutes(bk.endTime);
-            return (slotStartMin < bkEnd && bkStart < slotEndMin);
-        });
-        
-        if (sicknessBlock) {
-            isAvailable = false;
-            blockReason = "Prestador no disponible (Licencia/Enfermedad)";
-        } else if (overlappingBooking) {
-            isAvailable = false;
-            blockReason = "Prestador ocupado en otra sala";
-        } else {
-            // Iterate through rooms to find one available
-            for (const room of matchingRooms) {
-                const roomOpenMin = timeToMinutes(room.openTime);
-                const roomCloseMin = timeToMinutes(room.closeTime);
-                
-                // Check if room functioning hours cover the slot
-                if (slotStartMin < roomOpenMin || slotEndMin > roomCloseMin) {
-                    blockReason = "Sala cerrada";
-                    continue;
-                }
-                
-                // Check if room occupied by another booking
-                const roomConflict = state.bookings.find(bk => {
-                    if (bk.roomId !== room.id || bk.date !== bookingState.date || bk.status === "Cancelled") {
-                        return false;
-                    }
-                    const bkStart = timeToMinutes(bk.startTime);
-                    const bkEnd = timeToMinutes(bk.endTime);
-                    return (slotStartMin < bkEnd && bkStart < slotEndMin);
-                });
-                
-                if (roomConflict) {
-                    blockReason = "Sala ocupada";
-                    continue;
-                }
-                
-                // Room is open and free!
-                isAvailable = true;
-                selectedRoomForSlot = room;
-                break;
-            }
-        }
-        
-        const btnClass = isAvailable ? "slot-btn" : "slot-btn disabled";
-        const titleAttr = isAvailable ? "" : `title="${blockReason}"`;
-        const selectedClass = bookingState.timeSlot === slot ? " selected" : "";
-        
-        const roomParam = selectedRoomForSlot ? JSON.stringify(selectedRoomForSlot).replace(/"/g, '&quot;') : 'null';
+    dateSpots.forEach(spot => {
+        const isSelected = bookingState.selectedSpotId === spot.id;
+        const btnClass = "slot-btn" + (isSelected ? " selected" : "");
+        const roomParam = JSON.stringify(spot).replace(/"/g, '&quot;');
         
         slotsGrid.innerHTML += `
-            <button class="${btnClass}${selectedClass}" ${titleAttr} onclick="selectSlot('${slot}', '${slotStart}', '${slotEnd}', ${isAvailable}, ${roomParam})">
-                ${slotStart}
+            <button class="${btnClass}" onclick='selectSpot(${roomParam})'>
+                ${spot.start_time}
             </button>
         `;
     });
 }
 
-function selectSlot(slot, start, end, isAvailable, roomObj) {
-    if (!isAvailable) {
-        showToast("Este bloque horario no está disponible.", "error");
-        return;
-    }
-    bookingState.timeSlot = slot;
-    bookingState.startTime = start;
-    bookingState.endTime = end;
-    bookingState.room = roomObj;
+function selectSpot(spot) {
+    bookingState.selectedSpotId = spot.id;
+    bookingState.timeSlot = `${spot.start_time}-${spot.end_time}`;
+    bookingState.startTime = spot.start_time;
+    bookingState.endTime = spot.end_time;
+    bookingState.room = state.rooms.find(r => r.id === spot.room_id) || {
+        id: spot.room_id,
+        name: spot.roomName || spot.room_id
+    };
     
     document.querySelectorAll(".slot-btn").forEach(b => {
-        if (b.innerText.trim() === start) {
+        if (b.innerText.trim() === spot.start_time) {
             b.classList.add("selected");
         } else {
             b.classList.remove("selected");
@@ -500,6 +389,7 @@ async function processPayment() {
     
     const newBooking = {
         id: "bk-" + Date.now(),
+        spot_id: bookingState.selectedSpotId,
         providerId: bookingState.provider.id,
         serviceId: bookingState.service.id,
         serviceName: bookingState.service.name,
@@ -569,7 +459,6 @@ async function processPayment() {
                         showToast("Error al simular la notificación de pago local.", "error");
                     }
                 } catch (errMock) {
-                    console.error("Local notify error:", errMock);
                     showToast("Error de conexión al simular la notificación local.", "error");
                 }
             }, 1500);
@@ -597,13 +486,11 @@ async function processPayment() {
         });
         
     } catch (e) {
-        console.error("Khipu flow error:", e);
         showToast("Error de conexión al procesar el pago.", "error");
     }
 }
 
 async function handleKhipuResult(result, bookingId) {
-    console.log("Khipu callback result:", result);
     if (result.result === 'OK') {
         showToast("Pago registrado por Khipu. Confirmando reserva...", "info");
         await pollPaymentStatus(bookingId);
@@ -628,6 +515,7 @@ async function pollPaymentStatus(bookingId, maxAttempts = 15, intervalMs = 2000)
                     bookingState = {
                         step: 1, provider: null, service: null, room: null,
                         date: null, timeSlot: null, startTime: null, endTime: null,
+                        selectedSpotId: null, availableSpots: [],
                         client: { name: "", rut: "", email: "", phone: "" }
                     };
                     
@@ -645,7 +533,7 @@ async function pollPaymentStatus(bookingId, maxAttempts = 15, intervalMs = 2000)
                 }
             }
         } catch (e) {
-            console.error("Error polling payment status:", e);
+            // Silently retry on polling error
         }
         await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
@@ -657,6 +545,7 @@ async function pollPaymentStatus(bookingId, maxAttempts = 15, intervalMs = 2000)
     bookingState = {
         step: 1, provider: null, service: null, room: null,
         date: null, timeSlot: null, startTime: null, endTime: null,
+        selectedSpotId: null, availableSpots: [],
         client: { name: "", rut: "", email: "", phone: "" }
     };
     await loadAllData();

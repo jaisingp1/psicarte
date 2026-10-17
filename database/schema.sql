@@ -1,5 +1,6 @@
 -- schema.sql
 -- Database Schema for Centro Integral PsicArte
+-- Refactored: Agenda & Booking Module
 
 -- 1. Users Table (tabla unificada de usuarios)
 CREATE TABLE IF NOT EXISTS users (
@@ -27,39 +28,102 @@ CREATE TABLE IF NOT EXISTS content (
     value TEXT
 );
 
--- 4. Rooms table
+-- 4. Rooms table (simplified — schedules moved to room_schedules)
 CREATE TABLE IF NOT EXISTS rooms (
     id TEXT PRIMARY KEY,
     name TEXT,
-    type TEXT,
-    openTime TEXT,
-    closeTime TEXT
+    type TEXT
 );
 
--- 5. Services table
+-- 5. Room Schedules table (per day-of-week operating blocks)
+CREATE TABLE IF NOT EXISTS room_schedules (
+    id TEXT PRIMARY KEY,
+    room_id TEXT NOT NULL,
+    day_of_week INTEGER NOT NULL,  -- ISO: 1=Monday ... 7=Sunday
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    FOREIGN KEY (room_id) REFERENCES rooms(id),
+    UNIQUE(room_id, day_of_week, start_time)
+);
+
+-- 6. Services table (simplified — recurrence moved to agendas, room moved to service_rooms)
 CREATE TABLE IF NOT EXISTS services (
     id TEXT PRIMARY KEY,
-    providerId TEXT,
-    name TEXT,
-    price INTEGER,
-    duration INTEGER,
+    providerId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    price INTEGER DEFAULT 0,
+    duration INTEGER NOT NULL,
     type TEXT,
-    roomId TEXT,
-    recurrence TEXT DEFAULT 'single',
-    recurrenceDay INTEGER,
-    recurrenceStartTime TEXT,
-    recurrenceEndTime TEXT,
-    recurrenceStartDate TEXT,
-    recurrenceEndDate TEXT,
     allowReschedule INTEGER DEFAULT 1,
-    maxReschedules INTEGER DEFAULT 1
+    maxReschedules INTEGER DEFAULT 1,
+    FOREIGN KEY (providerId) REFERENCES users(id)
 );
 
--- 6. Bookings table
+-- 7. Service-Rooms association table (many-to-many)
+CREATE TABLE IF NOT EXISTS service_rooms (
+    id TEXT PRIMARY KEY,
+    service_id TEXT NOT NULL,
+    room_id TEXT NOT NULL,
+    FOREIGN KEY (service_id) REFERENCES services(id),
+    FOREIGN KEY (room_id) REFERENCES rooms(id),
+    UNIQUE(service_id, room_id)
+);
+
+-- 8. Holidays table
+CREATE TABLE IF NOT EXISTS holidays (
+    id TEXT PRIMARY KEY,
+    date TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL
+);
+
+-- 9. Agendas table
+CREATE TABLE IF NOT EXISTS agendas (
+    id TEXT PRIMARY KEY,
+    provider_id TEXT NOT NULL,
+    service_id TEXT NOT NULL,
+    room_id TEXT NOT NULL,
+    type TEXT NOT NULL,             -- 'recurrent' or 'punctual'
+    recurrence_rule TEXT,           -- JSON: rrule config + per-day time_ranges (for recurrent)
+    specific_date TEXT,             -- ISO date (for punctual)
+    start_time TEXT NOT NULL,       -- HH:MM
+    end_time TEXT NOT NULL,         -- HH:MM
+    start_date TEXT,                -- ISO date range start (for recurrent)
+    end_date TEXT,                  -- ISO date range end (for recurrent)
+    status TEXT DEFAULT 'draft',    -- 'draft' or 'published'
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (provider_id) REFERENCES users(id),
+    FOREIGN KEY (service_id) REFERENCES services(id),
+    FOREIGN KEY (room_id) REFERENCES rooms(id)
+);
+
+-- 10. Spots table (generated from agendas)
+CREATE TABLE IF NOT EXISTS spots (
+    id TEXT PRIMARY KEY,
+    agenda_id TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    service_id TEXT NOT NULL,
+    room_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    status TEXT DEFAULT 'available', -- 'available', 'reserved', 'booked'
+    booking_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (agenda_id) REFERENCES agendas(id),
+    FOREIGN KEY (provider_id) REFERENCES users(id),
+    FOREIGN KEY (service_id) REFERENCES services(id),
+    FOREIGN KEY (room_id) REFERENCES rooms(id)
+);
+
+-- 11. Bookings table (updated with client_id and spot_id)
 CREATE TABLE IF NOT EXISTS bookings (
     id TEXT PRIMARY KEY,
+    spot_id TEXT,
+    client_id TEXT,
     providerId TEXT,
     serviceId TEXT,
+    agendaId TEXT,
     serviceName TEXT,
     price INTEGER,
     duration INTEGER,
@@ -73,31 +137,16 @@ CREATE TABLE IF NOT EXISTS bookings (
     clientName TEXT,
     clientRut TEXT,
     clientPhone TEXT,
-    status TEXT,
+    status TEXT,                   -- 'Pending_Payment', 'Paid', 'Cancelled'
     rescheduleCount INTEGER DEFAULT 0,
     khipuPaymentId TEXT,
     khipuPaymentUrl TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (spot_id) REFERENCES spots(id),
+    FOREIGN KEY (client_id) REFERENCES users(id)
 );
 
--- 7. Service Schedules (Spots pre-generados)
-CREATE TABLE IF NOT EXISTS service_schedules (
-    id TEXT PRIMARY KEY,
-    serviceId TEXT NOT NULL,
-    roomId TEXT NOT NULL,
-    providerId TEXT NOT NULL,
-    date TEXT NOT NULL,
-    startTime TEXT NOT NULL,
-    endTime TEXT NOT NULL,
-    status TEXT DEFAULT 'available',
-    bookingId TEXT,
-    generatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (serviceId) REFERENCES services(id),
-    FOREIGN KEY (roomId) REFERENCES rooms(id),
-    FOREIGN KEY (providerId) REFERENCES users(id)
-);
-
--- 8. Sickness Blocks table
+-- 12. Sickness Blocks table
 CREATE TABLE IF NOT EXISTS sickness_blocks (
     id TEXT PRIMARY KEY,
     providerId TEXT,
@@ -106,7 +155,7 @@ CREATE TABLE IF NOT EXISTS sickness_blocks (
     reason TEXT
 );
 
--- 9. Activities table
+-- 13. Activities table
 CREATE TABLE IF NOT EXISTS activities (
     id TEXT PRIMARY KEY,
     title TEXT,
@@ -117,7 +166,7 @@ CREATE TABLE IF NOT EXISTS activities (
     capacity INTEGER DEFAULT 0
 );
 
--- 10. Activity Enrollments table
+-- 14. Activity Enrollments table
 CREATE TABLE IF NOT EXISTS activity_enrollments (
     id TEXT PRIMARY KEY,
     activityId TEXT,
@@ -127,19 +176,19 @@ CREATE TABLE IF NOT EXISTS activity_enrollments (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 11. Config table
+-- 15. Config table
 CREATE TABLE IF NOT EXISTS config (
     key TEXT PRIMARY KEY,
     value TEXT
 );
 
--- 12. Khipu Notifications Table
+-- 16. Khipu Notifications Table
 CREATE TABLE IF NOT EXISTS khipu_notifications (
     id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,          -- 'payment_1.3', 'rendition_drn_2.0', 'transaction_dtn_1.0'
-    headers TEXT,                -- JSON string of headers
-    query_params TEXT,           -- JSON string of query params
-    body TEXT,                   -- JSON string or raw text of the POST body
-    ip_address TEXT,             -- Sender's IP address
+    type TEXT NOT NULL,
+    headers TEXT,
+    query_params TEXT,
+    body TEXT,
+    ip_address TEXT,
     received_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

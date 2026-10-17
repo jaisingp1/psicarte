@@ -27,6 +27,8 @@ let bookingState = {
     timeSlot: null,
     startTime: null,
     endTime: null,
+    selectedSpotId: null,
+    availableSpots: [],
     client: { name: "", rut: "", email: "", phone: "" }
 };
 

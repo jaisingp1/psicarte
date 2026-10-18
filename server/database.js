@@ -19,7 +19,18 @@ const db = new sqlite3.Database(dbPath, (err) => {
         console.error('Error opening database:', err.message);
     } else {
         console.log('Connected to SQLite database at:', dbPath);
-        initializeDatabase();
+        db.get('PRAGMA journal_mode = WAL', (pragmaErr, row) => {
+            if (pragmaErr) {
+                console.error('Error enabling SQLite WAL mode:', pragmaErr.message);
+                return;
+            }
+            if (row?.journal_mode?.toLowerCase() !== 'wal') {
+                console.error('SQLite did not enable WAL mode. Current journal mode:', row?.journal_mode ?? 'unknown');
+                return;
+            }
+            console.log('SQLite WAL mode enabled.');
+            initializeDatabase();
+        });
     }
 });
 

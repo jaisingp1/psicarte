@@ -14,18 +14,29 @@ if (process.argv.includes('--reset') || process.env.RESET_DB === 'true') {
     }
 }
 
+let resolveDatabaseReady;
+let rejectDatabaseReady;
+const databaseReady = new Promise((resolve, reject) => {
+    resolveDatabaseReady = resolve;
+    rejectDatabaseReady = reject;
+});
+
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database:', err.message);
+        rejectDatabaseReady(err);
     } else {
         console.log('Connected to SQLite database at:', dbPath);
         db.get('PRAGMA journal_mode = WAL', (pragmaErr, row) => {
             if (pragmaErr) {
                 console.error('Error enabling SQLite WAL mode:', pragmaErr.message);
+                rejectDatabaseReady(pragmaErr);
                 return;
             }
             if (row?.journal_mode?.toLowerCase() !== 'wal') {
-                console.error('SQLite did not enable WAL mode. Current journal mode:', row?.journal_mode ?? 'unknown');
+                const error = new Error(`SQLite did not enable WAL mode. Current journal mode: ${row?.journal_mode ?? 'unknown'}`);
+                console.error(error.message);
+                rejectDatabaseReady(error);
                 return;
             }
             console.log('SQLite WAL mode enabled.');
@@ -33,6 +44,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
         });
     }
 });
+
+db.ready = databaseReady;
 
 function initializeDatabase() {
     db.serialize(() => {
@@ -43,6 +56,7 @@ function initializeDatabase() {
             db.exec(schemaSql, (err) => {
                 if (err) {
                     console.error('Error executing schema.sql:', err.message);
+                    rejectDatabaseReady(err);
                     return;
                 }
                 console.log('Database schema initialized successfully.');
@@ -50,13 +64,21 @@ function initializeDatabase() {
                 db.get('SELECT COUNT(*) as count FROM content', (err2, row) => {
                     if (err2) {
                         console.error('Error checking content count:', err2.message);
+                        rejectDatabaseReady(err2);
                         return;
                     }
 
                     if (row.count === 0) {
                         console.log('Database empty. Seeding initial values from SQL file...');
                         const seedPath = path.join(__dirname, '..', 'database', 'valores_iniciales.sql');
-                        const seedSql = fs.readFileSync(seedPath, 'utf8');
+                        let seedSql;
+                        try {
+                            seedSql = fs.readFileSync(seedPath, 'utf8');
+                        } catch (seedError) {
+                            console.error('Failed to read initial values SQL:', seedError.message);
+                            rejectDatabaseReady(seedError);
+                            return;
+                        }
 
                         db.exec(seedSql, (err3) => {
                             if (err3) {
@@ -64,6 +86,7 @@ function initializeDatabase() {
                             } else {
                                 console.log('Database seeded successfully from SQL file.');
                             }
+                            resolveDatabaseReady();
                             // Spot generation se ejecuta fuera de serialize() para evitar race conditions
                             // con los callbacks anidados de SpotGenerator
                             setImmediate(() => {
@@ -72,11 +95,13 @@ function initializeDatabase() {
                         });
                     } else {
                         console.log('Database already initialized. Skipping seeding.');
+                        resolveDatabaseReady();
                     }
                 });
             });
         } catch (e) {
             console.error('Failed to read SQL initialization files:', e.message);
+            rejectDatabaseReady(e);
         }
     });
 }

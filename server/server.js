@@ -1746,11 +1746,20 @@ function cleanupPendingPayments() {
 // =====================================================
 // START SERVER
 // =====================================================
-app.listen(PORT, () => {
-    console.log(`PsicArte Server is running on port ${PORT}`);
-    console.log(`Frontend served locally at: http://localhost:${PORT}/index.html`);
+db.ready.then(() => {
+    app.listen(PORT, () => {
+        console.log(`PsicArte Server is running on port ${PORT}`);
+        console.log(`Frontend served locally at: http://localhost:${PORT}/index.html`);
 
-    // Start cleanup scheduler
-    cleanupPendingPayments();
-    setInterval(cleanupPendingPayments, 30 * 60 * 1000);
+        cleanupPendingPayments();
+        setInterval(cleanupPendingPayments, 30 * 60 * 1000);
+    });
+}).catch((error) => {
+    console.error('Database initialization failed; server not started:', error.message);
+    db.close((closeError) => {
+        if (closeError) {
+            console.error('Error closing database after initialization failure:', closeError.message);
+        }
+        process.exitCode = 1;
+    });
 });

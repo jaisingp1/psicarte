@@ -15,9 +15,9 @@ function minutesToTime(totalMinutes) {
 }
 
 function formatDateStr(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
 }
 
@@ -80,11 +80,12 @@ class SpotGenerator {
 
     _resolveDates(agenda) {
         const dates = [];
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const now = new Date();
+        const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
         if (agenda.type === 'punctual') {
-            const d = new Date(agenda.specific_date + 'T00:00:00');
+            const [y, m, day] = agenda.specific_date.split('-').map(Number);
+            const d = new Date(Date.UTC(y, m - 1, day));
             if (d >= today) dates.push(d);
             return dates;
         }
@@ -93,14 +94,19 @@ class SpotGenerator {
         try {
             const rule = JSON.parse(agenda.recurrence_rule);
             const byweekday = rule.byweekday || [];
-            const dtstart = new Date(rule.dtstart + 'T00:00:00');
             // Horizonte máximo de 3 meses para generación de spots recurrentes
             const MAX_HORIZON_MONTHS = 3;
             const horizonEnd = new Date(today);
-            horizonEnd.setMonth(horizonEnd.getMonth() + MAX_HORIZON_MONTHS);
+            horizonEnd.setUTCMonth(horizonEnd.getUTCMonth() + MAX_HORIZON_MONTHS);
 
             // Usar end_date de la agenda, o el horizonte máximo (lo que sea antes)
-            let effectiveUntil = agenda.end_date ? new Date(agenda.end_date + 'T00:00:00') : horizonEnd;
+            let effectiveUntil;
+            if (agenda.end_date) {
+                const [ey, em, ed] = agenda.end_date.split('-').map(Number);
+                effectiveUntil = new Date(Date.UTC(ey, em - 1, ed, 23, 59, 59));
+            } else {
+                effectiveUntil = horizonEnd;
+            }
             if (effectiveUntil > horizonEnd) effectiveUntil = horizonEnd;
 
             // Build rrule string
@@ -119,9 +125,9 @@ class SpotGenerator {
             rruleStr += `;DTSTART=${rule.dtstart.replace(/-/g, '')}T000000`;
 
             // Siempre incluir UNTIL para evitar generación infinita
-            const untilStr = effectiveUntil.getFullYear() +
-                String(effectiveUntil.getMonth() + 1).padStart(2, '0') +
-                String(effectiveUntil.getDate()).padStart(2, '0') + 'T235959';
+            const untilStr = effectiveUntil.getUTCFullYear() +
+                String(effectiveUntil.getUTCMonth() + 1).padStart(2, '0') +
+                String(effectiveUntil.getUTCDate()).padStart(2, '0') + 'T235959';
             rruleStr += `;UNTIL=${untilStr}`;
 
             const parsed = rrulestr(rruleStr);
@@ -206,7 +212,7 @@ class SpotGenerator {
                                 // Now generate spots for each date
                                 for (const date of dates) {
                                     const dateStr = formatDateStr(date);
-                                    const isoDay = jsDayToISO(date.getDay());
+                                    const isoDay = jsDayToISO(date.getUTCDay());
 
                                     // Skip holidays
                                     if (holidaySet.has(dateStr)) {

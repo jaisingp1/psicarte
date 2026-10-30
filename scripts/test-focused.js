@@ -1,4 +1,4 @@
-// Focused integration test - CORRECTED order for Case 5
+// Focused integration test - DYNAMIC DATES (Rule R14 compliant)
 require('dotenv').config();
 const db = require('../server/database');
 const { SpotGenerator } = require('../server/spot-generator');
@@ -37,22 +37,33 @@ function gen(agenda) {
 }
 
 async function main() {
-    const SHORT_START = '2026-08-10';
-    const SHORT_END = '2026-08-24';
+    // Dynamic next Monday calculation
+    const now = new Date();
+    const daysUntilMonday = (1 + 7 - now.getDay()) % 7 || 7;
+    const monday = new Date(now.getTime() + daysUntilMonday * 24 * 60 * 60 * 1000);
+    const SHORT_START = monday.toISOString().split('T')[0];
+    const twoWeeksLater = new Date(monday.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const SHORT_END = twoWeeksLater.toISOString().split('T')[0];
+
+    const tueDate = new Date(monday.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const wedDate = new Date(monday.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const thuDate = new Date(monday.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const friDate = new Date(monday.getTime() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     console.log('=== Focused Integration Tests ===\n');
+    console.log(`Test Range: ${SHORT_START} to ${SHORT_END} (Tue: ${tueDate}, Wed: ${wedDate}, Thu: ${thuDate})`);
 
     await run("DELETE FROM spots WHERE agenda_id LIKE 't%'");
     await run("DELETE FROM agendas WHERE id LIKE 't%'");
     await run("DELETE FROM bookings WHERE id LIKE 't%'");
-    await run("INSERT OR IGNORE INTO services (id, providerId, name, duration) VALUES ('svc-a', 'prov-ivan', 'Svc A', 30)");
-    await run("INSERT OR IGNORE INTO services (id, providerId, name, duration) VALUES ('svc-b', 'prov-ivan', 'Svc B', 60)");
+    await run("INSERT OR IGNORE INTO services (id, providerId, name, duration) VALUES ('svc-a', 'prov-test', 'Svc A', 30)");
+    await run("INSERT OR IGNORE INTO services (id, providerId, name, duration) VALUES ('svc-b', 'prov-test', 'Svc B', 60)");
     await run("INSERT OR IGNORE INTO service_rooms (id, service_id, room_id) VALUES ('sr-a1', 'svc-a', 'room-1')");
     await run("INSERT OR IGNORE INTO service_rooms (id, service_id, room_id) VALUES ('sr-b2', 'svc-b', 'room-2')");
 
     // === CASE 1: Tue/Thu 8-13, Wed 9-14 ===
     const a1 = {
-        id: 't1', provider_id: 'prov-ivan', service_id: 'svc-a', room_id: 'room-1',
+        id: 't1', provider_id: 'prov-test', service_id: 'svc-a', room_id: 'room-1',
         type: 'recurrent',
         recurrence_rule: JSON.stringify({
             freq: 'WEEKLY', interval: 1, byweekday: [2, 4, 3], dtstart: SHORT_START,
@@ -63,49 +74,51 @@ async function main() {
     const r1 = await gen(a1);
     console.log(`Caso 1: ${r1.spotsGenerated} spots generated`);
 
-    let spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', '2026-08-13']);
-    console.log(`  Thu Aug 13: ${spots.length} spots (expect 7): ${spots.map(s => s.start_time).join(', ')}`);
+    let spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', thuDate]);
+    console.log(`  Thu (${thuDate}): ${spots.length} spots (expect 7): ${spots.map(s => s.start_time).join(', ')}`);
     console.log(`  ${spots.length === 7 ? '✓ PASS' : '✗ FAIL'}`);
 
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', '2026-08-12']);
-    console.log(`  Wed Aug 12: ${spots.length} spots (expect 8): ${spots.map(s => s.start_time).join(', ')}`);
+    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', wedDate]);
+    console.log(`  Wed (${wedDate}): ${spots.length} spots (expect 8): ${spots.map(s => s.start_time).join(', ')}`);
     console.log(`  ${spots.length === 8 ? '✓ PASS' : '✗ FAIL'}`);
 
-    // === CASE 2: Booking conflict on room-1, Aug 13, 10:00-11:00 ===
-    await run("INSERT INTO bookings (id, providerId, serviceId, roomId, date, startTime, endTime, status) VALUES ('t-bk1','prov-other','svc-b','room-1','2026-08-13','10:00','11:00','Paid')");
+    // === CASE 2: Booking conflict on room-1, Thursday, 10:00-11:00 ===
+    await run("INSERT INTO bookings (id, providerId, serviceId, roomId, date, startTime, endTime, status) VALUES ('t-bk1','prov-other','svc-b','room-1',?,'10:00','11:00','Paid')", [thuDate]);
     await gen(a1);
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', '2026-08-13']);
+    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', thuDate]);
     console.log(`\nCaso 2: ${spots.length} spots (expect 5): ${spots.map(s => s.start_time).join(', ')}`);
     const noConflict = !spots.some(s => s.start_time === '10:00' || s.start_time === '10:30');
     console.log(`  10:00-11:00 omitted: ${noConflict ? '✓ PASS' : '✗ FAIL'}`);
     console.log(`  Count: ${spots.length === 5 ? '✓ PASS' : '✗ FAIL'}`);
     await run("DELETE FROM bookings WHERE id='t-bk1'");
 
-    // === CASE 3: Holiday punctual (Sep 18) ===
-    const a3 = {
-        id: 't3', provider_id: 'prov-ivan', service_id: 'svc-a', room_id: 'room-1',
-        type: 'punctual', specific_date: '2026-09-18', start_time: '08:30', end_time: '12:30', status: 'published'
-    };
-    const r3 = await gen(a3);
-    console.log(`\nCaso 3 (holiday Sep 18): ${r3.spotsGenerated} spots (expect 0): ${r3.spotsGenerated === 0 ? '✓ PASS' : '✗ FAIL'}`);
+    // === CASE 3: Dynamic Holiday punctual ===
+    const holidayRow = await q("SELECT date, name FROM holidays WHERE date >= date('now') ORDER BY date ASC LIMIT 1");
+    if (holidayRow.length > 0) {
+        const holidayDate = holidayRow[0].date;
+        const a3 = {
+            id: 't3', provider_id: 'prov-test', service_id: 'svc-a', room_id: 'room-1',
+            type: 'punctual', specific_date: holidayDate, start_time: '08:30', end_time: '12:30', status: 'published'
+        };
+        const r3 = await gen(a3);
+        console.log(`\nCaso 3 (holiday ${holidayDate} - ${holidayRow[0].name}): ${r3.spotsGenerated} spots (expect 0): ${r3.spotsGenerated === 0 ? '✓ PASS' : '✗ FAIL'}`);
+    }
 
-    // === CASE 4: Non-holiday punctual (Sep 17) ===
+    // === CASE 4: Non-holiday punctual (Friday of next week) ===
     const a4 = {
-        id: 't4', provider_id: 'prov-ivan', service_id: 'svc-a', room_id: 'room-1',
-        type: 'punctual', specific_date: '2026-09-17', start_time: '08:30', end_time: '12:30', status: 'published'
+        id: 't4', provider_id: 'prov-test', service_id: 'svc-a', room_id: 'room-1',
+        type: 'punctual', specific_date: friDate, start_time: '08:30', end_time: '12:30', status: 'published'
     };
     await gen(a4);
     spots = await q('SELECT start_time FROM spots WHERE agenda_id=? ORDER BY start_time', ['t4']);
-    console.log(`\nCaso 4 (Sep 17): ${spots.length} spots (expect 7)`);
+    console.log(`\nCaso 4 (Non-holiday ${friDate}): ${spots.length} spots (expect 7)`);
     const no12 = !spots.some(s => s.start_time === '12:00');
     console.log(`  12:00-12:30 omitted: ${no12 ? '✓ PASS' : '✗ FAIL'}`);
     console.log(`  Count: ${spots.length === 7 ? '✓ PASS' : '✗ FAIL'}`);
 
     // === CASE 5: Provider conflict — ORDER MATTERS ===
-    // First: remove t1, generate t5b (claims Tuesday for prov-ivan)
-    // Then: generate t1 (Tuesday blocked by t5b)
     const a5b = {
-        id: 't5b', provider_id: 'prov-ivan', service_id: 'svc-b', room_id: 'room-2',
+        id: 't5b', provider_id: 'prov-test', service_id: 'svc-b', room_id: 'room-2',
         type: 'recurrent',
         recurrence_rule: JSON.stringify({
             freq: 'WEEKLY', interval: 1, byweekday: [2], dtstart: SHORT_START,
@@ -125,19 +138,19 @@ async function main() {
     const r5a = await gen(a1);
     console.log(`Caso 5 - Step 2 (t1 regenerated): ${r5a.spotsGenerated} spots, ${r5a.conflicts} conflicts`);
 
-    // Tue Aug 11: should be 0 for t1 (provider conflict with t5b)
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', '2026-08-11']);
-    console.log(`  Tue Aug 11 (t1): ${spots.length} spots (expect 0)`);
+    // Tue: should be 0 for t1 (provider conflict with t5b)
+    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', tueDate]);
+    console.log(`  Tue (${tueDate}) (t1): ${spots.length} spots (expect 0)`);
     console.log(`  ${spots.length === 0 ? '✓ PASS' : '✗ FAIL'}`);
 
-    // Tue Aug 11: should have spots for t5b
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t5b', '2026-08-11']);
-    console.log(`  Tue Aug 11 (t5b): ${spots.length} spots (expect >0)`);
+    // Tue: should have spots for t5b
+    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t5b', tueDate]);
+    console.log(`  Tue (${tueDate}) (t5b): ${spots.length} spots (expect >0)`);
     console.log(`  ${spots.length > 0 ? '✓ PASS' : '✗ FAIL'}`);
 
-    // Thu Aug 13: should still work for t1
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', '2026-08-13']);
-    console.log(`  Thu Aug 13 (t1): ${spots.length} spots (expect 7)`);
+    // Thu: should still work for t1
+    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', thuDate]);
+    console.log(`  Thu (${thuDate}) (t1): ${spots.length} spots (expect 7)`);
     console.log(`  ${spots.length === 7 ? '✓ PASS' : '✗ FAIL'}`);
 
     // Cleanup
@@ -151,4 +164,4 @@ async function main() {
     process.exit(0);
 }
 
-setTimeout(() => main(), 2000);
+setTimeout(() => main(), 1000);

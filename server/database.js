@@ -69,8 +69,10 @@ function initializeDatabase() {
                     }
 
                     if (row.count === 0) {
-                        console.log('Database empty. Seeding initial values from SQL file...');
-                        const seedPath = path.join(__dirname, '..', 'database', 'valores_iniciales.sql');
+                        const isDev = process.argv.includes('--dev') || process.env.SEED_PROFILE === 'dev';
+                        const seedFileName = isDev ? 'valores_iniciales_dev.sql' : (process.env.SEED_FILE || 'valores_iniciales.sql');
+                        const seedPath = path.join(__dirname, '..', 'database', seedFileName);
+                        console.log(`Database empty. Seeding initial values from SQL file (${seedFileName})...`);
                         let seedSql;
                         try {
                             seedSql = fs.readFileSync(seedPath, 'utf8');

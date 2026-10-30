@@ -38,7 +38,11 @@ function authenticateToken(req, res, next) {
 app.use(cors());
 app.use(express.json({
     verify: (req, res, buf) => {
-        if (req.originalUrl && (req.originalUrl.startsWith('/api/khipu/notify') || req.originalUrl.startsWith('/notificacion'))) {
+        if (req.originalUrl && (
+            req.originalUrl.startsWith('/api/khipu/notify') ||
+            req.originalUrl.startsWith('/api/khipu/webhook') ||
+            req.originalUrl.startsWith('/notificacion')
+        )) {
             req.rawBody = buf;
         }
     }
@@ -97,6 +101,17 @@ function verifyKhipuSignature(rawBody, signatureHeader, secret) {
         }
         if (!tValue || !sValue) return false;
 
+        // Mitigación de replay attacks: validar frescura del timestamp (tolerancia de 5 minutos)
+        const tNum = Number(tValue);
+        if (!Number.isNaN(tNum)) {
+            const timestampMs = tNum < 1e11 ? tNum * 1000 : tNum;
+            const ageMs = Math.abs(Date.now() - timestampMs);
+            if (ageMs > 5 * 60 * 1000) {
+                console.warn(`Webhook: timestamp expirado o desfasado (${ageMs}ms de diferencia).`);
+                return false;
+            }
+        }
+
         const toHash = `${tValue}.${rawBody.toString('utf8')}`;
         const computedSig = crypto.createHmac('sha256', secret).update(toHash).digest('base64');
 
@@ -116,7 +131,8 @@ async function callKhipuApi(method, path, body = null) {
         throw new Error('KHIPU_API_KEY no está configurada.');
     }
 
-    const url = `https://payment-api.khipu.com/v3${path}`;
+    const apiBase = process.env.KHIPU_API_URL || 'https://payment-api.khipu.com/v3';
+    const url = `${apiBase}${path}`;
     const headers = {
         'x-api-key': apiKey,
         'Accept': 'application/json'
@@ -408,24 +424,54 @@ app.get('/api/rooms', (req, res) => {
             } catch (err) {
                 parsedSchedules = [];
             }
-            return { id: r.id, name: r.name, type: r.type, schedules: parsedSchedules };
+            let openTime = '08:30';
+            let closeTime = '18:30';
+            if (parsedSchedules && parsedSchedules.length > 0) {
+                const startTimes = parsedSchedules.map(s => s.start_time).filter(Boolean).sort();
+                const endTimes = parsedSchedules.map(s => s.end_time).filter(Boolean).sort();
+                if (startTimes.length > 0) openTime = startTimes[0];
+                if (endTimes.length > 0) closeTime = endTimes[endTimes.length - 1];
+            }
+            return { id: r.id, name: r.name, type: r.type, openTime, closeTime, schedules: parsedSchedules };
         });
         res.json(result);
     });
 });
 
 app.post('/api/rooms', authenticateToken, (req, res) => {
-    const { id, name, type } = req.body;
+    const { id, name, type, openTime, closeTime } = req.body;
     if (!id || !name) {
         return res.status(400).json({ error: 'Faltan campos requeridos: id, name.' });
     }
-    db.run("INSERT OR REPLACE INTO rooms (id, name, type) VALUES (?, ?, ?)",
-        [id, name, type || 'consultorio'],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, id });
-        }
-    );
+    const start = openTime || '08:30';
+    const end = closeTime || '18:30';
+
+    db.serialize(() => {
+        db.run("INSERT OR REPLACE INTO rooms (id, name, type) VALUES (?, ?, ?)",
+            [id, name, type || 'consultorio'],
+            function (err) {
+                if (err) return res.status(500).json({ error: err.message });
+
+                db.get("SELECT COUNT(*) as count FROM room_schedules WHERE room_id = ?", [id], (errCount, row) => {
+                    if (errCount) return res.status(500).json({ error: errCount.message });
+
+                    if (row.count === 0) {
+                        const stmt = db.prepare("INSERT INTO room_schedules (id, room_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)");
+                        const daysToCreate = type === 'Virtual' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
+                        daysToCreate.forEach(day => {
+                            stmt.run([`rs-${id}-${day}`, id, day, start, end]);
+                        });
+                        stmt.finalize((errFinal) => {
+                            if (errFinal) return res.status(500).json({ error: errFinal.message });
+                            res.json({ success: true, id });
+                        });
+                    } else {
+                        res.json({ success: true, id });
+                    }
+                });
+            }
+        );
+    });
 });
 
 app.delete('/api/rooms/:id', authenticateToken, (req, res) => {
@@ -1564,7 +1610,7 @@ app.post('/api/khipu/create-payment', (req, res) => {
         }
 
         try {
-            const baseUrl = process.env.KHIPU_BASE_URL || process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
+            const baseUrl = process.env.APP_URL || process.env.KHIPU_BASE_URL || process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
             const expiresDate = new Date(Date.now() + 60 * 60 * 1000).toISOString();
             const params = {
                 subject: `Reserva PsicArte: ${booking.serviceName}`,
@@ -1600,7 +1646,7 @@ app.post('/api/khipu/create-payment', (req, res) => {
     });
 });
 
-app.post('/api/khipu/notify', (req, res) => {
+function handleKhipuWebhook(req, res) {
     const signatureHeader = req.headers['x-khipu-signature'];
     const apiKey = process.env.KHIPU_API_KEY;
 
@@ -1666,13 +1712,11 @@ app.post('/api/khipu/notify', (req, res) => {
             return res.status(500).send('Verification failed');
         }
     });
-});
+}
 
-// Alias /notificacion para compatibilidad con webhook Khipu
-app.post('/notificacion', (req, res, next) => {
-    req.url = '/api/khipu/notify';
-    app._router.handle(req, res, next);
-});
+app.post('/api/khipu/notify', handleKhipuWebhook);
+app.post('/api/khipu/webhook', handleKhipuWebhook);
+app.post('/notificacion', handleKhipuWebhook);
 
 // Rutas de retorno de pagos Khipu
 app.get('/exito', (req, res) => {

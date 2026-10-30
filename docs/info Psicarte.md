@@ -1,4 +1,4 @@
-﻿Inicio de página
+Inicio de página
 PsicArte es un centro integral de psicología, talleres, capacitaciones y artes escénicas, orientado al bienestar emocional, la expresión personal y el desarrollo humano. La integración de estas áreas nos permite acompañar procesos terapéuticos, formativos y creativos en personas, familias, comunidades educativas y organizaciones.
 Presentación, Misión y Visión (todo en un mismo apartado)
 
@@ -93,7 +93,7 @@ Jueves: Bloques 9:00-10:00 , 10:00-11:00 , 11:00-12:00 , 20:00-21:00 , 21:00-22:
 Viernes: Bloques 9:00-10:00 , 10:00-11:00 , 11:00-12:00 , 20:00-21:00 , 21:00-22:00
 Contacto (apartado o como pie de página que aparezca en todos los apartados)
 
-contacto@psicarte.cl
+contacto@centropsicarte.cl
 +56961676706
 
 Cartera de clientes (para mockup, le puede inventar rut y número de celular si es necesario)

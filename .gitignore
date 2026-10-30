@@ -5,10 +5,12 @@ node_modules/
 database.sqlite
 database.sqlite-journal
 database.sqlite-wal
+database.sqlite-shm
 
 # Environment & secrets
 .env
 .env.*
+!.env.example
 
 # Logs
 *.log

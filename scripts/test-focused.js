@@ -7,12 +7,24 @@ const generator = new SpotGenerator(db);
 
 async function q(sql, params = []) {
     return new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => { err ? reject(err) : resolve(rows || []); });
+        db.all(sql, params, (err, rows) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(rows || []);
+            }
+        });
     });
 }
 async function run(sql, params = []) {
     return new Promise((resolve, reject) => {
-        db.run(sql, params, function(err) { err ? reject(err) : resolve(this); });
+        db.run(sql, params, function (err) {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(this);
+            }
+        });
     });
 }
 function gen(agenda) {
@@ -42,8 +54,9 @@ async function main() {
     const a1 = {
         id: 't1', provider_id: 'prov-ivan', service_id: 'svc-a', room_id: 'room-1',
         type: 'recurrent',
-        recurrence_rule: JSON.stringify({ freq: 'WEEKLY', interval: 1, byweekday: [2,4,3], dtstart: SHORT_START,
-            time_ranges: { '2': {start:'08:00',end:'13:00'}, '4': {start:'08:00',end:'13:00'}, '3': {start:'09:00',end:'14:00'} }
+        recurrence_rule: JSON.stringify({
+            freq: 'WEEKLY', interval: 1, byweekday: [2, 4, 3], dtstart: SHORT_START,
+            time_ranges: { '2': { start: '08:00', end: '13:00' }, '4': { start: '08:00', end: '13:00' }, '3': { start: '09:00', end: '14:00' } }
         }),
         start_time: '08:00', end_time: '14:00', start_date: SHORT_START, end_date: SHORT_END, status: 'published'
     };
@@ -51,38 +64,42 @@ async function main() {
     console.log(`Caso 1: ${r1.spotsGenerated} spots generated`);
 
     let spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', '2026-08-13']);
-    console.log(`  Thu Aug 13: ${spots.length} spots (expect 7): ${spots.map(s=>s.start_time).join(', ')}`);
-    console.log(`  ${spots.length===7 ? '✓ PASS' : '✗ FAIL'}`);
+    console.log(`  Thu Aug 13: ${spots.length} spots (expect 7): ${spots.map(s => s.start_time).join(', ')}`);
+    console.log(`  ${spots.length === 7 ? '✓ PASS' : '✗ FAIL'}`);
 
     spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', '2026-08-12']);
-    console.log(`  Wed Aug 12: ${spots.length} spots (expect 8): ${spots.map(s=>s.start_time).join(', ')}`);
-    console.log(`  ${spots.length===8 ? '✓ PASS' : '✗ FAIL'}`);
+    console.log(`  Wed Aug 12: ${spots.length} spots (expect 8): ${spots.map(s => s.start_time).join(', ')}`);
+    console.log(`  ${spots.length === 8 ? '✓ PASS' : '✗ FAIL'}`);
 
     // === CASE 2: Booking conflict on room-1, Aug 13, 10:00-11:00 ===
     await run("INSERT INTO bookings (id, providerId, serviceId, roomId, date, startTime, endTime, status) VALUES ('t-bk1','prov-other','svc-b','room-1','2026-08-13','10:00','11:00','Paid')");
     await gen(a1);
     spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', '2026-08-13']);
-    console.log(`\nCaso 2: ${spots.length} spots (expect 5): ${spots.map(s=>s.start_time).join(', ')}`);
+    console.log(`\nCaso 2: ${spots.length} spots (expect 5): ${spots.map(s => s.start_time).join(', ')}`);
     const noConflict = !spots.some(s => s.start_time === '10:00' || s.start_time === '10:30');
     console.log(`  10:00-11:00 omitted: ${noConflict ? '✓ PASS' : '✗ FAIL'}`);
-    console.log(`  Count: ${spots.length===5 ? '✓ PASS' : '✗ FAIL'}`);
+    console.log(`  Count: ${spots.length === 5 ? '✓ PASS' : '✗ FAIL'}`);
     await run("DELETE FROM bookings WHERE id='t-bk1'");
 
     // === CASE 3: Holiday punctual (Sep 18) ===
-    const a3 = { id: 't3', provider_id: 'prov-ivan', service_id: 'svc-a', room_id: 'room-1',
-        type: 'punctual', specific_date: '2026-09-18', start_time: '08:30', end_time: '12:30', status: 'published' };
+    const a3 = {
+        id: 't3', provider_id: 'prov-ivan', service_id: 'svc-a', room_id: 'room-1',
+        type: 'punctual', specific_date: '2026-09-18', start_time: '08:30', end_time: '12:30', status: 'published'
+    };
     const r3 = await gen(a3);
-    console.log(`\nCaso 3 (holiday Sep 18): ${r3.spotsGenerated} spots (expect 0): ${r3.spotsGenerated===0 ? '✓ PASS' : '✗ FAIL'}`);
+    console.log(`\nCaso 3 (holiday Sep 18): ${r3.spotsGenerated} spots (expect 0): ${r3.spotsGenerated === 0 ? '✓ PASS' : '✗ FAIL'}`);
 
     // === CASE 4: Non-holiday punctual (Sep 17) ===
-    const a4 = { id: 't4', provider_id: 'prov-ivan', service_id: 'svc-a', room_id: 'room-1',
-        type: 'punctual', specific_date: '2026-09-17', start_time: '08:30', end_time: '12:30', status: 'published' };
+    const a4 = {
+        id: 't4', provider_id: 'prov-ivan', service_id: 'svc-a', room_id: 'room-1',
+        type: 'punctual', specific_date: '2026-09-17', start_time: '08:30', end_time: '12:30', status: 'published'
+    };
     await gen(a4);
     spots = await q('SELECT start_time FROM spots WHERE agenda_id=? ORDER BY start_time', ['t4']);
     console.log(`\nCaso 4 (Sep 17): ${spots.length} spots (expect 7)`);
     const no12 = !spots.some(s => s.start_time === '12:00');
     console.log(`  12:00-12:30 omitted: ${no12 ? '✓ PASS' : '✗ FAIL'}`);
-    console.log(`  Count: ${spots.length===7 ? '✓ PASS' : '✗ FAIL'}`);
+    console.log(`  Count: ${spots.length === 7 ? '✓ PASS' : '✗ FAIL'}`);
 
     // === CASE 5: Provider conflict — ORDER MATTERS ===
     // First: remove t1, generate t5b (claims Tuesday for prov-ivan)
@@ -90,8 +107,10 @@ async function main() {
     const a5b = {
         id: 't5b', provider_id: 'prov-ivan', service_id: 'svc-b', room_id: 'room-2',
         type: 'recurrent',
-        recurrence_rule: JSON.stringify({ freq: 'WEEKLY', interval: 1, byweekday: [2], dtstart: SHORT_START,
-            time_ranges: { '2': {start:'08:00',end:'13:00'} } }),
+        recurrence_rule: JSON.stringify({
+            freq: 'WEEKLY', interval: 1, byweekday: [2], dtstart: SHORT_START,
+            time_ranges: { '2': { start: '08:00', end: '13:00' } }
+        }),
         start_time: '08:00', end_time: '13:00', start_date: SHORT_START, end_date: SHORT_END, status: 'published'
     };
 
@@ -109,7 +128,7 @@ async function main() {
     // Tue Aug 11: should be 0 for t1 (provider conflict with t5b)
     spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', '2026-08-11']);
     console.log(`  Tue Aug 11 (t1): ${spots.length} spots (expect 0)`);
-    console.log(`  ${spots.length===0 ? '✓ PASS' : '✗ FAIL'}`);
+    console.log(`  ${spots.length === 0 ? '✓ PASS' : '✗ FAIL'}`);
 
     // Tue Aug 11: should have spots for t5b
     spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t5b', '2026-08-11']);
@@ -119,7 +138,7 @@ async function main() {
     // Thu Aug 13: should still work for t1
     spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', '2026-08-13']);
     console.log(`  Thu Aug 13 (t1): ${spots.length} spots (expect 7)`);
-    console.log(`  ${spots.length===7 ? '✓ PASS' : '✗ FAIL'}`);
+    console.log(`  ${spots.length === 7 ? '✓ PASS' : '✗ FAIL'}`);
 
     // Cleanup
     await run("DELETE FROM spots WHERE agenda_id LIKE 't%'");

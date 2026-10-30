@@ -440,31 +440,6 @@ async function processPayment() {
 
         const { paymentId } = khipuResult;
         
-        // Step 2.5: Handle Khipu Offline Simulator fallback
-        if (khipuResult.isOfflineMock) {
-            showToast("Simulando portal Khipu Offline...", "info");
-            setTimeout(async () => {
-                try {
-                    // Send mock payment notification to local webhook
-                    const notifyResponse = await fetch('/api/khipu/notify', {
-                        method: 'POST',
-                        headers: getAuthHeaders(),
-                        body: JSON.stringify({ notification_token: paymentId })
-                    });
-                    
-                    if (notifyResponse.ok) {
-                        showToast("Pago simulado procesado localmente.", "success");
-                        await pollPaymentStatus(bookingId);
-                    } else {
-                        showToast("Error al simular la notificación de pago local.", "error");
-                    }
-                } catch (errMock) {
-                    showToast("Error de conexión al simular la notificación local.", "error");
-                }
-            }, 1500);
-            return;
-        }
-        
         // Step 3: Launch Khipu Inside Web SDK modal
         if (typeof Khipu === 'undefined') {
             showToast("Error: SDK de Khipu no cargado. Reintentando...", "error");
@@ -510,25 +485,10 @@ async function pollPaymentStatus(bookingId, maxAttempts = 15, intervalMs = 2000)
                 const data = await response.json();
                 if (data.status === 'Paid') {
                     showToast("¡Pago confirmado y cita agendada exitosamente!", "success");
-                    
-                    // Reset Wizard
-                    bookingState = {
-                        step: 1, provider: null, service: null, room: null,
-                        date: null, timeSlot: null, startTime: null, endTime: null,
-                        selectedSpotId: null, availableSpots: [],
-                        client: { name: "", rut: "", email: "", phone: "" }
-                    };
-                    
-                    await loadAllData();
-                    initBookingWidget();
-                    goToStep(1);
-                    
-                    if (state.currentUser) {
-                        renderDashboardPanes();
-                    }
+                    window.location.href = `/exito?bookingId=${bookingId}`;
                     return true;
                 } else if (data.status === 'Payment_Conflict') {
-                    showToast("Conflicto de horario detectado. El slot ya fue tomado por otro usuario. Por favor contacta al administrador.", "error");
+                    window.location.href = `/exito?bookingId=${bookingId}`;
                     return false;
                 }
             }

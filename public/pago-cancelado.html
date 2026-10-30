@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pago Cancelado - Centro Integral PsicArte</title>
+    <meta name="description"
+        content="Información sobre la cancelación de la solicitud de pago en el Centro Integral PsicArte.">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+
+    <!-- Navigation Header -->
+    <header>
+        <div class="header-container">
+            <a href="index.html" class="logo-container" id="logo-link">
+                <img id="nav-logo" src="images/logo_light.png" alt="PsicArte Logo">
+            </a>
+
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="index.html#inicio">Inicio</a></li>
+                    <li><a href="nosotros.html">Nosotros</a></li>
+                    <li><a href="index.html#servicios">Servicios</a></li>
+                    <li><a href="index.html#calendario">Comunidad</a></li>
+                    <li><a href="index.html#agendamiento">Agendar Hora</a></li>
+                </ul>
+
+                <div class="nav-actions">
+                    <button class="btn-icon" id="theme-toggle" title="Cambiar tema">
+                        <i class="fa-solid fa-moon"></i>
+                    </button>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <section class="info-section" style="max-width: 650px; margin: 40px auto; padding: 0 20px;">
+            <div class="card" style="text-align: center; padding: 40px 30px;">
+                <div style="margin-bottom: 20px;">
+                    <i class="fa-solid fa-circle-xmark" style="font-size: 4rem; color: var(--color-error);"></i>
+                </div>
+                <h2 style="font-size: 1.8rem; margin-bottom: 12px; color: var(--text-primary);">Pago No Completado</h2>
+                <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px;">
+                    El proceso de pago fue cancelado o no se completó en la pasarela Khipu. No se ha realizado ningún cobro a tu cuenta bancaria.
+                </p>
+
+                <div style="background: var(--bg-secondary); border-radius: var(--radius-md); padding: 18px; margin-bottom: 30px; text-align: left;">
+                    <p style="font-size: 0.95rem; color: var(--text-primary); margin-bottom: 8px;">
+                        <i class="fa-solid fa-circle-info" style="color: var(--color-info); margin-right: 8px;"></i>
+                        <strong>¿Qué ocurre con tu hora?</strong>
+                    </p>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0; line-height: 1.5;">
+                        La solicitud pendiente se liberará automáticamente para que puedas seleccionar nuevamente el horario de tu preferencia cuando lo desees.
+                    </p>
+                </div>
+
+                <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
+                    <a href="index.html#agendamiento" class="btn-primary" style="padding: 12px 24px; text-decoration: none;">
+                        <i class="fa-solid fa-rotate-right" style="margin-right: 8px;"></i>Reintentar Agendamiento
+                    </a>
+                    <a href="index.html" class="btn-secondary" style="padding: 12px 24px; text-decoration: none;">
+                        <i class="fa-solid fa-house" style="margin-right: 8px;"></i>Volver al Inicio
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-info">
+                <img id="footer-logo" src="images/logo_light.png" alt="PsicArte Logo">
+                <p>Centro Integral PsicArte está orientado al acompañamiento terapéutico, el desarrollo de capacidades
+                    artísticas y corporales, y la promoción del autocuidado y la salud mental.</p>
+            </div>
+            <div class="footer-links">
+                <h4>Enlaces Rápidos</h4>
+                <ul>
+                    <li><a href="index.html#inicio">Inicio</a></li>
+                    <li><a href="nosotros.html">Nosotros</a></li>
+                    <li><a href="index.html#servicios">Servicios</a></li>
+                    <li><a href="index.html#calendario">Actividades</a></li>
+                    <li><a href="index.html#agendamiento">Reservar Hora</a></li>
+                </ul>
+            </div>
+            <div class="footer-contact">
+                <h4>Contacto</h4>
+                <p><i class="fa-solid fa-envelope" style="color: var(--color-gold);"></i> <span
+                        id="contact-email">contacto@psicarte.cl</span></p>
+                <p><i class="fa-solid fa-phone" style="color: var(--color-gold);"></i> <span
+                        id="contact-phone">+56961676706</span></p>
+                <p><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> Modalidad Online y
+                    Presencial</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; <span id="footer-year"></span> Centro Integral PsicArte. Todos los derechos reservados.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Theme management
+        function initTheme() {
+            const savedTheme = localStorage.getItem("psicarte_theme") || "light";
+            document.documentElement.setAttribute("data-theme", savedTheme);
+            updateThemeUI(savedTheme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute("data-theme");
+            const newTheme = currentTheme === "dark" ? "light" : "dark";
+            document.documentElement.setAttribute("data-theme", newTheme);
+            localStorage.setItem("psicarte_theme", newTheme);
+            updateThemeUI(newTheme);
+        }
+
+        function updateThemeUI(theme) {
+            const themeBtn = document.getElementById("theme-toggle");
+            const logoImg = document.getElementById("nav-logo");
+            const footerLogo = document.getElementById("footer-logo");
+
+            if (theme === "dark") {
+                themeBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
+                logoImg.src = "logo_dark.png";
+                if (footerLogo) footerLogo.src = "logo_dark.png";
+            } else {
+                themeBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
+                logoImg.src = "logo_light.png";
+                if (footerLogo) footerLogo.src = "logo_light.png";
+            }
+        }
+
+        document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
+
+        // Dynamic footer year
+        const yearEl = document.getElementById("footer-year");
+        if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+        initTheme();
+    </script>
+</body>
+
+</html>
+

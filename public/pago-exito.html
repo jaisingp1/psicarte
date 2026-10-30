@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmación de Pago - Centro Integral PsicArte</title>
+    <meta name="description"
+        content="Estado de confirmación de tu pago y agendamiento en el Centro Integral PsicArte.">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+
+    <!-- Navigation Header -->
+    <header>
+        <div class="header-container">
+            <a href="index.html" class="logo-container" id="logo-link">
+                <img id="nav-logo" src="images/logo_light.png" alt="PsicArte Logo">
+            </a>
+
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="index.html#inicio">Inicio</a></li>
+                    <li><a href="nosotros.html">Nosotros</a></li>
+                    <li><a href="index.html#servicios">Servicios</a></li>
+                    <li><a href="index.html#calendario">Comunidad</a></li>
+                    <li><a href="index.html#agendamiento">Agendar Hora</a></li>
+                </ul>
+
+                <div class="nav-actions">
+                    <button class="btn-icon" id="theme-toggle" title="Cambiar tema">
+                        <i class="fa-solid fa-moon"></i>
+                    </button>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <section class="info-section" style="max-width: 700px; margin: 40px auto; padding: 0 20px;">
+            <div class="card" id="payment-status-card" style="text-align: center; padding: 40px 30px;">
+                <!-- Loading State (Default) -->
+                <div id="state-loading">
+                    <div style="margin-bottom: 24px;">
+                        <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 3.5rem; color: var(--color-accent);"></i>
+                    </div>
+                    <h2 style="font-size: 1.8rem; margin-bottom: 12px; color: var(--text-primary);">Verificando tu pago con Khipu...</h2>
+                    <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px;">
+                        Estamos confirmando la recepción de tu transferencia bancaria. Por favor espera un momento sin cerrar esta ventana.
+                    </p>
+                    <div style="display: inline-block; padding: 10px 18px; background: var(--bg-secondary); border-radius: var(--radius-sm); font-size: 0.9rem; color: var(--text-secondary);">
+                        <i class="fa-solid fa-shield-halved" style="color: var(--color-accent); margin-right: 6px;"></i>
+                        Operación segura procesada por Khipu
+                    </div>
+                </div>
+
+                <!-- Success State -->
+                <div id="state-success" style="display: none;">
+                    <div style="margin-bottom: 20px;">
+                        <i class="fa-solid fa-circle-check" style="font-size: 4rem; color: var(--color-success);"></i>
+                    </div>
+                    <h2 style="font-size: 1.9rem; margin-bottom: 10px; color: var(--text-primary);">¡Pago Confirmado!</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 28px;">
+                        Tu cita ha sido agendada y registrada exitosamente en nuestro sistema.
+                    </p>
+
+                    <!-- Booking Summary Box -->
+                    <div id="booking-details-box" style="text-align: left; background: var(--bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 22px; margin-bottom: 30px;">
+                        <h3 style="font-size: 1.15rem; margin-bottom: 16px; border-bottom: 1px solid var(--color-border); padding-bottom: 10px;">
+                            <i class="fa-solid fa-calendar-check" style="color: var(--color-accent); margin-right: 8px;"></i>
+                            Detalles de tu Reserva
+                        </h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;" class="form-row">
+                            <div>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Código de Reserva</span>
+                                <p style="font-weight: 600; font-family: monospace;" id="summary-booking-id">-</p>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Servicio</span>
+                                <p style="font-weight: 600;" id="summary-service">-</p>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Fecha</span>
+                                <p style="font-weight: 600;" id="summary-date">-</p>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Horario</span>
+                                <p style="font-weight: 600;" id="summary-time">-</p>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Modalidad / Sala</span>
+                                <p style="font-weight: 600;" id="summary-room">-</p>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Paciente</span>
+                                <p style="font-weight: 600;" id="summary-client">-</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
+                        <a href="index.html" class="btn-primary" style="padding: 12px 24px; text-decoration: none;">
+                            <i class="fa-solid fa-house" style="margin-right: 8px;"></i>Volver al Inicio
+                        </a>
+                        <a href="index.html#agendamiento" class="btn-secondary" style="padding: 12px 24px; text-decoration: none;">
+                            <i class="fa-solid fa-calendar-plus" style="margin-right: 8px;"></i>Agendar Otra Hora
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Conflict State -->
+                <div id="state-conflict" style="display: none;">
+                    <div style="margin-bottom: 20px;">
+                        <i class="fa-solid fa-triangle-exclamation" style="font-size: 4rem; color: var(--color-warning);"></i>
+                    </div>
+                    <h2 style="font-size: 1.8rem; margin-bottom: 10px; color: var(--text-primary);">Pago Recibido con Conflicto</h2>
+                    <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px;">
+                        Tu transferencia fue recibida correctamente por Khipu, pero el horario seleccionado fue reservado por otro usuario casi simultáneamente.
+                    </p>
+                    <p style="color: var(--text-primary); font-weight: 500; margin-bottom: 28px;">
+                        No te preocupes: tu dinero está resguardado. Por favor contáctanos para reasignar tu sesión al horario de tu preferencia o gestionar tu devolución inmediata.
+                    </p>
+                    <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
+                        <a href="https://wa.me/56952182998" target="_blank" rel="noopener" class="btn-primary" style="padding: 12px 24px; text-decoration: none; background: #25D366; border-color: #25D366; color: white;">
+                            <i class="fa-brands fa-whatsapp" style="margin-right: 8px;"></i>Contactar por WhatsApp
+                        </a>
+                        <a href="index.html" class="btn-secondary" style="padding: 12px 24px; text-decoration: none;">
+                            Volver al Inicio
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Timeout / Warning State -->
+                <div id="state-timeout" style="display: none;">
+                    <div style="margin-bottom: 20px;">
+                        <i class="fa-solid fa-clock-rotate-left" style="font-size: 3.5rem; color: var(--color-info);"></i>
+                    </div>
+                    <h2 style="font-size: 1.8rem; margin-bottom: 10px; color: var(--text-primary);">Pago en Proceso de Conciliación</h2>
+                    <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px;">
+                        Khipu aún está validando la transferencia con la entidad bancaria. Recibirás un correo electrónico de confirmación una vez verificado el pago.
+                    </p>
+                    <a href="index.html" class="btn-primary" style="padding: 12px 24px; text-decoration: none;">
+                        Volver al Inicio
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-info">
+                <img id="footer-logo" src="images/logo_light.png" alt="PsicArte Logo">
+                <p>Centro Integral PsicArte está orientado al acompañamiento terapéutico, el desarrollo de capacidades
+                    artísticas y corporales, y la promoción del autocuidado y la salud mental.</p>
+            </div>
+            <div class="footer-links">
+                <h4>Enlaces Rápidos</h4>
+                <ul>
+                    <li><a href="index.html#inicio">Inicio</a></li>
+                    <li><a href="nosotros.html">Nosotros</a></li>
+                    <li><a href="index.html#servicios">Servicios</a></li>
+                    <li><a href="index.html#calendario">Actividades</a></li>
+                    <li><a href="index.html#agendamiento">Reservar Hora</a></li>
+                </ul>
+            </div>
+            <div class="footer-contact">
+                <h4>Contacto</h4>
+                <p><i class="fa-solid fa-envelope" style="color: var(--color-gold);"></i> <span
+                        id="contact-email">contacto@psicarte.cl</span></p>
+                <p><i class="fa-solid fa-phone" style="color: var(--color-gold);"></i> <span
+                        id="contact-phone">+56961676706</span></p>
+                <p><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> Modalidad Online y
+                    Presencial</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; <span id="footer-year"></span> Centro Integral PsicArte. Todos los derechos reservados.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Theme management
+        function initTheme() {
+            const savedTheme = localStorage.getItem("psicarte_theme") || "light";
+            document.documentElement.setAttribute("data-theme", savedTheme);
+            updateThemeUI(savedTheme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute("data-theme");
+            const newTheme = currentTheme === "dark" ? "light" : "dark";
+            document.documentElement.setAttribute("data-theme", newTheme);
+            localStorage.setItem("psicarte_theme", newTheme);
+            updateThemeUI(newTheme);
+        }
+
+        function updateThemeUI(theme) {
+            const themeBtn = document.getElementById("theme-toggle");
+            const logoImg = document.getElementById("nav-logo");
+            const footerLogo = document.getElementById("footer-logo");
+
+            if (theme === "dark") {
+                themeBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
+                logoImg.src = "logo_dark.png";
+                if (footerLogo) footerLogo.src = "logo_dark.png";
+            } else {
+                themeBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
+                logoImg.src = "logo_light.png";
+                if (footerLogo) footerLogo.src = "logo_light.png";
+            }
+        }
+
+        document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
+
+        // Dynamic footer year
+        const yearEl = document.getElementById("footer-year");
+        if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+        // Payment status polling
+        const params = new URLSearchParams(window.location.search);
+        const bookingId = params.get("bookingId");
+
+        function showState(stateName) {
+            document.getElementById("state-loading").style.display = (stateName === "loading") ? "block" : "none";
+            document.getElementById("state-success").style.display = (stateName === "success") ? "block" : "none";
+            document.getElementById("state-conflict").style.display = (stateName === "conflict") ? "block" : "none";
+            document.getElementById("state-timeout").style.display = (stateName === "timeout") ? "block" : "none";
+        }
+
+        async function fetchBookingDetails(id) {
+            try {
+                const res = await fetch('/api/bookings');
+                if (!res.ok) return;
+                const bookings = await res.json();
+                const b = bookings.find(item => item.id === id);
+                if (b) {
+                    document.getElementById("summary-booking-id").textContent = b.id;
+                    document.getElementById("summary-service").textContent = b.serviceName || "Consulta";
+                    document.getElementById("summary-date").textContent = b.date || "-";
+                    document.getElementById("summary-time").textContent = `${b.startTime || ""} - ${b.endTime || ""}`;
+                    document.getElementById("summary-room").textContent = b.roomName || "Por confirmar";
+                    document.getElementById("summary-client").textContent = b.clientName || b.clientEmail || "-";
+                }
+            } catch (err) {
+                console.error("Error al obtener detalles:", err);
+            }
+        }
+
+        async function verifyPayment() {
+            if (!bookingId) {
+                showState("timeout");
+                return;
+            }
+
+            const maxAttempts = 15;
+            const intervalMs = 2000;
+
+            for (let i = 0; i < maxAttempts; i++) {
+                try {
+                    const res = await fetch(`/api/bookings/${bookingId}/payment-status`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.status === 'Paid') {
+                            await fetchBookingDetails(bookingId);
+                            showState("success");
+                            return;
+                        } else if (data.status === 'Payment_Conflict') {
+                            showState("conflict");
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    // Retrying
+                }
+                await new Promise(r => setTimeout(r, intervalMs));
+            }
+
+            showState("timeout");
+        }
+
+        initTheme();
+        verifyPayment();
+    </script>
+</body>
+
+</html>
+

@@ -6,14 +6,14 @@ function goToDashboard() {
         window.location.href = 'acceso.html';
         return;
     }
-    
+
     // If on acceso.html, show dashboard view
     const isAccesoPage = window.location.pathname.includes('acceso.html');
     if (isAccesoPage) {
         showDashboardView();
         return;
     }
-    
+
     // Otherwise redirect to acceso.html
     window.location.href = 'acceso.html';
 }
@@ -21,18 +21,18 @@ function goToDashboard() {
 function showDashboardView() {
     const loginView = document.getElementById("login-view");
     const dashboardView = document.getElementById("dashboard-view");
-    
+
     if (loginView) loginView.style.display = "none";
     if (dashboardView) {
         dashboardView.style.display = "block";
         renderSidebarMenu();
         renderDashboardPanes();
-        
+
         // Populate room selects for admin forms
         if (typeof populateRoomSelects === 'function') {
             populateRoomSelects();
         }
-        
+
         const firstTab = document.querySelector(".sidebar-btn");
         if (firstTab) firstTab.click();
     }
@@ -42,7 +42,7 @@ function renderSidebarMenu() {
     const menuList = document.getElementById("sidebar-menu-list");
     if (!menuList) return;
     menuList.innerHTML = "";
-    
+
     if (state.currentUser.role === "usuario") {
         menuList.innerHTML = `
             <li><button class="sidebar-btn active" onclick="switchDashboardPane('client-bookings', this)"><i class="fa-solid fa-calendar-days"></i> Mis Reservas</button></li>
@@ -75,10 +75,10 @@ function renderSidebarMenu() {
 function switchDashboardPane(paneId, btn) {
     document.querySelectorAll(".sidebar-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
-    
+
     document.querySelectorAll(".dashboard-pane").forEach(p => p.classList.remove("active"));
     document.getElementById(`pane-${paneId}`).classList.add("active");
-    
+
     if (paneId === 'admin-room-schedule') {
         setTimeout(() => renderRoomSchedule(), 100);
     }
@@ -87,13 +87,13 @@ function switchDashboardPane(paneId, btn) {
 function renderDashboardPanes() {
     if (!state.currentUser) return;
     const role = state.currentUser.role;
-    
+
     if (role === "usuario") {
         const bookingsList = document.getElementById("client-bookings-list");
         if (!bookingsList) return;
-        
+
         const clientBookings = state.bookings.filter(b => b.clientEmail === state.currentUser.email);
-        
+
         if (clientBookings.length === 0) {
             bookingsList.innerHTML = '<p style="color: var(--text-secondary);">No tienes agendamientos registrados.</p>';
         } else {
@@ -101,23 +101,23 @@ function renderDashboardPanes() {
             clientBookings.forEach(bk => {
                 const isPaidBadge = bk.status === "Paid" ? '<span class="badge badge-paid">Pagado</span>' : (bk.status === "Pending_Payment" ? '<span class="badge badge-warning">Procesando Pago</span>' : '<span class="badge badge-pending">Pendiente</span>');
                 const isCancelled = bk.status === "Cancelled";
-                
+
                 let cancelBtn = "";
                 let rescheduleBtn = "";
                 if (!isCancelled) {
                     const todayStr = new Date().toISOString().split('T')[0];
                     if (bk.date >= todayStr) {
                         cancelBtn = `<button class="btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" onclick="cancelBooking('${bk.id}')"><i class="fa-solid fa-ban"></i> Cancelar</button>`;
-                        
+
                         // Find the service for this booking
                         const provider = state.providers.find(p => p.id === bk.providerId);
                         const service = provider?.services.find(s => s.id === bk.serviceId);
-                        
+
                         // Check if reschedule is allowed for this service
                         const serviceAllowsReschedule = service ? service.allowReschedule !== 0 : true;
                         const maxReschedules = service ? (service.maxReschedules || 1) : parseInt(state.config?.max_reschedules || '1', 10);
                         const rescheduleCount = bk.rescheduleCount || 0;
-                        
+
                         if (bk.status === 'Paid' && serviceAllowsReschedule && rescheduleCount < maxReschedules) {
                             rescheduleBtn = `<button class="btn-primary" style="padding: 6px 12px; font-size: 0.85rem; margin-left: 5px;" onclick="openRescheduleModal('${bk.id}')"><i class="fa-solid fa-calendar-check"></i> Reagendar</button>`;
                         }
@@ -125,7 +125,7 @@ function renderDashboardPanes() {
                 } else {
                     cancelBtn = '<span class="badge badge-cancelled">Cancelado</span>';
                 }
-                
+
                 bookingsList.innerHTML += `
                     <div class="booking-list-item">
                         <div class="booking-list-info">
@@ -144,13 +144,13 @@ function renderDashboardPanes() {
             });
         }
     }
-    
+
     if (role === "prestador") {
         const tbody = document.getElementById("provider-bookings-table");
         if (!tbody) return;
-        
+
         const provBookings = state.bookings.filter(b => b.providerId === state.currentUser.id);
-        
+
         if (provBookings.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">No tienes reservas en tu agenda.</td></tr>';
         } else {
@@ -171,11 +171,11 @@ function renderDashboardPanes() {
                 `;
             });
         }
-        
+
         const blockList = document.getElementById("provider-blocks-list");
         if (blockList) {
             const blocks = state.sicknessBlocks.filter(b => b.providerId === state.currentUser.id);
-            
+
             if (blocks.length === 0) {
                 blockList.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">No tienes bloqueos de agenda.</td></tr>';
             } else {
@@ -193,7 +193,7 @@ function renderDashboardPanes() {
             }
         }
     }
-    
+
     if (role === "administrador") {
         const roomsList = document.getElementById("admin-rooms-list");
         if (roomsList) {
@@ -212,7 +212,7 @@ function renderDashboardPanes() {
                 `;
             });
         }
-        
+
         const provServicesList = document.getElementById("admin-providers-services-list");
         if (!provServicesList) {
             const dropdowns = [
@@ -225,19 +225,19 @@ function renderDashboardPanes() {
                     if (dd) dd.innerHTML += `<option value="${p.id}">${p.name}</option>`;
                 });
             });
-            
+
             // Also populate room select for services
             populateRoomSelects();
         }
-        
+
         renderProvidersServicesTable();
-        
+
         // Ensure room select is populated for service form
         const servRoomSelect = document.getElementById("adm-serv-room");
         if (servRoomSelect && servRoomSelect.options.length <= 1) {
             populateRoomSelects();
         }
-        
+
         const adminBlocksList = document.getElementById("admin-blocks-list");
         if (adminBlocksList) {
             if (state.sicknessBlocks.length === 0) {
@@ -258,7 +258,7 @@ function renderDashboardPanes() {
                 });
             }
         }
-        
+
         const adminActivitiesTable = document.getElementById("admin-activities-table");
         if (adminActivitiesTable) {
             adminActivitiesTable.innerHTML = "";
@@ -266,12 +266,12 @@ function renderDashboardPanes() {
                 const capacity = act.capacity || 0;
                 const enrolled = act.enrolledCount || 0;
                 const capacityInfo = capacity > 0 ? `${enrolled}/${capacity}` : 'Sin límite';
-                
+
                 let enrollmentsBtn = '';
                 if (capacity > 0) {
                     enrollmentsBtn = `<button class="btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="openAdminEnrollmentsModal('${act.id}', '${act.title.replace(/'/g, "\\'")}')"><i class="fa-solid fa-users"></i> Ver Inscritos</button>`;
                 }
-                
+
                 adminActivitiesTable.innerHTML += `
                     <tr>
                         <td><strong>${act.date}</strong></td>
@@ -285,7 +285,7 @@ function renderDashboardPanes() {
                 `;
             });
         }
-        
+
         const popupActive = document.getElementById("popup-active");
         const popupConfigTitle = document.getElementById("popup-config-title");
         const popupConfigText = document.getElementById("popup-config-text");
@@ -293,20 +293,20 @@ function renderDashboardPanes() {
         const bannerConfigText = document.getElementById("banner-config-text");
         const whatsappActive = document.getElementById("whatsapp-active");
         const whatsappNumber = document.getElementById("whatsapp-number");
-        
+
         if (popupActive) popupActive.checked = state.popupConfig.active;
         if (popupConfigTitle) popupConfigTitle.value = state.popupConfig.title;
         if (popupConfigText) popupConfigText.value = state.popupConfig.text;
-        
+
         if (bannerActive) bannerActive.checked = state.bannerConfig.active;
         if (bannerConfigText) bannerConfigText.value = state.bannerConfig.text;
-        
+
         if (whatsappActive) whatsappActive.checked = state.whatsappConfig.enabled;
         if (whatsappNumber) whatsappNumber.value = state.whatsappConfig.number;
-        
+
         const maxReschedulesInput = document.getElementById("max-reschedules-input");
         if (maxReschedulesInput) maxReschedulesInput.value = state.config?.max_reschedules || '1';
-        
+
         renderAdminBookings();
         renderAdminKhipuNotifications();
         renderAdminMyBookings();
@@ -339,14 +339,14 @@ async function saveClientProfile(e) {
     const name = document.getElementById("profile-name").value;
     const rut = document.getElementById("profile-rut").value;
     const phone = document.getElementById("profile-phone").value;
-    
+
     try {
         const res = await fetch('/api/clients', {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({ email: state.currentUser.email, name, rut, phone })
         });
-        
+
         if (res.ok) {
             state.currentUser.name = name;
             sessionStorage.setItem("psicarte_user", JSON.stringify(state.currentUser));
@@ -365,7 +365,7 @@ async function addProviderBlock(e) {
     const date = document.getElementById("block-date").value;
     const time = document.getElementById("block-time").value;
     const reason = document.getElementById("block-reason").value;
-    
+
     const newBlock = {
         id: "sb-" + Date.now(),
         providerId: state.currentUser.id,
@@ -373,7 +373,7 @@ async function addProviderBlock(e) {
         timeSlot: time,
         reason: reason
     };
-    
+
     try {
         const res = await fetch('/api/blocks', {
             method: 'POST',
@@ -398,7 +398,7 @@ async function addAdminBlock(e) {
     const date = document.getElementById("adm-block-date").value;
     const time = document.getElementById("adm-block-time").value;
     const reason = document.getElementById("adm-block-reason").value;
-    
+
     const newBlock = {
         id: "sb-" + Date.now(),
         providerId: provId,
@@ -406,7 +406,7 @@ async function addAdminBlock(e) {
         timeSlot: time,
         reason: reason
     };
-    
+
     try {
         const res = await fetch('/api/blocks', {
             method: 'POST',
@@ -427,7 +427,7 @@ async function addAdminBlock(e) {
 
 async function deleteBlock(id) {
     try {
-        const res = await fetch(`/api/blocks/${id}`, { 
+        const res = await fetch(`/api/blocks/${id}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
@@ -451,7 +451,7 @@ async function saveRoom(e) {
     const type = document.getElementById("room-type").value;
     const open = document.getElementById("room-open").value;
     const close = document.getElementById("room-close").value;
-    
+
     const roomPayload = {
         id: editingRoomId || ("room-" + Date.now()),
         name,
@@ -459,7 +459,7 @@ async function saveRoom(e) {
         openTime: open,
         closeTime: close
     };
-    
+
     try {
         const res = await fetch('/api/rooms', {
             method: 'POST',
@@ -494,7 +494,7 @@ function editRoom(id) {
 async function deleteRoom(id) {
     if (confirm("¿Estás seguro de eliminar esta sala?")) {
         try {
-            const res = await fetch(`/api/rooms/${id}`, { 
+            const res = await fetch(`/api/rooms/${id}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
@@ -513,7 +513,7 @@ async function deleteRoom(id) {
 async function deleteProvider(id) {
     if (confirm("¿Estás seguro de eliminar este prestador? Se eliminarán todos sus servicios asociados.")) {
         try {
-            const res = await fetch(`/api/providers/${id}`, { 
+            const res = await fetch(`/api/providers/${id}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
@@ -738,16 +738,16 @@ async function addService(e) {
     const recurrenceEndDate = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-end-date").value || null : singleDate;
     const allowReschedule = document.getElementById("adm-serv-allow-reschedule").checked;
     const maxReschedules = Number(document.getElementById("adm-serv-max-reschedules").value) || 1;
-    
+
     try {
         const res = await fetch('/api/services', {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ 
-                id: "serv-" + Date.now(), providerId: provId, name, price, duration, 
+            body: JSON.stringify({
+                id: "serv-" + Date.now(), providerId: provId, name, price, duration,
                 type: serviceType, roomId, recurrence, recurrenceDay,
                 recurrenceStartTime, recurrenceEndTime, recurrenceStartDate, recurrenceEndDate,
-                allowReschedule, maxReschedules 
+                allowReschedule, maxReschedules
             })
         });
         const result = await res.json();
@@ -770,7 +770,7 @@ async function addService(e) {
 
 async function deleteService(provId, servId) {
     try {
-        const res = await fetch(`/api/services/${servId}`, { 
+        const res = await fetch(`/api/services/${servId}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
@@ -794,7 +794,7 @@ async function generateServiceSpots(serviceId) {
             headers: getAuthHeaders()
         });
         const result = await res.json();
-        
+
         if (res.ok) {
             showToast("Spots generados correctamente.", "success");
             await loadAllData();
@@ -816,7 +816,7 @@ async function generateAllSpots() {
             headers: getAuthHeaders()
         });
         const result = await res.json();
-        
+
         if (res.ok) {
             showToast(result.message || "Spots generados.", "success");
             await loadAllData();
@@ -838,7 +838,7 @@ async function savePopupConfig(e) {
         popup_title: document.getElementById("popup-config-title").value,
         popup_text: document.getElementById("popup-config-text").value
     };
-    
+
     try {
         const res = await fetch('/api/config', {
             method: 'POST',
@@ -861,7 +861,7 @@ async function saveBannerConfig(e) {
         banner_active: document.getElementById('banner-active').checked,
         banner_text: document.getElementById('banner-config-text').value
     };
-    
+
     try {
         const res = await fetch('/api/config', {
             method: 'POST',
@@ -884,7 +884,7 @@ async function saveWhatsAppConfig(e) {
         whatsapp_enabled: document.getElementById('whatsapp-active').checked,
         whatsapp_number: document.getElementById('whatsapp-number').value.replace(/\D/g, '')
     };
-    
+
     try {
         const res = await fetch('/api/config', {
             method: 'POST',
@@ -906,7 +906,7 @@ async function saveMaxReschedulesConfig(e) {
     const payload = {
         max_reschedules: document.getElementById('max-reschedules-input').value
     };
-    
+
     try {
         const res = await fetch('/api/config', {
             method: 'POST',
@@ -936,7 +936,7 @@ async function saveContentCustomizations(e) {
         contactEmail: document.getElementById("custom-contact-email").value,
         contactPhone: document.getElementById("custom-contact-phone").value
     };
-    
+
     try {
         const res = await fetch('/api/content', {
             method: 'POST',
@@ -960,29 +960,29 @@ async function saveContentCustomizations(e) {
 function getFilteredAdminBookings() {
     const provFilter = document.getElementById("adm-booking-provider-filter");
     const searchInput = document.getElementById("adm-booking-search");
-    
+
     if (provFilter && provFilter.options.length <= 1) {
         state.providers.forEach(p => {
             provFilter.innerHTML += `<option value="${p.id}">${p.name}</option>`;
         });
     }
-    
+
     const filterProv = provFilter ? provFilter.value : 'all';
     const searchQuery = searchInput ? stripAccents(searchInput.value.toLowerCase().trim()) : '';
-    
+
     let filtered = [...state.bookings];
     if (filterProv !== 'all') {
         filtered = filtered.filter(b => b.providerId === filterProv);
     }
     if (searchQuery) {
-        filtered = filtered.filter(b => 
+        filtered = filtered.filter(b =>
             stripAccents((b.clientName || '').toLowerCase()).includes(searchQuery) ||
             stripAccents((b.clientEmail || '').toLowerCase()).includes(searchQuery) ||
             stripAccents((b.serviceName || '').toLowerCase()).includes(searchQuery) ||
             stripAccents((b.roomName || '').toLowerCase()).includes(searchQuery)
         );
     }
-    
+
     const { key, dir } = adminBookingsSort;
     filtered.sort((a, b) => {
         let va = a[key] || '', vb = b[key] || '';
@@ -995,7 +995,7 @@ function getFilteredAdminBookings() {
         if (va > vb) return dir === 'asc' ? 1 : -1;
         return 0;
     });
-    
+
     return filtered;
 }
 
@@ -1003,15 +1003,15 @@ function renderAdminBookings() {
     const tbody = document.getElementById("admin-bookings-table");
     const paginationEl = document.getElementById("adm-bookings-pagination");
     if (!tbody) return;
-    
+
     const filtered = getFilteredAdminBookings();
-    
+
     const total = filtered.length;
     const totalPages = Math.max(1, Math.ceil(total / ADMIN_BOOKINGS_PER_PAGE));
     if (adminBookingsPage > totalPages) adminBookingsPage = totalPages;
     const start = (adminBookingsPage - 1) * ADMIN_BOOKINGS_PER_PAGE;
     const pageRows = filtered.slice(start, start + ADMIN_BOOKINGS_PER_PAGE);
-    
+
     if (pageRows.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);">No hay reservas registradas.</td></tr>';
     } else {
@@ -1019,14 +1019,14 @@ function renderAdminBookings() {
         pageRows.forEach(bk => {
             const provName = state.providers.find(p => p.id === bk.providerId)?.name || 'Prestador';
             const isCancelled = bk.status === 'Cancelled';
-            const statusBadge = isCancelled 
-                ? '<span class="badge badge-cancelled">Cancelada</span>' 
+            const statusBadge = isCancelled
+                ? '<span class="badge badge-cancelled">Cancelada</span>'
                 : bk.status === 'Paid' ? '<span class="badge badge-paid">Pagada</span>' : (bk.status === 'Pending_Payment' ? '<span class="badge badge-warning">Procesando Pago</span>' : '<span class="badge badge-pending">Pendiente</span>');
-            
-            const actionBtns = isCancelled 
+
+            const actionBtns = isCancelled
                 ? `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="purgeBooking('${bk.id}')"><i class="fa-solid fa-trash"></i> Eliminar</button>`
                 : `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="cancelBooking('${bk.id}')"><i class="fa-solid fa-ban"></i></button>`;
-            
+
             tbody.innerHTML += `
                 <tr>
                     <td><strong>${bk.date}</strong><br>${bk.timeSlot}</td>
@@ -1040,7 +1040,7 @@ function renderAdminBookings() {
             `;
         });
     }
-    
+
     if (paginationEl) {
         const showing = total === 0 ? 0 : start + 1;
         const showingEnd = Math.min(start + ADMIN_BOOKINGS_PER_PAGE, total);
@@ -1143,60 +1143,60 @@ function editService(provId, servId) {
     if (!provider) return;
     const service = provider.services.find(s => s.id === servId);
     if (!service) return;
-    
+
     editingServiceId = servId;
-    
+
     document.getElementById("adm-serv-provider").value = provId;
     document.getElementById("adm-serv-name").value = service.name;
     document.getElementById("adm-serv-price").value = service.price;
     document.getElementById("adm-serv-duration").value = service.duration;
-    
+
     // Set room
     const roomSelect = document.getElementById("adm-serv-room");
     if (roomSelect) roomSelect.value = service.roomId || '';
-    
+
     // Set recurrence
     const recurrence = service.recurrence || 'single';
     const recurrenceRadio = document.querySelector(`input[name="adm-serv-recurrence"][value="${recurrence}"]`);
     if (recurrenceRadio) recurrenceRadio.checked = true;
-    
+
     const singleDateConfig = document.getElementById("single-date-config");
     const recurrenceConfig = document.getElementById("recurrence-config");
-    
+
     if (singleDateConfig) {
         singleDateConfig.style.display = recurrence === 'single' ? 'block' : 'none';
     }
     if (recurrenceConfig) {
         recurrenceConfig.style.display = recurrence === 'weekly' ? 'block' : 'none';
     }
-    
+
     // Set single date
     const singleDateInput = document.getElementById("adm-serv-single-date");
     if (singleDateInput && recurrence === 'single') {
         singleDateInput.value = service.recurrenceStartDate || '';
     }
-    
+
     if (recurrence === 'weekly') {
         const daySelect = document.getElementById("adm-serv-recurrence-day");
         const startInput = document.getElementById("adm-serv-recurrence-start");
         const endInput = document.getElementById("adm-serv-recurrence-end");
         const startDateInput = document.getElementById("adm-serv-recurrence-start-date");
         const endDateInput = document.getElementById("adm-serv-recurrence-end-date");
-        
+
         if (daySelect) daySelect.value = service.recurrenceDay || 1;
         if (startInput) startInput.value = service.recurrenceStartTime || '09:00';
         if (endInput) endInput.value = service.recurrenceEndTime || '12:00';
         if (startDateInput) startDateInput.value = service.recurrenceStartDate || '';
         if (endDateInput) endDateInput.value = service.recurrenceEndDate || '';
     }
-    
+
     document.getElementById("adm-serv-allow-reschedule").checked = service.allowReschedule !== 0;
     document.getElementById("adm-serv-max-reschedules").value = service.maxReschedules || 1;
     document.getElementById("adm-serv-max-reschedules-container").style.display = service.allowReschedule !== 0 ? "block" : "none";
-    
+
     const submitBtn = document.querySelector("#admin-service-form button[type='submit']");
     if (submitBtn) submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> Guardar Cambios';
-    
+
     document.getElementById("pane-admin-providers").scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -1223,29 +1223,18 @@ function renderAdminKhipuNotifications() {
         let typeBadge;
         let summaryText;
 
-        if (notif.type === "payment_1.3") {
-            typeBadge = '<span class="badge badge-paid">Pago (API 1.3)</span>';
+        if (notif.type === "payment_3.0" || notif.type === "payment_1.3") {
+            typeBadge = `<span class="badge badge-paid">${notif.type === "payment_3.0" ? "Pago (API 3.0)" : "Pago (API 1.3)"}</span>`;
             try {
                 const bodyObj = JSON.parse(notif.body);
-                summaryText = `Token: <code>${bodyObj.notification_token || "N/A"}</code>`;
+                if (notif.type === "payment_3.0") {
+                    const amtStr = bodyObj.amount != null ? '$' + Number(bodyObj.amount).toLocaleString('es-CL') : 'N/A';
+                    summaryText = `ID: <code>${bodyObj.payment_id || "N/A"}</code> | Reserva: <code>${bodyObj.transaction_id || "N/A"}</code> | Monto: ${amtStr}`;
+                } else {
+                    summaryText = `Token: <code>${bodyObj.notification_token || "N/A"}</code>`;
+                }
             } catch (e) {
                 summaryText = "Detalles del pago no disponibles";
-            }
-        } else if (notif.type === "rendition_drn_2.0") {
-            typeBadge = '<span class="badge badge-info">Rendición (DRN-2.0)</span>';
-            try {
-                const bodyObj = JSON.parse(notif.body);
-                summaryText = `Reporte ID: <code>${bodyObj.report_id || "N/A"}</code> | Estado: ${bodyObj.status || "N/A"}`;
-            } catch (e) {
-                summaryText = "Detalles del reporte DRN no disponibles";
-            }
-        } else if (notif.type === "transaction_dtn_1.0") {
-            typeBadge = '<span class="badge badge-pending">Transacciones (DTN-1.0)</span>';
-            try {
-                const bodyObj = JSON.parse(notif.body);
-                summaryText = `Reporte ID: <code>${bodyObj.report_id || "N/A"}</code>`;
-            } catch (e) {
-                summaryText = "Detalles del reporte DTN no disponibles";
             }
         } else {
             typeBadge = `<span class="badge badge-secondary">${notif.type}</span>`;
@@ -1254,8 +1243,8 @@ function renderAdminKhipuNotifications() {
 
         // Format Date/Time nicely
         const dateObj = new Date(notif.received_at);
-        const formattedDate = isNaN(dateObj.getTime()) 
-            ? notif.received_at 
+        const formattedDate = isNaN(dateObj.getTime())
+            ? notif.received_at
             : dateObj.toLocaleString("es-CL", { dateStyle: "short", timeStyle: "medium" });
 
         // Pretty print JSON structures
@@ -1264,17 +1253,17 @@ function renderAdminKhipuNotifications() {
         let prettyBody;
         try {
             prettyHeaders = JSON.stringify(JSON.parse(notif.headers || "{}"), null, 2);
-        } catch(e) {
+        } catch (e) {
             prettyHeaders = String(notif.headers || "{}");
         }
         try {
             prettyQuery = JSON.stringify(JSON.parse(notif.query_params || "{}"), null, 2);
-        } catch(e) {
+        } catch (e) {
             prettyQuery = String(notif.query_params || "{}");
         }
         try {
             prettyBody = JSON.stringify(JSON.parse(notif.body || "{}"), null, 2);
-        } catch(e) {
+        } catch (e) {
             prettyBody = String(notif.body || "{}");
         }
 
@@ -1335,10 +1324,10 @@ function renderAdminMyBookings() {
 
     myBookings.forEach(bk => {
         const provName = state.providers.find(p => p.id === bk.providerId)?.name || 'Prestador';
-        const statusBadge = bk.status === 'Paid' 
-            ? '<span class="badge badge-paid">Pagada</span>' 
-            : bk.status === 'Cancelled' 
-                ? '<span class="badge badge-cancelled">Cancelada</span>' 
+        const statusBadge = bk.status === 'Paid'
+            ? '<span class="badge badge-paid">Pagada</span>'
+            : bk.status === 'Cancelled'
+                ? '<span class="badge badge-cancelled">Cancelada</span>'
                 : '<span class="badge badge-warning">Pendiente</span>';
 
         tbody.innerHTML += `
@@ -1358,7 +1347,7 @@ function renderAdminMyProfile() {
     const nameInput = document.getElementById("adm-profile-name");
     const emailInput = document.getElementById("adm-profile-email");
     const roleInput = document.getElementById("adm-profile-role");
-    
+
     if (nameInput) nameInput.value = state.currentUser.name || '';
     if (emailInput) emailInput.value = state.currentUser.email || '';
     if (roleInput) roleInput.value = state.currentUser.role || '';
@@ -1368,7 +1357,7 @@ async function saveAdminProfile(e) {
     e.preventDefault();
     const name = document.getElementById("adm-profile-name").value;
     const email = document.getElementById("adm-profile-email").value;
-    
+
     try {
         const res = await fetch(`/api/users/${state.currentUser.id}`, {
             method: 'PUT',
@@ -1400,7 +1389,7 @@ function toggleAdminUserFields() {
     const fields = document.getElementById("adm-user-client-fields");
     const rutInput = document.getElementById("adm-user-rut");
     const phoneInput = document.getElementById("adm-user-phone");
-    
+
     if (fields) {
         if (role === 'usuario') {
             fields.style.display = 'block';
@@ -1425,7 +1414,7 @@ async function renderAdminUsers() {
 
     let filtered = [...users];
     if (searchQuery) {
-        filtered = filtered.filter(u => 
+        filtered = filtered.filter(u =>
             (u.name && u.name.toLowerCase().includes(searchQuery)) ||
             (u.email && u.email.toLowerCase().includes(searchQuery))
         );
@@ -1441,12 +1430,12 @@ async function renderAdminUsers() {
     tbody.innerHTML = "";
     filtered.forEach(u => {
         const createdDate = u.created_at ? new Date(u.created_at).toLocaleDateString('es-CL') : '-';
-        const roleBadge = u.role === 'administrador' 
-            ? '<span class="badge badge-paid">administrador</span>' 
+        const roleBadge = u.role === 'administrador'
+            ? '<span class="badge badge-paid">administrador</span>'
             : u.role === 'prestador'
                 ? '<span class="badge badge-info">prestador</span>'
                 : '<span class="badge badge-success">cliente</span>';
-                
+
         tbody.innerHTML += `
             <tr>
                 <td>${u.name}</td>
@@ -1468,19 +1457,19 @@ function editAdminUser(id) {
     getUsers().then(users => {
         const user = users.find(u => u.id === id);
         if (!user) return;
-        
+
         editingUserId = id;
         document.getElementById("adm-user-editing-id").value = id;
         document.getElementById("adm-user-name").value = user.name || '';
         document.getElementById("adm-user-email").value = user.email || '';
         document.getElementById("adm-user-role").value = user.role || 'usuario';
         document.getElementById("adm-user-password").value = '';
-        
+
         const rutInput = document.getElementById("adm-user-rut");
         const phoneInput = document.getElementById("adm-user-phone");
         if (rutInput) rutInput.value = user.rut || '';
         if (phoneInput) phoneInput.value = user.phone || '';
-        
+
         document.getElementById("admin-user-form-title").innerText = "Editar Usuario";
         toggleAdminUserFields();
     });
@@ -1501,7 +1490,7 @@ async function saveAdminUser(e) {
     const email = document.getElementById("adm-user-email").value;
     const role = document.getElementById("adm-user-role").value;
     const password = document.getElementById("adm-user-password").value;
-    
+
     const rut = document.getElementById("adm-user-rut") ? document.getElementById("adm-user-rut").value : '';
     const phone = document.getElementById("adm-user-phone") ? document.getElementById("adm-user-phone").value : '';
 
@@ -1553,7 +1542,7 @@ async function renderAdminConfigRaw() {
     const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
 
     const entries = Object.entries(config);
-    const filtered = searchQuery 
+    const filtered = searchQuery
         ? entries.filter(([key]) => key.toLowerCase().includes(searchQuery))
         : entries;
 
@@ -1624,9 +1613,9 @@ function cancelInlineConfig() {
 async function saveInlineConfig(key) {
     const inputEl = document.getElementById(`inline-config-val-${key}`);
     if (!inputEl) return;
-    
+
     const val = inputEl.value.trim();
-    
+
     // Validation
     if (key === 'popup_active' || key === 'banner_active' || key === 'whatsapp_enabled') {
         if (val !== 'true' && val !== 'false') {
@@ -1645,14 +1634,14 @@ async function saveInlineConfig(key) {
             return;
         }
     }
-    
+
     try {
         await saveConfig({ [key]: val });
         showToast("Configuración guardada correctamente.", "success");
         editingConfigKey = null;
         await loadAllData();
         renderAdminConfigRaw();
-        
+
         // Refresh dependent elements/views
         if (key.startsWith('popup_') || key.startsWith('banner_')) {
             if (typeof checkPopups === 'function') checkPopups();
@@ -1697,7 +1686,7 @@ function toggleRecurrenceConfig() {
     const recurrence = document.querySelector('input[name="adm-serv-recurrence"]:checked').value;
     const singleDateConfig = document.getElementById('single-date-config');
     const recurrenceConfig = document.getElementById('recurrence-config');
-    
+
     if (singleDateConfig) {
         singleDateConfig.style.display = recurrence === 'single' ? 'block' : 'none';
     }
@@ -1715,11 +1704,11 @@ function populateRoomSelects() {
         }
         mainSelect.value = roomScheduleState.selectedRoomId;
     }
-    
+
     // Also populate the service form room select
     const servRoomSelect = document.getElementById('adm-serv-room');
     if (servRoomSelect) {
-        servRoomSelect.innerHTML = '<option value="">Cualquier sala disponible</option>' + 
+        servRoomSelect.innerHTML = '<option value="">Cualquier sala disponible</option>' +
             state.rooms.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
     }
 }
@@ -1777,7 +1766,7 @@ function goToTodayRoomSchedule() {
 function getRoomScheduleDateRange() {
     const d = roomScheduleState.currentDate;
     let start, end;
-    
+
     if (roomScheduleState.view === 'day') {
         start = end = formatDate(d);
     } else if (roomScheduleState.view === 'week') {
@@ -1792,7 +1781,7 @@ function getRoomScheduleDateRange() {
         start = formatDate(new Date(d.getFullYear(), d.getMonth(), 1));
         end = formatDate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
     }
-    
+
     return { start, end };
 }
 
@@ -1806,7 +1795,7 @@ function formatDate(date) {
 function formatDateLabel() {
     const d = roomScheduleState.currentDate;
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    
+
     if (roomScheduleState.view === 'day') {
         return d.toLocaleDateString('es-CL', options);
     } else if (roomScheduleState.view === 'week') {
@@ -1823,15 +1812,15 @@ function formatDateLabel() {
 
 async function renderRoomSchedule() {
     populateRoomSelects();
-    
+
     const label = document.getElementById('room-schedule-date-label');
     if (label) label.textContent = formatDateLabel();
-    
+
     const container = document.getElementById('room-schedule-content');
     if (!container) return;
-    
+
     const { start, end } = getRoomScheduleDateRange();
-    
+
     try {
         const res = await fetch(`/api/rooms/schedule/all?start=${start}&end=${end}`, { headers: getAuthHeaders() });
         if (!res.ok) throw new Error('Error loading schedule');
@@ -1840,7 +1829,7 @@ async function renderRoomSchedule() {
         container.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">Error al cargar la agenda.</p>';
         return;
     }
-    
+
     if (roomScheduleState.dualMode) {
         renderDualRoomView(container);
     } else {
@@ -1855,7 +1844,7 @@ function renderSingleRoomView(container) {
         container.innerHTML = '<p style="color: var(--text-secondary);">Selecciona una sala.</p>';
         return;
     }
-    
+
     const html = `
         <div class="room-schedule-single">
             <h4 style="margin-bottom: 10px;"><i class="fa-solid fa-building"></i> ${room.name} <small style="color: var(--text-secondary);">(${room.openTime} - ${room.closeTime})</small></h4>
@@ -1864,7 +1853,7 @@ function renderSingleRoomView(container) {
             </div>
         </div>
     `;
-    
+
     container.innerHTML = html;
     initDragAndDrop();
 }
@@ -1873,10 +1862,10 @@ function renderDualRoomView(container) {
     const room1Id = roomScheduleState.selectedRoomId;
     const room2Id = roomScheduleState.secondRoomId || state.rooms.find(r => r.id !== room1Id)?.id || room1Id;
     roomScheduleState.secondRoomId = room2Id;
-    
+
     const room1 = state.rooms.find(r => r.id === room1Id);
     const room2 = state.rooms.find(r => r.id === room2Id);
-    
+
     const html = `
         <div class="dual-room-container">
             <div class="dual-room-panel">
@@ -1904,7 +1893,7 @@ function renderDualRoomView(container) {
             </div>
         </div>
     `;
-    
+
     container.innerHTML = html;
     initDragAndDrop();
 }
@@ -1921,7 +1910,7 @@ function changeDualRoom(panel, roomId) {
 function renderScheduleGrid(roomId, room) {
     const data = roomScheduleState.roomScheduleData;
     const { start, end } = getRoomScheduleDateRange();
-    
+
     // Get dates to render
     let dates = [];
     if (roomScheduleState.view === 'day') {
@@ -1942,7 +1931,7 @@ function renderScheduleGrid(roomId, room) {
             current.setDate(current.getDate() + 1);
         }
     }
-    
+
     // Generate time slots from room open to close
     const openMin = timeToMinutes(room.openTime);
     const closeMin = timeToMinutes(room.closeTime);
@@ -1950,15 +1939,15 @@ function renderScheduleGrid(roomId, room) {
     for (let m = openMin; m < closeMin; m += 30) {
         timeSlots.push(minutesToTime(m));
     }
-    
+
     // Get bookings and spots for this room
     const roomBookings = data.bookings.filter(b => b.roomId === roomId && b.status === 'Paid');
     const roomSpots = data.spots.filter(s => s.roomId === roomId);
-    
+
     // Calculate grid columns: 1 time column + N date columns
     const totalCols = 1 + dates.length;
     const gridTemplate = `70px repeat(${dates.length}, minmax(120px, 1fr))`;
-    
+
     let html = `<div class="schedule-grid-header" style="display: grid; grid-template-columns: ${gridTemplate};"><div class="time-col">Hora</div>`;
     dates.forEach(d => {
         const dateObj = new Date(d + 'T00:00:00');
@@ -1966,7 +1955,7 @@ function renderScheduleGrid(roomId, room) {
         html += `<div class="date-col">${dayName}</div>`;
     });
     html += '</div>';
-    
+
     html += `<div class="schedule-grid-body" style="display: grid; grid-template-columns: ${gridTemplate};">`;
     timeSlots.forEach(time => {
         html += `<div class="time-slot">${time}</div>`;
@@ -1977,16 +1966,16 @@ function renderScheduleGrid(roomId, room) {
                 const bSlot = timeToMinutes(time);
                 return bStart === bSlot;
             });
-            
+
             const cellSpots = roomSpots.filter(s => {
                 if (s.date !== date) return false;
                 const sStart = timeToMinutes(s.startTime);
                 const sSlot = timeToMinutes(time);
                 return sStart === sSlot;
             });
-            
+
             html += `<div class="schedule-cell" data-room-id="${roomId}" data-date="${date}" data-time="${time}" ondragover="handleCellDragOver(event)" ondrop="handleCellDrop(event)">`;
-            
+
             cellBookings.forEach(bk => {
                 const duration = bk.duration || bk.serviceDuration || 50;
                 const heightSlots = Math.ceil(duration / 30);
@@ -2009,7 +1998,7 @@ function renderScheduleGrid(roomId, room) {
                     </div>
                 `;
             });
-            
+
             cellSpots.forEach(spot => {
                 if (spot.status === 'available') {
                     html += `
@@ -2019,12 +2008,12 @@ function renderScheduleGrid(roomId, room) {
                     `;
                 }
             });
-            
+
             html += '</div>';
         });
     });
     html += '</div>';
-    
+
     return html;
 }
 
@@ -2038,7 +2027,7 @@ function initDragAndDrop() {
 function handleBookingDragStart(e) {
     const el = e.target.closest('.booking-draggable');
     if (!el) return;
-    
+
     draggedBookingData = {
         bookingId: el.dataset.bookingId,
         roomId: el.dataset.roomId,
@@ -2048,7 +2037,7 @@ function handleBookingDragStart(e) {
         service: el.dataset.service,
         provider: el.dataset.provider
     };
-    
+
     el.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', el.dataset.bookingId);
@@ -2071,20 +2060,20 @@ function handleCellDrop(e) {
     e.preventDefault();
     const cell = e.target.closest('.schedule-cell');
     if (cell) cell.classList.remove('drag-over');
-    
+
     if (!draggedBookingData) return;
-    
+
     const targetRoomId = cell.dataset.roomId;
     const targetDate = cell.dataset.date;
     const targetTime = cell.dataset.time;
-    
+
     // Check if actually moving to a different room or time
-    if (draggedBookingData.roomId === targetRoomId && 
-        draggedBookingData.date === targetDate && 
+    if (draggedBookingData.roomId === targetRoomId &&
+        draggedBookingData.date === targetDate &&
         draggedBookingData.startTime === targetTime) {
         return; // No change
     }
-    
+
     // Show move modal
     moveBookingContext = {
         bookingId: draggedBookingData.bookingId,
@@ -2096,25 +2085,25 @@ function handleCellDrop(e) {
         service: draggedBookingData.service,
         provider: draggedBookingData.provider
     };
-    
+
     showMoveBookingModal();
 }
 
 function showMoveBookingModal() {
     const modal = document.getElementById('move-booking-modal');
     const infoDiv = document.getElementById('move-booking-info');
-    
+
     if (!modal || !infoDiv || !moveBookingContext) return;
-    
+
     const newRoom = state.rooms.find(r => r.id === moveBookingContext.newRoomId);
-    
+
     infoDiv.innerHTML = `
         <strong>Servicio:</strong> ${moveBookingContext.service}<br>
         <strong>Prestador:</strong> ${moveBookingContext.provider}<br>
         <strong>Desde:</strong> ${moveBookingContext.originalDate} (${moveBookingContext.startTime}) en ${state.rooms.find(r => r.id === moveBookingContext.originalRoom)?.name || 'N/A'}<br>
         <strong>Hasta:</strong> ${moveBookingContext.newDate} (${moveBookingContext.newStartTime}) en ${newRoom?.name || 'N/A'}
     `;
-    
+
     modal.style.display = 'flex';
 }
 
@@ -2126,18 +2115,18 @@ function closeMoveModal() {
 
 async function executeMoveBooking(moveAll) {
     if (!moveBookingContext) return;
-    
+
     const { bookingId, newRoomId, newDate, newStartTime } = moveBookingContext;
-    
+
     try {
         const res = await fetch(`/api/bookings/${bookingId}/move`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({ newRoomId, newDate, newStartTime, moveAll })
         });
-        
+
         const result = await res.json();
-        
+
         if (res.ok) {
             showToast(result.message || "Reserva movida exitosamente.", "success");
             closeMoveModal();

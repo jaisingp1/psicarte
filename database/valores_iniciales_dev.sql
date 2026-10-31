@@ -417,179 +417,24 @@ VALUES ('sr-1', 'ivan-s1', 'room-2'),
     ('sr-12', 'val-s6', 'room-2'),
     ('sr-13', 'maca-s1', 'room-2');
 -- 8. Seed Agendas (migrated from old service recurrence data)
--- Punctual agendas (old recurrence='single')
-INSERT
-    OR REPLACE INTO agendas (
-        id,
-        provider_id,
-        service_id,
-        room_id,
-        type,
-        specific_date,
-        start_time,
-        end_time,
-        status
-    )
-VALUES (
-        'agenda-ivan-s1',
-        'prov-ivan',
-        'ivan-s1',
-        'room-2',
-        'punctual',
-        '2026-08-05',
-        '08:30',
-        '20:00',
-        'published'
-    ),
-    (
-        'agenda-ivan-s2',
-        'prov-ivan',
-        'ivan-s2',
-        'room-1',
-        'punctual',
-        '2026-08-10',
-        '08:30',
-        '17:00',
-        'published'
-    ),
-    (
-        'agenda-ivan-s3',
-        'prov-ivan',
-        'ivan-s3',
-        'room-1',
-        'punctual',
-        '2026-08-14',
-        '08:30',
-        '17:00',
-        'published'
-    ),
-    (
-        'agenda-ivan-s4',
-        'prov-ivan',
-        'ivan-s4',
-        'room-2',
-        'punctual',
-        '2026-08-07',
-        '08:30',
-        '20:00',
-        'published'
-    ),
-    (
-        'agenda-ivan-s6',
-        'prov-ivan',
-        'ivan-s6',
-        'room-2',
-        'punctual',
-        '2026-08-12',
-        '08:30',
-        '20:00',
-        'published'
-    ),
-    (
-        'agenda-val-s1',
-        'prov-valentina',
-        'val-s1',
-        'room-2',
-        'punctual',
-        '2026-08-06',
-        '08:30',
-        '20:00',
-        'published'
-    ),
-    (
-        'agenda-val-s2',
-        'prov-valentina',
-        'val-s2',
-        'room-2',
-        'punctual',
-        '2026-08-08',
-        '08:30',
-        '20:00',
-        'published'
-    ),
-    (
-        'agenda-val-s3',
-        'prov-valentina',
-        'val-s3',
-        'room-2',
-        'punctual',
-        '2026-08-11',
-        '08:30',
-        '20:00',
-        'published'
-    ),
-    (
-        'agenda-val-s4',
-        'prov-valentina',
-        'val-s4',
-        'room-2',
-        'punctual',
-        '2026-08-13',
-        '08:30',
-        '20:00',
-        'published'
-    ),
-    (
-        'agenda-val-s5',
-        'prov-valentina',
-        'val-s5',
-        'room-2',
-        'punctual',
-        '2026-08-15',
-        '08:30',
-        '20:00',
-        'published'
-    ),
-    (
-        'agenda-val-s6',
-        'prov-valentina',
-        'val-s6',
-        'room-2',
-        'punctual',
-        '2026-08-09',
-        '08:30',
-        '20:00',
-        'published'
-    ),
-    (
-        'agenda-maca-s1',
-        'prov-macarena',
-        'maca-s1',
-        'room-2',
-        'punctual',
-        '2026-08-16',
-        '08:30',
-        '20:00',
-        'published'
-    );
--- Recurrent agenda: ivan-s5 (weekly Thursdays 09:00-12:00, from 2026-01-01)
-INSERT
-    OR REPLACE INTO agendas (
-        id,
-        provider_id,
-        service_id,
-        room_id,
-        type,
-        recurrence_rule,
-        start_time,
-        end_time,
-        start_date,
-        end_date,
-        status
-    )
-VALUES (
-        'agenda-ivan-s5',
-        'prov-ivan',
-        'ivan-s5',
-        'room-1',
-        'recurrent',
-        '{"freq":"WEEKLY","interval":1,"byweekday":[4],"dtstart":"2026-01-01","time_ranges":{"4":{"start":"09:00","end":"12:00"}}}',
-        '09:00',
-        '12:00',
-        '2026-01-01',
-        NULL,
-        'published'
-    );
+-- 8. Seed Agendas (Recurrentes para todos los servicios de prueba)
+INSERT OR REPLACE INTO agendas (
+    id, provider_id, service_id, room_id, type, recurrence_rule, start_time, end_time, start_date, end_date, status
+) VALUES
+    ('agenda-ivan-s1', 'prov-ivan', 'ivan-s1', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,3],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-ivan-s2', 'prov-ivan', 'ivan-s2', 'room-1', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-ivan-s3', 'prov-ivan', 'ivan-s3', 'room-1', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[3],"dtstart":"2026-01-01"}', '14:00', '17:00', '2026-01-01', NULL, 'published'),
+    ('agenda-ivan-s4', 'prov-ivan', 'ivan-s4', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2,4],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
+    ('agenda-ivan-s5', 'prov-ivan', 'ivan-s5', 'room-1', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[4],"dtstart":"2026-01-01"}', '09:00', '12:00', '2026-01-01', NULL, 'published'),
+    ('agenda-ivan-s6', 'prov-ivan', 'ivan-s6', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[5],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s1', 'prov-valentina', 'val-s1', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,3,5],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s2', 'prov-valentina', 'val-s2', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2,4],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s3', 'prov-valentina', 'val-s3', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,3],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s4', 'prov-valentina', 'val-s4', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2,4],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s5', 'prov-valentina', 'val-s5', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[5],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s6', 'prov-valentina', 'val-s6', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[6],"dtstart":"2026-01-01"}', '10:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-maca-s1', 'prov-macarena', 'maca-s1', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,2,3,4,5],"dtstart":"2026-01-01"}', '15:00', '18:00', '2026-01-01', NULL, 'published');
+
 -- 9. Seed Bookings (with client_id linked to users)
 INSERT
     OR REPLACE INTO bookings (

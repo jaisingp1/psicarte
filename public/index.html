@@ -246,7 +246,20 @@
 
                 <!-- Step 2 Pane: Calendar & Available Hours -->
                 <div class="booking-pane" id="pane-step-2">
-                    <h3 style="margin-bottom: 20px;">2. Selecciona Fecha y Hora</h3>
+                    <h3 style="margin-bottom: 15px;">2. Selecciona Fecha y Hora</h3>
+
+                    <!-- Resumen Selección Previa Paso 1 -->
+                    <div class="booking-step-summary" id="step2-selection-summary"
+                        style="background: var(--bg-secondary); border-left: 4px solid var(--primary-color, #bfa15f); padding: 12px 18px; border-radius: 6px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: var(--shadow-sm);">
+                        <div style="display: flex; gap: 20px; flex-wrap: wrap; font-size: 0.95rem; align-items: center;">
+                            <div><i class="fa-solid fa-user-doctor" style="color: var(--primary-color, #bfa15f); margin-right: 6px;"></i><strong>Profesional:</strong> <span id="step2-sum-provider">-</span></div>
+                            <div><i class="fa-solid fa-notes-medical" style="color: var(--primary-color, #bfa15f); margin-right: 6px;"></i><strong>Servicio:</strong> <span id="step2-sum-service">-</span></div>
+                            <div><i class="fa-solid fa-tag" style="color: var(--primary-color, #bfa15f); margin-right: 6px;"></i><strong>Valor:</strong> <span id="step2-sum-price">-</span></div>
+                        </div>
+                        <button type="button" onclick="goToStep(1)" style="font-size: 0.85rem; color: var(--primary-color, #bfa15f); background: none; border: 1px solid var(--primary-color, #bfa15f); padding: 5px 12px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+                            <i class="fa-solid fa-pen-to-square"></i> Cambiar
+                        </button>
+                    </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
                         <!-- Date Selector -->
@@ -283,7 +296,21 @@
 
                 <!-- Step 3 Pane: Personal Info Form -->
                 <div class="booking-pane" id="pane-step-3">
-                    <h3 style="margin-bottom: 20px;">3. Datos del Paciente</h3>
+                    <h3 style="margin-bottom: 15px;">3. Datos del Paciente</h3>
+
+                    <!-- Resumen Selección Previa Pasos 1 y 2 -->
+                    <div class="booking-step-summary" id="step3-selection-summary"
+                        style="background: var(--bg-secondary); border-left: 4px solid var(--primary-color, #bfa15f); padding: 12px 18px; border-radius: 6px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: var(--shadow-sm);">
+                        <div style="display: flex; gap: 20px; flex-wrap: wrap; font-size: 0.95rem; align-items: center;">
+                            <div><i class="fa-solid fa-user-doctor" style="color: var(--primary-color, #bfa15f); margin-right: 6px;"></i><strong>Profesional:</strong> <span id="step3-sum-provider">-</span></div>
+                            <div><i class="fa-solid fa-notes-medical" style="color: var(--primary-color, #bfa15f); margin-right: 6px;"></i><strong>Servicio:</strong> <span id="step3-sum-service">-</span></div>
+                            <div><i class="fa-solid fa-calendar-day" style="color: var(--primary-color, #bfa15f); margin-right: 6px;"></i><strong>Fecha y Hora:</strong> <span id="step3-sum-datetime">-</span></div>
+                            <div><i class="fa-solid fa-tag" style="color: var(--primary-color, #bfa15f); margin-right: 6px;"></i><strong>Total:</strong> <span id="step3-sum-price">-</span></div>
+                        </div>
+                        <button type="button" onclick="goToStep(2)" style="font-size: 0.85rem; color: var(--primary-color, #bfa15f); background: none; border: 1px solid var(--primary-color, #bfa15f); padding: 5px 12px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+                            <i class="fa-solid fa-pen-to-square"></i> Modificar Cita
+                        </button>
+                    </div>
 
                     <div id="logged-in-autofill-msg"
                         style="background-color: rgba(47, 133, 90, 0.1); border-left: 4px solid var(--color-success); padding: 12px; margin-bottom: 20px; border-radius: 4px; display: none;">

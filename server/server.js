@@ -779,9 +779,21 @@ app.post('/api/bookings', (req, res) => {
     }
 
     // Get the spot
-    db.get('SELECT * FROM spots WHERE id = ? AND status = \'available\'', [booking.spot_id], (err, spot) => {
+    db.get('SELECT * FROM spots WHERE id = ?', [booking.spot_id], (err, spot) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (!spot) return res.status(404).json({ error: 'Spot no encontrado o no disponible.' });
+        if (!spot) return res.status(404).json({ error: 'Spot no encontrado.' });
+
+        if (spot.status !== 'available') {
+            if (spot.status === 'reserved' && spot.booking_id) {
+                return db.get('SELECT * FROM bookings WHERE id = ? AND status = ?', [spot.booking_id, 'Pending_Payment'], (errB, existingBooking) => {
+                    if (!errB && existingBooking && (existingBooking.clientEmail === booking.clientEmail || !booking.clientEmail)) {
+                        return res.json({ id: existingBooking.id, status: existingBooking.status, reused: true });
+                    }
+                    return res.status(409).json({ error: 'El horario seleccionado ya no está disponible.' });
+                });
+            }
+            return res.status(409).json({ error: 'El horario seleccionado ya no está disponible.' });
+        }
 
         // Get service and provider info
         db.get('SELECT s.*, u.name as providerName FROM services s JOIN users u ON s.providerId = u.id WHERE s.id = ?', [spot.service_id], (err2, service) => {
@@ -1609,6 +1621,15 @@ app.post('/api/khipu/create-payment', (req, res) => {
             return res.status(400).json({ error: 'La reserva ya fue pagada o cancelada.' });
         }
 
+        if (booking.khipuPaymentId && booking.khipuPaymentUrl) {
+            return res.json({
+                success: true,
+                paymentId: booking.khipuPaymentId,
+                paymentUrl: booking.khipuPaymentUrl,
+                reused: true
+            });
+        }
+
         try {
             const baseUrl = process.env.APP_URL || process.env.KHIPU_BASE_URL || process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
             const expiresDate = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -1670,8 +1691,8 @@ function handleKhipuWebhook(req, res) {
         }
     );
 
-    const bookingId = paymentEvent.transaction_id;
-    const paymentId = paymentEvent.payment_id;
+    const bookingId = paymentEvent?.transaction_id || paymentEvent?.data?.transaction_id;
+    const paymentId = paymentEvent?.payment_id || paymentEvent?.data?.payment_id;
 
     if (!bookingId || !paymentId) {
         return res.status(200).send('Payload incompleto');
@@ -1692,7 +1713,8 @@ function handleKhipuWebhook(req, res) {
             return res.status(200).send('Payment ID mismatch');
         }
 
-        if (paymentEvent.amount != null && Number(paymentEvent.amount) !== Number(booking.price)) {
+        const eventAmount = paymentEvent?.amount != null ? paymentEvent.amount : paymentEvent?.data?.amount;
+        if (eventAmount != null && Number(eventAmount) !== Number(booking.price)) {
             console.error(`Webhook: Monto discrepante para booking ${bookingId}`);
             return res.status(200).send('Amount mismatch');
         }

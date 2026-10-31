@@ -121,16 +121,44 @@ function goToStep(stepNum) {
         
         bookingState.room = null; // Automatically determined per slot
         bookingState.selectedSpotId = null;
-        bookingState.availableSpots = [];
+        bookingState.availableSpots = null;
+        bookingState.date = null;
         
+        // Render Step 2 Preview Summary
+        if (bookingState.provider && bookingState.service) {
+            const s2Prov = document.getElementById("step2-sum-provider");
+            const s2Serv = document.getElementById("step2-sum-service");
+            const s2Price = document.getElementById("step2-sum-price");
+            if (s2Prov) s2Prov.innerText = bookingState.provider.name;
+            if (s2Serv) s2Serv.innerText = `${bookingState.service.name} (${bookingState.service.duration} min)`;
+            if (s2Price) s2Price.innerText = `$${bookingState.service.price.toLocaleString("es-CL")}`;
+        }
+
         renderCalendar();
-        updateSlotsView();
+        loadSpotsForStep2();
     }
     
     if (stepNum === 3 && bookingState.step === 2) {
         if (!bookingState.date || !bookingState.timeSlot) {
             showToast("Debe seleccionar una Fecha y un Bloque Horario disponible", "error");
             return;
+        }
+        
+        // Render Step 3 Preview Summary (Professional, Service, Date, Time & Total)
+        if (bookingState.provider && bookingState.service && bookingState.date && bookingState.timeSlot) {
+            const s3Prov = document.getElementById("step3-sum-provider");
+            const s3Serv = document.getElementById("step3-sum-service");
+            const s3Date = document.getElementById("step3-sum-datetime");
+            const s3Price = document.getElementById("step3-sum-price");
+            if (s3Prov) s3Prov.innerText = bookingState.provider.name;
+            if (s3Serv) s3Serv.innerText = `${bookingState.service.name} (${bookingState.service.duration} min)`;
+            
+            const [y, m, d] = bookingState.date.split("-");
+            const dateObj = new Date(y, parseInt(m) - 1, d);
+            const friendlyDate = dateObj.toLocaleDateString("es-CL", { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+            if (s3Date) s3Date.innerText = `${friendlyDate} • ${bookingState.timeSlot} hrs`;
+            
+            if (s3Price) s3Price.innerText = `${bookingState.service.price.toLocaleString("es-CL")}`;
         }
         
         // Auto fill if client is logged in
@@ -188,9 +216,35 @@ function goToStep(stepNum) {
     bookingState.step = stepNum;
 }
 
+// Load available spots immediately when entering Step 2
+async function loadSpotsForStep2() {
+    if (!bookingState.provider || !bookingState.service) return;
+    const slotsGrid = document.getElementById("booking-slots");
+    if (slotsGrid) {
+        slotsGrid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary);">Cargando disponibilidad...</div>';
+    }
+    try {
+        const params = new URLSearchParams({
+            providerId: bookingState.provider.id,
+            serviceId: bookingState.service.id
+        });
+        const response = await fetch(`/api/spots/available?${params}`);
+        if (response.ok) {
+            bookingState.availableSpots = await response.json();
+        } else {
+            bookingState.availableSpots = [];
+        }
+    } catch (e) {
+        console.error("Error al cargar disponibilidad:", e);
+        bookingState.availableSpots = [];
+    }
+    renderCalendar();
+    updateSlotsView();
+}
+
 // checkDateAvailability helper — checks if any cached available spots exist for a given date
 function checkDateAvailability(dateStr, providerId, serviceType, bookingIdToIgnore = null) {
-    if (!bookingState.availableSpots || bookingState.availableSpots.length === 0) {
+    if (!bookingState.availableSpots) {
         return { available: false, reason: "Cargando disponibilidad..." };
     }
 
@@ -310,31 +364,8 @@ async function updateSlotsView() {
     const friendlyDate = dateObj.toLocaleDateString("es-CL", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     label.innerText = `Horas para: ${friendlyDate}`;
     
-    // Fetch spots if not already loaded for this provider+service combo
-    const needFetch = bookingState.availableSpots.length === 0;
-    if (needFetch) {
-        slotsGrid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary);">Cargando horarios disponibles...</div>';
-        try {
-            const params = new URLSearchParams({
-                providerId: bookingState.provider.id,
-                serviceId: bookingState.service.id
-            });
-            const response = await fetch(`/api/spots/available?${params}`);
-            if (!response.ok) {
-                slotsGrid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary);">Error al cargar disponibilidad.</div>';
-                return;
-            }
-            bookingState.availableSpots = await response.json();
-            // Re-render calendar to reflect available dates
-            renderCalendar();
-        } catch (e) {
-            slotsGrid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary);">Error de conexión al cargar disponibilidad.</div>';
-            return;
-        }
-    }
-    
     // Filter spots for the selected date
-    const dateSpots = bookingState.availableSpots.filter(s => s.date === bookingState.date);
+    const dateSpots = (bookingState.availableSpots || []).filter(s => s.date === bookingState.date);
     
     if (dateSpots.length === 0) {
         slotsGrid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary);">No hay horarios disponibles para este día.</div>';
@@ -447,11 +478,14 @@ async function processPayment() {
             return;
         }
 
+        const mountEl = document.getElementById('khipu-web-root') || document.body;
+        mountEl.innerHTML = '';
+
         const khipu = new Khipu();
         khipu.startOperation(paymentId, (res) => {
             handleKhipuResult(res, bookingId);
         }, {
-            mountElement: document.getElementById('khipu-web-root'),
+            mountElement: mountEl,
             modal: true,
             modalOptions: { maxWidth: 450, maxHeight: 860 },
             options: {

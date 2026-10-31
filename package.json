@@ -5,7 +5,10 @@
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
-    "start:reset": "node server/server.js --reset"
+    "start:reset": "node server/server.js --reset",
+    "dev": "node --watch server/server.js --dev",
+    "dev:reset": "node server/server.js --dev --reset",
+    "dev:reg": "node --watch server/server.js --dev --reset"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -26,6 +29,6 @@
     "typescript-eslint": "^8.66.0"
   },
   "allowScripts": {
-    "sqlite3@5.1.7": true
+    "sqlite3": true
   }
 }

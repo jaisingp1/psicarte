@@ -211,10 +211,10 @@ function reconcileBookingPayment(bookingId, doneCallback) {
 // SECTION 3: AUTH ENDPOINTS
 // =====================================================
 app.post('/api/auth/login', (req, res) => {
-    const { email, password, role } = req.body;
+    const { email, password } = req.body;
 
-    if (!email || !password || !role) {
-        return res.status(400).json({ error: 'Faltan credenciales o rol.' });
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Faltan credenciales.' });
     }
 
     db.get("SELECT id, email, password, name, role FROM users WHERE email = ?", [email], (err, user) => {
@@ -231,21 +231,6 @@ app.post('/api/auth/login', (req, res) => {
                 const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
                 return res.json({ ...tokenPayload, name: user.name, token });
             });
-            return;
-        }
-
-        // Auto-register for usuarios without password
-        if (role === 'usuario') {
-            const name = email.split('@')[0].toUpperCase();
-            const userId = 'usr-' + Date.now();
-            db.run("INSERT INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, '', ?, 'usuario', '', '')",
-                [userId, email, name], (err3) => {
-                    if (err3) return res.status(500).json({ error: err3.message });
-                    const tokenPayload = { id: userId, email, role };
-                    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
-                    return res.json({ name, email, role, token });
-                }
-            );
             return;
         }
 
@@ -1669,9 +1654,14 @@ app.post('/api/khipu/create-payment', (req, res) => {
 
 function handleKhipuWebhook(req, res) {
     const signatureHeader = req.headers['x-khipu-signature'];
-    const apiKey = process.env.KHIPU_API_KEY;
+    const webhookSecret = process.env.KHIPU_SECRET;
 
-    if (!verifyKhipuSignature(req.rawBody, signatureHeader, apiKey)) {
+    if (!webhookSecret) {
+        console.error('Webhook: KHIPU_SECRET no está configurada.');
+        return res.status(503).send('Webhook no configurado');
+    }
+
+    if (!verifyKhipuSignature(req.rawBody, signatureHeader, webhookSecret)) {
         console.warn('Webhook: Firma x-khipu-signature inválida o faltante.');
         return res.status(401).send('Firma inválida');
     }

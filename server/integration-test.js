@@ -52,7 +52,7 @@ function getFutureDate(daysFromNow) {
 
 async function login() {
     log('=== INICIO DE SESIÓN ===');
-    const res = await post('/api/auth/login', { email: 'admin@centropsicarte.cl', password: 'admin123', role: 'administrador' });
+    const res = await post('/api/auth/login', { email: 'admin@centropsicarte.cl', password: 'admin123' });
     TOKEN = res.data.token;
     assert(res.status === 200, 'Login exitoso', `Status: ${res.status}`);
     assert(TOKEN && TOKEN.length > 0, 'Token recibido', 'No token');

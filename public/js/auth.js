@@ -97,7 +97,6 @@ async function processRecovery() {
 async function processLogin() {
     const email = document.getElementById("login-email").value;
     const pass = document.getElementById("login-password").value;
-    const role = document.getElementById("login-role").value;
     
     if (!email || !pass) {
         showToast("Complete los campos de acceso", "error");
@@ -108,7 +107,7 @@ async function processLogin() {
         const res = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: pass, role })
+            body: JSON.stringify({ email, password: pass })
         });
         const data = await res.json();
         

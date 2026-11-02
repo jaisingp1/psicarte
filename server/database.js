@@ -88,16 +88,26 @@ function initializeDatabase() {
                             } else {
                                 console.log('Database seeded successfully from SQL file.');
                             }
-                            resolveDatabaseReady();
-                            // Spot generation se ejecuta fuera de serialize() para evitar race conditions
-                            // con los callbacks anidados de SpotGenerator
-                            setImmediate(() => {
-                                generateSpotsForAllAgendas();
+                            applyContactDefaults(defaultsErr => {
+                                if (defaultsErr) {
+                                    rejectDatabaseReady(defaultsErr);
+                                    return;
+                                }
+                                resolveDatabaseReady();
+                                setImmediate(() => {
+                                    generateSpotsForAllAgendas();
+                                });
                             });
                         });
                     } else {
                         console.log('Database already initialized. Skipping seeding.');
-                        resolveDatabaseReady();
+                        applyContactDefaults(defaultsErr => {
+                            if (defaultsErr) {
+                                rejectDatabaseReady(defaultsErr);
+                                return;
+                            }
+                            resolveDatabaseReady();
+                        });
                     }
                 });
             });
@@ -106,6 +116,20 @@ function initializeDatabase() {
             rejectDatabaseReady(e);
         }
     });
+}
+
+function applyContactDefaults(callback) {
+    try {
+        const defaultsPath = path.join(__dirname, '..', 'database', 'valores_configuracion_contacto.sql');
+        const defaultsSql = fs.readFileSync(defaultsPath, 'utf8');
+        db.exec(defaultsSql, err => {
+            if (err) console.error('Error applying contact defaults:', err.message);
+            callback(err);
+        });
+    } catch (error) {
+        console.error('Failed to read contact defaults SQL:', error.message);
+        callback(error);
+    }
 }
 
 function generateSpotsForAllAgendas() {

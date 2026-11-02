@@ -8,25 +8,30 @@
     --font-body: 'Inter', sans-serif;
 
     /* Light Theme Palette */
-    --bg-primary: #fcf8ec;
-    --bg-secondary: #f3edd7;
+    --bg-primary: #FEFDF9;
+    --bg-secondary: #F7F1E2;
     --bg-card: #FFFFFF;
-    --text-primary: #001933;
+    --text-primary: #001B40;
     --text-secondary: #4A5568;
-    --color-navy: #001933;
-    --color-gold: #D4AF37;
-    --color-pomegranate: #7A1D2B;
-    --color-accent: #7A1D2B;
+    --color-navy: #001B40;
+    --color-gold: #D8A048;
+    --color-pomegranate: #782050;
+    --color-accent: #782050;
+    --color-accent-text: #FEFDF9;
+    --color-in-person: #B88028;
+    --color-online: #802850;
     --color-border: #E2E8F0;
-    --color-shadow: rgba(0, 25, 51, 0.08);
-    --color-glass-bg: rgba(252, 248, 236, 0.85);
+    --color-shadow: rgba(0, 27, 64, 0.08);
+    --color-glass-bg: rgba(254, 253, 249, 0.92);
     --color-glass-border: rgba(255, 255, 255, 0.4);
     
     /* Utility States */
     --color-success: #2F855A;
+    --color-success-bg: rgba(47, 133, 90, 0.12);
     --color-error: #C53030;
     --color-info: #2B6CB0;
     --color-warning: #DD6B20;
+    --color-accent-soft: rgba(120, 32, 80, 0.15);
     
     /* Layout Constants */
     --radius-sm: 8px;
@@ -40,16 +45,20 @@
     --bg-primary: #031c32;
     --bg-secondary: #0a2542;
     --bg-card: #0d2c4d;
-    --text-primary: #FFF9F3;
+    --text-primary: #FEFDF9;
     --text-secondary: #CBD5E1;
-    --color-navy: #001933;
-    --color-gold: #D4AF37;
-    --color-pomegranate: #7A1D2B;
-    --color-accent: #D4AF37; /* Use Gold as accent in Dark mode for premium feel */
+    --color-navy: #001B40;
+    --color-gold: #D8A048;
+    --color-pomegranate: #782050;
+    --color-accent: #D8A048;
+    --color-accent-text: #001B40;
+    --color-in-person: #D8A048;
+    --color-online: #C35B88;
     --color-border: #1E3A5F;
     --color-shadow: rgba(0, 0, 0, 0.3);
-    --color-glass-bg: rgba(3, 28, 50, 0.85);
+    --color-glass-bg: rgba(3, 28, 50, 0.92);
     --color-glass-border: rgba(255, 255, 255, 0.08);
+    --color-accent-soft: rgba(216, 160, 72, 0.15);
 }
 
 /* Reset */

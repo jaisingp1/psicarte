@@ -29,7 +29,8 @@ VALUES ('heroTitle', 'Centro Integral PsicArte'),
         'Fomentar el bienestar emocional y el desarrollo humano integral mediante servicios de psicología, talleres artísticos, capacitaciones y experiencias corporales que promuevan la salud mental, la creatividad y el fortalecimiento de vínculos en personas, familias y comunidades.'
     ),
     ('contactEmail', 'contacto@centropsicarte.cl'),
-    ('contactPhone', '+56961676706');
+    ('contactPhone', '+56961676706'),
+    ('contactAddress', 'Oficina Virtual Las Bellotas 199, Providencia, RM');
 
 -- 2. Seed Users (Solo Administrador Inicial)
 INSERT
@@ -54,6 +55,7 @@ VALUES ('popup_active', 'false'),
     ('banner_text', '¡Agende sus horas de consulta en línea de forma rápida y segura! Sistema de pago habilitado.'),
     ('whatsapp_number', '56961676706'),
     ('whatsapp_enabled', 'true'),
+    ('instagram_url', 'https://www.instagram.com/centropsicarte/'),
     ('max_reschedules', '1');
 
 -- 13. Chilean National Holidays 2026-2030

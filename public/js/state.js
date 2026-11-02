@@ -8,6 +8,7 @@ const state = {
     bookings: [],
     clients: [],
     activities: [],
+    articles: [],
     activityEnrollments: [],
     sicknessBlocks: [],
     popupConfig: { active: false, title: "", text: "" },

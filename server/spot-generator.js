@@ -1,5 +1,6 @@
 // spot-generator.js
 // Core engine for generating spots from agendas with full validation logic
+const crypto = require('crypto');
 const { rrulestr } = require('rrule');
 
 function timeToMinutes(timeStr) {
@@ -37,8 +38,8 @@ class SpotGenerator {
         const providerId = agenda.provider_id;
         const roomId = agenda.room_id;
 
-        // Step 0: Delete existing spots for this agenda FIRST (before conflict check)
-        this.db.run('DELETE FROM spots WHERE agenda_id = ?', [agendaId], (errDel) => {
+        // Keep reserved/booked slots intact when schedules are regenerated.
+        this.db.run("DELETE FROM spots WHERE agenda_id = ? AND status = 'available'", [agendaId], (errDel) => {
             if (errDel) return callback({ spotsGenerated: 0, conflicts: 0, errors: [errDel.message] });
 
             // Step 1: Get service duration
@@ -175,7 +176,9 @@ class SpotGenerator {
 
                 // Query existing spots for the same provider (excluding this agenda) across ALL dates
                 this.db.all(
-                    `SELECT date, start_time, end_time FROM spots WHERE provider_id = ? AND agenda_id != ? AND status IN ('available', 'reserved', 'booked')`,
+                    `SELECT date, start_time, end_time FROM spots
+                     WHERE provider_id = ? AND (agenda_id != ? OR status IN ('reserved', 'booked'))
+                     AND status IN ('available', 'reserved', 'booked')`,
                     [providerId, agendaId], (errProv, providerSpots) => {
                         if (errProv) {
                             return callback({ spotsGenerated: 0, conflicts: 0, errors: [errProv.message] });
@@ -265,7 +268,7 @@ class SpotGenerator {
                                                     conflicts++;
                                                 } else {
                                                     allSpots.push({
-                                                        id: 'spot-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+                                                        id: crypto.randomUUID(),
                                                         agenda_id: agendaId,
                                                         provider_id: providerId,
                                                         service_id: serviceId,
@@ -310,10 +313,11 @@ class SpotGenerator {
             const dayRange = timeRanges[String(isoDay)];
 
             if (dayRange) {
-                return [{
-                    start: timeToMinutes(dayRange.start),
-                    end: timeToMinutes(dayRange.end)
-                }];
+                const ranges = Array.isArray(dayRange) ? dayRange : [dayRange];
+                return ranges.map(range => ({
+                    start: timeToMinutes(range.start),
+                    end: timeToMinutes(range.end)
+                })).filter(range => range.start < range.end);
             }
 
             // Fallback: use agenda start_time/end_time

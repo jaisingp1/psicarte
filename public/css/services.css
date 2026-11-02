@@ -104,18 +104,18 @@
 .provider-tab-btn.active {
     border-color: var(--color-accent);
     background-color: var(--color-accent);
-    color: #FFF9F3;
+    color: var(--color-accent-text);
     box-shadow: 0 4px 12px var(--color-shadow);
 }
 
 .provider-tab-btn.active .provider-tab-avatar {
-    background-color: rgba(255, 249, 243, 0.2);
-    color: #FFF9F3;
-    border-color: rgba(255, 249, 243, 0.4);
+    background-color: color-mix(in srgb, var(--color-accent-text) 20%, transparent);
+    color: var(--color-accent-text);
+    border-color: color-mix(in srgb, var(--color-accent-text) 40%, transparent);
 }
 
 .provider-tab-btn.active small {
-    color: rgba(255, 249, 243, 0.8);
+    color: color-mix(in srgb, var(--color-accent-text) 80%, transparent);
 }
 
 .provider-tab-avatar {
@@ -195,7 +195,7 @@
 
 .filter-pill.active {
     background-color: var(--color-accent);
-    color: #FFF9F3;
+    color: var(--color-accent-text);
     border-color: var(--color-accent);
 }
 
@@ -257,13 +257,13 @@
 }
 
 .service-badge-virtual {
-    background-color: rgba(43, 108, 176, 0.12);
-    color: var(--color-info);
+    background-color: var(--color-online);
+    color: var(--color-accent-text);
 }
 
 .service-badge-physical {
-    background-color: rgba(221, 107, 32, 0.12);
-    color: var(--color-warning);
+    background-color: var(--color-in-person);
+    color: var(--color-accent-text);
 }
 
 .service-card-meta {
@@ -299,6 +299,10 @@
 .price-unit {
     font-size: 0.85rem;
     color: var(--text-secondary);
+}
+
+.service-card-book {
+    align-self: flex-start;
 }
 
 /* Services Section - Responsive */
@@ -383,7 +387,7 @@
 
 .view-toggle-btn.active {
     background-color: var(--color-accent);
-    color: #FFF9F3;
+    color: var(--color-accent-text);
     box-shadow: 0 2px 8px var(--color-shadow);
 }
 
@@ -451,6 +455,10 @@
 }
 
 .service-list-price {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     font-size: 1.15rem;
     font-weight: 700;
     color: var(--color-accent);
@@ -496,5 +504,6 @@
 
     .service-list-price {
         font-size: 1rem;
+        width: 100%;
     }
 }

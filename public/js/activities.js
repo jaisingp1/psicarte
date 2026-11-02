@@ -326,3 +326,133 @@ async function deleteActivity(id) {
         showToast("Error al eliminar.", "error");
     }
 }
+
+function escapeArticleText(value) {
+    const element = document.createElement('span');
+    element.textContent = value || '';
+    return element.innerHTML;
+}
+
+async function renderPublicArticles() {
+    const list = document.getElementById('public-articles-list');
+    if (!list) return;
+
+    try {
+        const response = await fetch('/api/articles');
+        if (!response.ok) throw new Error('No se pudieron cargar las noticias.');
+        const articles = await response.json();
+        state.articles = articles;
+
+        if (!articles.length) {
+            list.innerHTML = '<p class="article-empty">Pronto compartiremos novedades y artículos de interés.</p>';
+            return;
+        }
+
+        list.innerHTML = articles.slice(0, 3).map(article => `
+            <article class="article-card">
+                <p class="article-date">${new Date(article.published_at || article.created_at).toLocaleDateString('es-CL')}</p>
+                <h4>${escapeArticleText(article.title)}</h4>
+                <p class="article-summary">${escapeArticleText(article.summary)}</p>
+                <details>
+                    <summary>Leer artículo</summary>
+                    <p class="article-body">${escapeArticleText(article.body)}</p>
+                </details>
+            </article>
+        `).join('');
+    } catch (error) {
+        console.error('Error al cargar artículos:', error);
+        list.innerHTML = '<p class="article-empty">No se pudieron cargar las noticias. Intenta nuevamente más tarde.</p>';
+    }
+}
+
+async function renderArticleSubmissions() {
+    const submissionsList = document.getElementById('article-submissions-list');
+    const adminReview = document.getElementById('article-review-list');
+    if (!submissionsList || !state.currentUser) return;
+
+    try {
+        const response = await fetch('/api/articles/submissions', { headers: getAuthHeaders() });
+        if (!response.ok) throw new Error('No se pudieron cargar tus artículos.');
+        const articles = await response.json();
+        const isAdmin = state.currentUser.role === 'administrador';
+
+        submissionsList.innerHTML = articles.length
+            ? articles.map(article => `
+                <article class="article-submission">
+                    <h4>${escapeArticleText(article.title)}</h4>
+                    <p>${escapeArticleText(article.summary)}</p>
+                    <span class="article-status">${article.status === 'published' ? 'Publicado' : article.status === 'rejected' ? 'No aprobado' : 'Pendiente de revisión'}</span>
+                </article>
+            `).join('')
+            : '<p class="article-empty">Todavía no has enviado artículos.</p>';
+
+        if (isAdmin && adminReview) {
+            const reviewSection = document.getElementById('article-admin-review');
+            if (reviewSection) reviewSection.style.display = 'block';
+            adminReview.innerHTML = articles.length
+                ? articles.map(article => `
+                    <article class="article-submission">
+                        <h4>${escapeArticleText(article.title)}</h4>
+                        <p><strong>Autor:</strong> ${escapeArticleText(article.author_name || 'Cuenta eliminada')}</p>
+                        <p>${escapeArticleText(article.summary)}</p>
+                        <p class="article-body">${escapeArticleText(article.body)}</p>
+                        <div class="article-review-actions">
+                            <button class="btn-primary" onclick="reviewArticle('${article.id}', 'published')">Publicar</button>
+                            <button class="btn-secondary" onclick="reviewArticle('${article.id}', 'rejected')">Rechazar</button>
+                        </div>
+                    </article>
+                `).join('')
+                : '<p class="article-empty">No hay artículos pendientes de revisión.</p>';
+        }
+    } catch (error) {
+        console.error('Error al cargar artículos enviados:', error);
+        submissionsList.innerHTML = '<p class="article-empty">No se pudieron cargar tus artículos.</p>';
+    }
+}
+
+async function submitArticle(e) {
+    e.preventDefault();
+    if (!state.currentUser) {
+        showToast('Inicia sesión para proponer un artículo.', 'error');
+        window.location.href = 'acceso.html';
+        return;
+    }
+
+    const form = document.getElementById('community-article-form');
+    const payload = {
+        title: document.getElementById('article-title').value,
+        summary: document.getElementById('article-summary').value,
+        body: document.getElementById('article-body').value
+    };
+
+    try {
+        const response = await fetch('/api/articles', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'No se pudo enviar el artículo.');
+        form.reset();
+        showToast('Artículo enviado para revisión editorial.', 'success');
+        await renderArticleSubmissions();
+    } catch (error) {
+        showToast(error.message || 'Error al enviar el artículo.', 'error');
+    }
+}
+
+async function reviewArticle(id, status) {
+    try {
+        const response = await fetch(`/api/articles/${id}/status`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ status })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'No se pudo actualizar el artículo.');
+        showToast(status === 'published' ? 'Artículo publicado.' : 'Artículo rechazado.', 'success');
+        await Promise.all([renderArticleSubmissions(), renderPublicArticles()]);
+    } catch (error) {
+        showToast(error.message || 'Error al revisar el artículo.', 'error');
+    }
+}

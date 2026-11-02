@@ -73,7 +73,10 @@ function renderServicesSection() {
                         <span><i class="fa-solid fa-clock"></i> ${s.duration} min</span>
                         <span><i class="fa-solid fa-user-doctor"></i> ${provider.name}</span>
                     </div>
-                    <div class="service-list-price">$${s.price.toLocaleString("es-CL")} <small>/ sesión</small></div>
+                    <div class="service-list-price">
+                        <span>$${s.price.toLocaleString("es-CL")} <small>/ sesión</small></span>
+                        <button class="btn-primary" type="button" onclick="bookServiceFromCard('${provider.id}', '${s.id}')">Reservar</button>
+                    </div>
                 </div>
             `;
         });
@@ -99,6 +102,7 @@ function renderServicesSection() {
                         <span class="price-amount">$${s.price.toLocaleString("es-CL")}</span>
                         <span class="price-unit">Sesión</span>
                     </div>
+                    <button class="btn-primary service-card-book" type="button" onclick="bookServiceFromCard('${provider.id}', '${s.id}')">Reservar este servicio</button>
                 </div>
             `;
         });
@@ -108,6 +112,19 @@ function renderServicesSection() {
 function selectServiceProvider(providerId) {
     selectedServicesProviderId = providerId;
     renderServicesSection();
+}
+
+function bookServiceFromCard(providerId, serviceId) {
+    const providerSelect = document.getElementById('booking-provider');
+    const serviceSelect = document.getElementById('booking-service');
+    if (!providerSelect || !serviceSelect) return;
+
+    setSearchMethod('provider');
+    providerSelect.value = providerId;
+    onBookingProviderChange();
+    serviceSelect.value = serviceId;
+    goToStep(2);
+    document.getElementById('agendamiento')?.scrollIntoView({ behavior: 'smooth' });
 }
 
 function setServiceTypeFilter(type) {

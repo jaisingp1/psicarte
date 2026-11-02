@@ -82,6 +82,65 @@ function generateSpotsLegacy(durationMin, rangeStart, rangeEnd, existingBookings
     return spots;
 }
 
+function normalizeAgendaRecurrenceRule(value) {
+    let rule;
+    try {
+        rule = typeof value === 'string' ? JSON.parse(value) : value;
+    } catch (error) {
+        return { error: 'La regla de recurrencia debe ser JSON válido.' };
+    }
+
+    if (!rule || typeof rule !== 'object' || Array.isArray(rule)) {
+        return { error: 'La regla de recurrencia no es válida.' };
+    }
+
+    if (rule.byweekday !== undefined &&
+        (!Array.isArray(rule.byweekday) ||
+            rule.byweekday.some(day => !Number.isInteger(Number(day)) || Number(day) < 1 || Number(day) > 7))) {
+        return { error: 'Los días recurrentes deben usar valores ISO entre 1 (lunes) y 7 (domingo).' };
+    }
+
+    const timeRanges = rule.time_ranges;
+    if (timeRanges !== undefined) {
+        if (!timeRanges || typeof timeRanges !== 'object' || Array.isArray(timeRanges)) {
+            return { error: 'Los intervalos horarios por día no son válidos.' };
+        }
+
+        const normalizedRanges = {};
+        for (const [day, configuredRanges] of Object.entries(timeRanges)) {
+            if (!/^[1-7]$/.test(day)) {
+                return { error: 'Cada intervalo debe corresponder a un día ISO entre 1 y 7.' };
+            }
+
+            const ranges = Array.isArray(configuredRanges) ? configuredRanges : [configuredRanges];
+            if (!ranges.length) return { error: `Agregue al menos un intervalo para el día ${day}.` };
+
+            const parsedRanges = [];
+            for (const range of ranges) {
+                if (!range || typeof range.start !== 'string' || typeof range.end !== 'string' ||
+                    !/^([01]\d|2[0-3]):[0-5]\d$/.test(range.start) ||
+                    !/^([01]\d|2[0-3]):[0-5]\d$/.test(range.end) ||
+                    range.start >= range.end) {
+                    return { error: `Revise los intervalos horarios del día ${day}.` };
+                }
+                parsedRanges.push({ start: range.start, end: range.end });
+            }
+
+            parsedRanges.sort((a, b) => a.start.localeCompare(b.start));
+            for (let index = 1; index < parsedRanges.length; index += 1) {
+                if (parsedRanges[index].start < parsedRanges[index - 1].end) {
+                    return { error: `Los intervalos del día ${day} no pueden superponerse.` };
+                }
+            }
+            normalizedRanges[day] = parsedRanges;
+        }
+
+        rule.time_ranges = normalizedRanges;
+    }
+
+    return { value: JSON.stringify(rule) };
+}
+
 // =====================================================
 // SECTION 2: KHIPU PAYMENT GATEWAY HELPERS (API v3)
 // =====================================================
@@ -390,6 +449,72 @@ app.post('/api/content', authenticateToken, (req, res) => {
     });
 });
 
+app.get('/api/articles', (req, res) => {
+    db.all(`SELECT id, title, summary, body, created_at, published_at
+        FROM articles WHERE status = 'published'
+        ORDER BY published_at DESC, created_at DESC`, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows || []);
+    });
+});
+
+app.get('/api/articles/submissions', authenticateToken, (req, res) => {
+    const isAdmin = req.user.role === 'administrador';
+    const query = isAdmin
+        ? `SELECT a.id, a.title, a.summary, a.body, a.status, a.created_at, u.name AS author_name
+            FROM articles a LEFT JOIN users u ON u.id = a.author_id
+            WHERE a.status = 'pending_review' ORDER BY a.created_at ASC`
+        : `SELECT id, title, summary, body, status, created_at
+            FROM articles WHERE author_id = ? ORDER BY created_at DESC`;
+    const params = isAdmin ? [] : [req.user.id];
+    db.all(query, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows || []);
+    });
+});
+
+app.post('/api/articles', authenticateToken, (req, res) => {
+    const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
+    const summary = typeof req.body.summary === 'string' ? req.body.summary.trim() : '';
+    const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
+    if (!title || title.length > 120 || !summary || summary.length > 300 || !body || body.length > 10000) {
+        return res.status(400).json({ error: 'Revise el título (máx. 120), resumen (máx. 300) y artículo (máx. 10.000 caracteres).' });
+    }
+
+    const id = crypto.randomUUID();
+    db.run(
+        `INSERT INTO articles (id, author_id, title, summary, body)
+         VALUES (?, ?, ?, ?, ?)`,
+        [id, req.user.id, title, summary, body],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.status(201).json({ success: true, id, status: 'pending_review' });
+        }
+    );
+});
+
+app.put('/api/articles/:id/status', authenticateToken, (req, res) => {
+    if (req.user.role !== 'administrador') {
+        return res.status(403).json({ error: 'Solo un administrador puede revisar y publicar artículos.' });
+    }
+    const { status } = req.body;
+    if (!['published', 'rejected'].includes(status)) {
+        return res.status(400).json({ error: 'Estado de revisión no válido.' });
+    }
+    db.run(
+        `UPDATE articles
+         SET status = ?, updated_at = CURRENT_TIMESTAMP,
+             published_at = CASE WHEN ? = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END
+         WHERE id = ? AND status = 'pending_review'`,
+        [status, status, req.params.id],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) return res.status(404).json({ error: 'Artículo pendiente no encontrado.' });
+            res.json({ success: true, status });
+        }
+    );
+});
+
 // =====================================================
 // SECTION 6: ROOMS ENDPOINTS
 // =====================================================
@@ -432,7 +557,8 @@ app.post('/api/rooms', authenticateToken, (req, res) => {
     const end = closeTime || '18:30';
 
     db.serialize(() => {
-        db.run("INSERT OR REPLACE INTO rooms (id, name, type) VALUES (?, ?, ?)",
+        db.run(`INSERT INTO rooms (id, name, type) VALUES (?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type`,
             [id, name, type || 'consultorio'],
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
@@ -453,6 +579,57 @@ app.post('/api/rooms', authenticateToken, (req, res) => {
                     } else {
                         res.json({ success: true, id });
                     }
+                });
+            }
+        );
+    });
+});
+
+app.put('/api/rooms/:id', authenticateToken, (req, res) => {
+    const { name, type, openTime, closeTime } = req.body;
+    if (!name || !type || !openTime || !closeTime || openTime >= closeTime) {
+        return res.status(400).json({ error: 'Revise el nombre, tipo y rango horario de la sala.' });
+    }
+
+    db.run('UPDATE rooms SET name = ?, type = ? WHERE id = ?', [name, type, req.params.id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Sala no encontrada.' });
+
+        db.all(
+            'SELECT id, day_of_week FROM room_schedules WHERE room_id = ? ORDER BY day_of_week, start_time',
+            [req.params.id],
+            (scheduleErr, schedules) => {
+                if (scheduleErr) return res.status(500).json({ error: scheduleErr.message });
+
+                const schedulesPerDay = new Map();
+                for (const schedule of schedules || []) {
+                    schedulesPerDay.set(
+                        schedule.day_of_week,
+                        [...(schedulesPerDay.get(schedule.day_of_week) || []), schedule]
+                    );
+                }
+
+                const multiBlockDays = [...schedulesPerDay.values()].some(daySchedules => daySchedules.length > 1);
+                const pending = [];
+                for (const daySchedules of schedulesPerDay.values()) {
+                    if (daySchedules.length === 1) pending.push(daySchedules[0].id);
+                }
+
+                if (multiBlockDays || pending.length === 0) {
+                    return res.json({
+                        success: true,
+                        scheduleUpdated: false,
+                        message: 'Sala actualizada; los horarios existentes se conservaron porque incluyen varios bloques por día.'
+                    });
+                }
+
+                db.serialize(() => {
+                    const stmt = db.prepare('UPDATE room_schedules SET start_time = ?, end_time = ? WHERE id = ?');
+                    pending.forEach(id => stmt.run(openTime, closeTime, id));
+                    stmt.finalize(updateErr => {
+                        if (updateErr) return res.status(500).json({ error: updateErr.message });
+                        res.json({ success: true, scheduleUpdated: true });
+                    });
                 });
             }
         );
@@ -665,7 +842,16 @@ app.post('/api/services', authenticateToken, (req, res) => {
     const allowRescheduleVal = allowReschedule !== undefined ? (allowReschedule ? 1 : 0) : 1;
     const maxReschedulesVal = maxReschedules || 1;
 
-    db.run(`INSERT OR REPLACE INTO services (id, providerId, name, price, duration, type, allowReschedule, maxReschedules) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    db.run(`INSERT INTO services (id, providerId, name, price, duration, type, allowReschedule, maxReschedules)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            providerId = excluded.providerId,
+            name = excluded.name,
+            price = excluded.price,
+            duration = excluded.duration,
+            type = excluded.type,
+            allowReschedule = excluded.allowReschedule,
+            maxReschedules = excluded.maxReschedules`,
         [id, providerId, name, price || 0, duration, type || 'sesion', allowRescheduleVal, maxReschedulesVal],
         function (err) {
             if (err) return res.status(500).json({ error: err.message });
@@ -743,6 +929,42 @@ app.get('/api/services/without-rooms', authenticateToken, (req, res) => {
     `, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows || []);
+    });
+});
+
+function regenerateAgendas(agendas, res) {
+    const totals = { agendasProcessed: 0, spotsGenerated: 0, conflicts: 0, errors: [] };
+    const generator = new SpotGenerator(db);
+    const processNext = index => {
+        if (index >= agendas.length) return res.json(totals);
+        generator.generate(agendas[index], result => {
+            totals.agendasProcessed += 1;
+            totals.spotsGenerated += result.spotsGenerated || 0;
+            totals.conflicts += result.conflicts || 0;
+            totals.errors.push(...(result.errors || []));
+            processNext(index + 1);
+        });
+    };
+    processNext(0);
+}
+
+app.post('/api/services/:id/generate-spots', authenticateToken, (req, res) => {
+    db.all('SELECT * FROM agendas WHERE service_id = ? ORDER BY created_at, id', [req.params.id], (err, agendas) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!agendas || agendas.length === 0) {
+            return res.status(404).json({ error: 'El servicio no tiene agendas configuradas.' });
+        }
+        regenerateAgendas(agendas, res);
+    });
+});
+
+app.post('/api/services/generate-all-spots', authenticateToken, (req, res) => {
+    db.all('SELECT * FROM agendas ORDER BY created_at, id', (err, agendas) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!agendas || agendas.length === 0) {
+            return res.status(404).json({ error: 'No hay agendas configuradas.' });
+        }
+        regenerateAgendas(agendas, res);
     });
 });
 
@@ -966,6 +1188,12 @@ app.post('/api/agendas', authenticateToken, (req, res) => {
     if (!provider_id || !service_id || !room_id || !type || !start_time || !end_time) {
         return res.status(400).json({ error: 'Faltan datos requeridos: provider_id, service_id, room_id, type, start_time, end_time.' });
     }
+    if (!['punctual', 'recurrent'].includes(type) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(start_time) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(end_time) ||
+        start_time >= end_time) {
+        return res.status(400).json({ error: 'El tipo o rango horario de la agenda no es válido.' });
+    }
 
     if (type === 'punctual' && !specific_date) {
         return res.status(400).json({ error: 'Agenda puntual requiere specific_date.' });
@@ -973,6 +1201,20 @@ app.post('/api/agendas', authenticateToken, (req, res) => {
 
     if (type === 'recurrent' && !recurrence_rule) {
         return res.status(400).json({ error: 'Agenda recurrente requiere recurrence_rule.' });
+    }
+    let recurrenceRule = recurrence_rule || null;
+    if (type === 'recurrent') {
+        const normalized = normalizeAgendaRecurrenceRule(recurrence_rule);
+        if (normalized.error) return res.status(400).json({ error: normalized.error });
+        recurrenceRule = normalized.value;
+        const rule = JSON.parse(recurrenceRule);
+        if (typeof rule.dtstart !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(rule.dtstart) ||
+            Number.isNaN(Date.parse(`${rule.dtstart}T00:00:00Z`))) {
+            return res.status(400).json({ error: 'La agenda recurrente requiere una fecha de inicio válida en dtstart.' });
+        }
+        if (end_date && end_date < rule.dtstart) {
+            return res.status(400).json({ error: 'La fecha de término debe ser posterior al inicio.' });
+        }
     }
 
     // Validate service exists
@@ -994,7 +1236,7 @@ app.post('/api/agendas', authenticateToken, (req, res) => {
 
                 db.run(
                     `INSERT INTO agendas (id, provider_id, service_id, room_id, type, recurrence_rule, specific_date, start_time, end_time, start_date, end_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [agendaId, provider_id, service_id, room_id, type, recurrence_rule || null, specific_date || null, start_time, end_time, start_date || null, end_date || null, status || 'draft'],
+                    [agendaId, provider_id, service_id, room_id, type, recurrenceRule, specific_date || null, start_time, end_time, start_date || null, end_date || null, status || 'draft'],
                     function (err2) {
                         if (err2) return res.status(500).json({ error: err2.message });
 
@@ -1036,6 +1278,12 @@ app.put('/api/agendas/:id', authenticateToken, (req, res) => {
     if (!provider_id || !service_id || !room_id || !type || !start_time || !end_time) {
         return res.status(400).json({ error: 'Faltan datos requeridos: provider_id, service_id, room_id, type, start_time, end_time.' });
     }
+    if (!['punctual', 'recurrent'].includes(type) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(start_time) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(end_time) ||
+        start_time >= end_time) {
+        return res.status(400).json({ error: 'El tipo o rango horario de la agenda no es válido.' });
+    }
 
     if (type === 'punctual' && !specific_date) {
         return res.status(400).json({ error: 'Agenda puntual requiere specific_date.' });
@@ -1043,6 +1291,20 @@ app.put('/api/agendas/:id', authenticateToken, (req, res) => {
 
     if (type === 'recurrent' && !recurrence_rule) {
         return res.status(400).json({ error: 'Agenda recurrente requiere recurrence_rule.' });
+    }
+    let recurrenceRule = recurrence_rule || null;
+    if (type === 'recurrent') {
+        const normalized = normalizeAgendaRecurrenceRule(recurrence_rule);
+        if (normalized.error) return res.status(400).json({ error: normalized.error });
+        recurrenceRule = normalized.value;
+        const rule = JSON.parse(recurrenceRule);
+        if (typeof rule.dtstart !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(rule.dtstart) ||
+            Number.isNaN(Date.parse(`${rule.dtstart}T00:00:00Z`))) {
+            return res.status(400).json({ error: 'La agenda recurrente requiere una fecha de inicio válida en dtstart.' });
+        }
+        if (end_date && end_date < rule.dtstart) {
+            return res.status(400).json({ error: 'La fecha de término debe ser posterior al inicio.' });
+        }
     }
 
     // Validate service-room association
@@ -1052,7 +1314,7 @@ app.put('/api/agendas/:id', authenticateToken, (req, res) => {
 
         db.run(
             `UPDATE agendas SET provider_id = ?, service_id = ?, room_id = ?, type = ?, recurrence_rule = ?, specific_date = ?, start_time = ?, end_time = ?, start_date = ?, end_date = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [provider_id, service_id, room_id, type, recurrence_rule || null, specific_date || null, start_time, end_time, start_date || null, end_date || null, status || 'draft', agendaId],
+            [provider_id, service_id, room_id, type, recurrenceRule, specific_date || null, start_time, end_time, start_date || null, end_date || null, status || 'draft', agendaId],
             function (err2) {
                 if (err2) return res.status(500).json({ error: err2.message });
 
@@ -1531,11 +1793,6 @@ app.post('/api/activities/enroll', (req, res) => {
                     [enrollId, activityId, clientName, clientEmail, clientPhone],
                     function (errIns) {
                         if (errIns) return res.status(500).json({ error: errIns.message });
-
-                        // Save client to clients table if not exists
-                        db.run("INSERT OR IGNORE INTO clients (email, name, phone) VALUES (?, ?, ?)",
-                            [clientEmail, clientName, clientPhone], () => { });
-
                         res.json({ success: true, id: enrollId });
                     }
                 );

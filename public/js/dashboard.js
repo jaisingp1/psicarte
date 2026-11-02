@@ -47,11 +47,13 @@ function renderSidebarMenu() {
         menuList.innerHTML = `
             <li><button class="sidebar-btn active" onclick="switchDashboardPane('client-bookings', this)"><i class="fa-solid fa-calendar-days"></i> Mis Reservas</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('client-profile', this)"><i class="fa-solid fa-user-gear"></i> Mis Datos</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('community-articles', this)"><i class="fa-solid fa-newspaper"></i> Noticias y artículos</button></li>
         `;
     } else if (state.currentUser.role === "prestador") {
         menuList.innerHTML = `
             <li><button class="sidebar-btn active" onclick="switchDashboardPane('provider-schedule', this)"><i class="fa-solid fa-clipboard-list"></i> Mi Agenda</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('provider-blocks', this)"><i class="fa-solid fa-calendar-minus"></i> Bloqueos</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('community-articles', this)"><i class="fa-solid fa-newspaper"></i> Noticias y artículos</button></li>
         `;
     } else if (state.currentUser.role === "administrador") {
         menuList.innerHTML = `
@@ -68,6 +70,7 @@ function renderSidebarMenu() {
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-content', this)"><i class="fa-solid fa-file-pen"></i> Personalizar Textos</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-khipu-notifications', this)"><i class="fa-solid fa-bell"></i> Notificaciones Khipu</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-config-raw', this)"><i class="fa-solid fa-gears"></i> Configuración Avanzada</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('community-articles', this)"><i class="fa-solid fa-newspaper"></i> Noticias y artículos</button></li>
         `;
     }
 }
@@ -453,7 +456,7 @@ async function saveRoom(e) {
     const close = document.getElementById("room-close").value;
 
     const roomPayload = {
-        id: editingRoomId || ("room-" + Date.now()),
+        id: editingRoomId || crypto.randomUUID(),
         name,
         type,
         openTime: open,
@@ -461,18 +464,21 @@ async function saveRoom(e) {
     };
 
     try {
-        const res = await fetch('/api/rooms', {
-            method: 'POST',
+        const res = await fetch(editingRoomId ? `/api/rooms/${editingRoomId}` : '/api/rooms', {
+            method: editingRoomId ? 'PUT' : 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify(roomPayload)
         });
+        const result = await res.json();
         if (res.ok) {
-            showToast(editingRoomId ? "Sala editada con éxito." : "Sala creada correctamente.", "success");
+            showToast(result.message || (editingRoomId ? "Sala editada con éxito." : "Sala creada correctamente."), result.scheduleUpdated === false ? "info" : "success");
             editingRoomId = null;
             document.getElementById("admin-room-form").reset();
             await loadAllData();
             renderDashboardPanes();
             updateSlotsView();
+        } else {
+            showToast(result.error || "No fue posible guardar la sala.", "error");
         }
     } catch (e) {
         showToast("Error al guardar sala.", "error");
@@ -721,6 +727,150 @@ function exportProvidersServicesExcel() {
     showToast(`Exportadas ${rows.length} filas.`, "success");
 }
 
+function collectServiceAgendaConfig() {
+    const recurrence = document.querySelector('input[name="adm-serv-recurrence"]:checked').value;
+    const selectedRoomId = document.getElementById("adm-serv-room").value;
+    const roomIds = selectedRoomId ? [selectedRoomId] : [];
+    if (!roomIds.length) throw new Error('Configura al menos una sala antes de crear la agenda.');
+
+    if (recurrence === 'single') {
+        const specificDate = document.getElementById("adm-serv-single-date").value;
+        const startTime = document.getElementById("adm-serv-single-start").value;
+        const endTime = document.getElementById("adm-serv-single-end").value;
+        if (!specificDate || !startTime || !endTime || startTime >= endTime) {
+            throw new Error('Indica una fecha y un rango horario válido para el servicio.');
+        }
+        return { recurrence, roomIds, specificDate, startTime, endTime };
+    }
+
+    const days = [...document.querySelectorAll('.agenda-weekday-check:checked')]
+        .map(input => Number(input.value));
+    const startDate = document.getElementById("adm-serv-recurrence-start-date").value;
+    const endDate = document.getElementById("adm-serv-recurrence-end-date").value || null;
+    if (!days.length || !startDate || (endDate && endDate < startDate)) {
+        throw new Error('Selecciona al menos un día y un rango de fechas válido para la recurrencia.');
+    }
+
+    const timeRanges = {};
+    for (const day of days) {
+        const container = document.querySelector(`.agenda-time-ranges[data-day="${day}"]`);
+        const ranges = [...container.querySelectorAll('.agenda-time-range')].map(row => ({
+            start: row.querySelector('.agenda-range-start').value,
+            end: row.querySelector('.agenda-range-end').value
+        })).sort((a, b) => a.start.localeCompare(b.start));
+        if (!ranges.length || ranges.some(range => !range.start || !range.end || range.start >= range.end)) {
+            throw new Error('Revisa los intervalos horarios de cada día seleccionado.');
+        }
+        for (let index = 1; index < ranges.length; index += 1) {
+            if (ranges[index].start < ranges[index - 1].end) {
+                throw new Error('Los intervalos de un mismo día no pueden superponerse.');
+            }
+        }
+        timeRanges[String(day)] = ranges;
+    }
+
+    const starts = Object.values(timeRanges).flat().map(range => range.start).sort();
+    const ends = Object.values(timeRanges).flat().map(range => range.end).sort();
+    return {
+        recurrence,
+        roomIds,
+        startDate,
+        endDate,
+        startTime: starts[0],
+        endTime: ends[ends.length - 1],
+        recurrenceRule: JSON.stringify({
+            freq: 'WEEKLY',
+            interval: 1,
+            byweekday: days,
+            dtstart: startDate,
+            time_ranges: timeRanges
+        })
+    };
+}
+
+async function createServiceAgendas(serviceId, providerId, agendaConfig) {
+    let spotsGenerated = 0;
+    for (const roomId of agendaConfig.roomIds) {
+        const associationResponse = await fetch(`/api/services/${serviceId}/rooms`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ room_id: roomId })
+        });
+        const associationResult = await associationResponse.json();
+        if (!associationResponse.ok) {
+            throw new Error(associationResult.error || 'No se pudo asociar la sala al servicio.');
+        }
+
+        const agendaPayload = {
+            provider_id: providerId,
+            service_id: serviceId,
+            room_id: roomId,
+            type: agendaConfig.recurrence === 'weekly' ? 'recurrent' : 'punctual',
+            recurrence_rule: agendaConfig.recurrenceRule || null,
+            specific_date: agendaConfig.specificDate || null,
+            start_time: agendaConfig.startTime,
+            end_time: agendaConfig.endTime,
+            start_date: agendaConfig.startDate || null,
+            end_date: agendaConfig.endDate || null
+        };
+        const agendaResponse = await fetch('/api/agendas', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(agendaPayload)
+        });
+        const agendaResult = await agendaResponse.json();
+        if (!agendaResponse.ok) {
+            throw new Error(agendaResult.error || 'No se pudo crear la agenda.');
+        }
+        if (agendaResult.errors?.length) throw new Error(agendaResult.errors.join(' '));
+
+        const publishResponse = await fetch(`/api/agendas/${agendaResult.id}/publish`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        const publishResult = await publishResponse.json();
+        if (!publishResponse.ok) {
+            throw new Error(publishResult.error || 'La agenda se creó, pero no se pudo publicar.');
+        }
+        spotsGenerated += publishResult.spotsGenerated || 0;
+    }
+    return spotsGenerated;
+}
+
+function resetAgendaTimeRanges() {
+    document.querySelectorAll('.agenda-time-ranges').forEach(container => {
+        const rows = [...container.querySelectorAll('.agenda-time-range')];
+        rows.slice(1).forEach(row => row.remove());
+    });
+}
+
+function addAgendaTimeRange(day) {
+    const container = document.querySelector(`.agenda-time-ranges[data-day="${day}"]`);
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'agenda-time-range';
+    row.innerHTML = `
+        <label>Desde <input type="time" class="agenda-range-start" value="14:00"></label>
+        <label>Hasta <input type="time" class="agenda-range-end" value="18:00"></label>
+        <button type="button" class="btn-secondary agenda-remove-range">Quitar</button>
+    `;
+    row.querySelector('.agenda-remove-range').addEventListener('click', () => row.remove());
+    container.appendChild(row);
+}
+
+function setServiceScheduleEditable(isEditable) {
+    const roomSelect = document.getElementById('adm-serv-room');
+    if (roomSelect) {
+        roomSelect.disabled = !isEditable;
+        roomSelect.required = isEditable;
+    }
+    document.querySelectorAll(
+        'input[name="adm-serv-recurrence"], #single-date-config input, #recurrence-config input, #recurrence-config button'
+    ).forEach(input => { input.disabled = !isEditable; });
+    const note = document.getElementById('service-schedule-locked-note');
+    if (note) note.hidden = isEditable;
+}
+
 async function addService(e) {
     e.preventDefault();
     const provId = document.getElementById("adm-serv-provider").value;
@@ -729,42 +879,44 @@ async function addService(e) {
     const duration = Number(document.getElementById("adm-serv-duration").value);
     const roomId = document.getElementById("adm-serv-room").value || null;
     const serviceType = roomId ? (state.rooms.find(r => r.id === roomId)?.type || 'Presencial') : 'Virtual';
-    const recurrence = document.querySelector('input[name="adm-serv-recurrence"]:checked').value;
-    const singleDate = recurrence === 'single' ? document.getElementById("adm-serv-single-date").value : null;
-    const recurrenceDay = recurrence === 'weekly' ? Number(document.getElementById("adm-serv-recurrence-day").value) : null;
-    const recurrenceStartTime = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-start").value : null;
-    const recurrenceEndTime = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-end").value : null;
-    const recurrenceStartDate = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-start-date").value : singleDate;
-    const recurrenceEndDate = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-end-date").value || null : singleDate;
     const allowReschedule = document.getElementById("adm-serv-allow-reschedule").checked;
     const maxReschedules = Number(document.getElementById("adm-serv-max-reschedules").value) || 1;
+    let agendaConfig;
+    try {
+        agendaConfig = collectServiceAgendaConfig();
+    } catch (error) {
+        showToast(error.message, "error");
+        return;
+    }
+    const serviceId = crypto.randomUUID();
 
     try {
         const res = await fetch('/api/services', {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
-                id: "serv-" + Date.now(), providerId: provId, name, price, duration,
-                type: serviceType, roomId, recurrence, recurrenceDay,
-                recurrenceStartTime, recurrenceEndTime, recurrenceStartDate, recurrenceEndDate,
+                id: serviceId, providerId: provId, name, price, duration,
+                type: serviceType,
                 allowReschedule, maxReschedules
             })
         });
         const result = await res.json();
-        if (res.ok) {
-            showToast(result.message || "Servicio asignado correctamente.", "success");
-            document.getElementById("admin-service-form").reset();
-            document.getElementById("adm-serv-allow-reschedule").checked = true;
-            document.getElementById("adm-serv-max-reschedules").value = "1";
-            document.getElementById("adm-serv-max-reschedules-container").style.display = "block";
-            document.getElementById("recurrence-config").style.display = "none";
-            document.getElementById("single-date-config").style.display = "block";
-            await loadAllData();
-            renderDashboardPanes();
-            renderServicesSection();
-        }
+        if (!res.ok) throw new Error(result.error || "No se pudo guardar el servicio.");
+        const spotsGenerated = await createServiceAgendas(serviceId, provId, agendaConfig);
+        showToast(`Servicio y agenda publicados. Horarios disponibles generados: ${spotsGenerated}.`, "success");
+        document.getElementById("admin-service-form").reset();
+        setServiceScheduleEditable(true);
+        resetAgendaTimeRanges();
+        document.getElementById("adm-serv-allow-reschedule").checked = true;
+        document.getElementById("adm-serv-max-reschedules").value = "1";
+        document.getElementById("adm-serv-max-reschedules-container").style.display = "block";
+        document.getElementById("recurrence-config").style.display = "none";
+        document.getElementById("single-date-config").style.display = "block";
+        await loadAllData();
+        renderDashboardPanes();
+        renderServicesSection();
     } catch (e) {
-        showToast("Error al añadir servicio.", "error");
+        showToast(`El servicio puede haberse guardado, pero la agenda no se completó: ${e.message}`, "error");
     }
 }
 
@@ -796,7 +948,8 @@ async function generateServiceSpots(serviceId) {
         const result = await res.json();
 
         if (res.ok) {
-            showToast("Spots generados correctamente.", "success");
+            const message = `Agendas procesadas: ${result.agendasProcessed}. Horarios generados: ${result.spotsGenerated}. Conflictos: ${result.conflicts}.`;
+            showToast(result.errors?.length ? `${message} ${result.errors.join(' ')}` : message, result.errors?.length ? "info" : "success");
             await loadAllData();
             renderDashboardPanes();
         } else {
@@ -818,7 +971,8 @@ async function generateAllSpots() {
         const result = await res.json();
 
         if (res.ok) {
-            showToast(result.message || "Spots generados.", "success");
+            const message = `Agendas procesadas: ${result.agendasProcessed}. Horarios generados: ${result.spotsGenerated}. Conflictos: ${result.conflicts}.`;
+            showToast(result.errors?.length ? `${message} ${result.errors.join(' ')}` : message, result.errors?.length ? "info" : "success");
             await loadAllData();
             renderDashboardPanes();
             renderRoomSchedule();
@@ -934,7 +1088,8 @@ async function saveContentCustomizations(e) {
         vision: document.getElementById("custom-vision").value,
         objectives: document.getElementById("custom-objectives").value,
         contactEmail: document.getElementById("custom-contact-email").value,
-        contactPhone: document.getElementById("custom-contact-phone").value
+        contactPhone: document.getElementById("custom-contact-phone").value,
+        contactAddress: document.getElementById("custom-contact-address").value
     };
 
     try {
@@ -1153,13 +1308,16 @@ function editService(provId, servId) {
 
     // Set room
     const roomSelect = document.getElementById("adm-serv-room");
-    if (roomSelect) roomSelect.value = service.roomId || '';
+    if (roomSelect) {
+        roomSelect.value = service.roomId || '';
+        roomSelect.required = false;
+        roomSelect.disabled = true;
+    }
+    setServiceScheduleEditable(false);
 
-    // Set recurrence
-    const recurrence = service.recurrence || 'single';
-    const recurrenceRadio = document.querySelector(`input[name="adm-serv-recurrence"][value="${recurrence}"]`);
+    const recurrence = 'single';
+    const recurrenceRadio = document.querySelector('input[name="adm-serv-recurrence"][value="single"]');
     if (recurrenceRadio) recurrenceRadio.checked = true;
-
     const singleDateConfig = document.getElementById("single-date-config");
     const recurrenceConfig = document.getElementById("recurrence-config");
 
@@ -1170,25 +1328,8 @@ function editService(provId, servId) {
         recurrenceConfig.style.display = recurrence === 'weekly' ? 'block' : 'none';
     }
 
-    // Set single date
-    const singleDateInput = document.getElementById("adm-serv-single-date");
-    if (singleDateInput && recurrence === 'single') {
-        singleDateInput.value = service.recurrenceStartDate || '';
-    }
-
-    if (recurrence === 'weekly') {
-        const daySelect = document.getElementById("adm-serv-recurrence-day");
-        const startInput = document.getElementById("adm-serv-recurrence-start");
-        const endInput = document.getElementById("adm-serv-recurrence-end");
-        const startDateInput = document.getElementById("adm-serv-recurrence-start-date");
-        const endDateInput = document.getElementById("adm-serv-recurrence-end-date");
-
-        if (daySelect) daySelect.value = service.recurrenceDay || 1;
-        if (startInput) startInput.value = service.recurrenceStartTime || '09:00';
-        if (endInput) endInput.value = service.recurrenceEndTime || '12:00';
-        if (startDateInput) startDateInput.value = service.recurrenceStartDate || '';
-        if (endDateInput) endDateInput.value = service.recurrenceEndDate || '';
-    }
+    resetAgendaTimeRanges();
+    document.querySelectorAll('.agenda-weekday-check').forEach(input => { input.checked = false; });
 
     document.getElementById("adm-serv-allow-reschedule").checked = service.allowReschedule !== 0;
     document.getElementById("adm-serv-max-reschedules").value = service.maxReschedules || 1;
@@ -1708,7 +1849,7 @@ function populateRoomSelects() {
     // Also populate the service form room select
     const servRoomSelect = document.getElementById('adm-serv-room');
     if (servRoomSelect) {
-        servRoomSelect.innerHTML = '<option value="">Cualquier sala disponible</option>' +
+        servRoomSelect.innerHTML = '<option value="">Selecciona una sala</option>' +
             state.rooms.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
     }
 }
@@ -2139,4 +2280,3 @@ async function executeMoveBooking(moveAll) {
         showToast("Error de conexión al mover reserva.", "error");
     }
 }
-

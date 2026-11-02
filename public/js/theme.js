@@ -18,16 +18,19 @@ function updateThemeUI(theme) {
     const themeBtn = document.getElementById("theme-toggle");
     const logoImg = document.getElementById("nav-logo");
     const footerLogo = document.getElementById("footer-logo");
+    const accentLogo = document.getElementById("hero-logo");
     
-    if (theme === "dark") {
-        themeBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
-        logoImg.src = "images/logo_dark.png";
-        if (footerLogo) footerLogo.src = "images/logo_dark.png";
-    } else {
-        themeBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
-        logoImg.src = "images/logo_light.png";
-        if (footerLogo) footerLogo.src = "images/logo_light.png";
-    }
+    if (themeBtn) themeBtn.innerHTML = theme === "dark"
+        ? '<i class="fa-solid fa-sun"></i>'
+        : '<i class="fa-solid fa-moon"></i>';
+
+    if (logoImg) logoImg.src = theme === "dark"
+        ? "images/logo_dark.png"
+        : "images/logo_light.png";
+    if (accentLogo) accentLogo.src = "images/logo-original.webp";
+    if (footerLogo) footerLogo.src = theme === "dark"
+        ? "images/logo_dark.png"
+        : "images/logo_light.png";
 }
 
 function renderFooterYear() {

@@ -15,35 +15,28 @@ async function loadAllData() {
         state.rooms = await (await fetch('/api/rooms')).json();
         state.providers = await (await fetch('/api/providers')).json();
         
-        const bookingsRes = await fetch('/api/bookings', { headers: getAuthHeaders() });
-        if (bookingsRes.status === 401 || bookingsRes.status === 403) {
-            forceLogout('Sesión expirada. Inicie sesión nuevamente.');
-            return;
-        } else {
-            state.bookings = await bookingsRes.json();
-        }
-        
         state.activities = await (await fetch('/api/activities')).json();
-        
-        const blocksRes = await fetch('/api/blocks', { headers: getAuthHeaders() });
-        if (blocksRes.ok) {
-            state.sicknessBlocks = await blocksRes.json();
-        }
-        
-        const clientsRes = await fetch('/api/clients', { headers: getAuthHeaders() });
-        if (clientsRes.ok) {
-            state.clients = await clientsRes.json();
-        }
-        
-        try {
-            const enrollRes = await fetch('/api/activities/enrollments', { headers: getAuthHeaders() });
-            if (enrollRes.ok) {
-                state.activityEnrollments = await enrollRes.json();
-            } else {
+
+        if (state.currentUser) {
+            const bookingsRes = await fetch('/api/bookings', { headers: getAuthHeaders() });
+            if (bookingsRes.status === 401 || bookingsRes.status === 403) {
+                forceLogout('Sesión expirada. Inicie sesión nuevamente.');
+                return;
+            }
+            state.bookings = await bookingsRes.json();
+
+            const blocksRes = await fetch('/api/blocks', { headers: getAuthHeaders() });
+            if (blocksRes.ok) state.sicknessBlocks = await blocksRes.json();
+
+            const clientsRes = await fetch('/api/clients', { headers: getAuthHeaders() });
+            if (clientsRes.ok) state.clients = await clientsRes.json();
+
+            try {
+                const enrollRes = await fetch('/api/activities/enrollments', { headers: getAuthHeaders() });
+                state.activityEnrollments = enrollRes.ok ? await enrollRes.json() : [];
+            } catch (e) {
                 state.activityEnrollments = [];
             }
-        } catch (e) {
-            state.activityEnrollments = [];
         }
 
         if (state.currentUser && state.currentUser.role === 'administrador') {
@@ -70,9 +63,7 @@ async function loadAllData() {
             number: cfg.whatsapp_number || ""
         };
         
-        state.config = {
-            max_reschedules: cfg.max_reschedules || '1'
-        };
+        state.config = { ...cfg, max_reschedules: cfg.max_reschedules || '1' };
     } catch (e) {
         console.error("Error loading API data:", e);
         showToast("Error al conectar con el servidor backend.", "error");
@@ -115,14 +106,45 @@ function renderContent() {
     const customObjectives = document.getElementById("custom-objectives");
     const customContactEmail = document.getElementById("custom-contact-email");
     const customContactPhone = document.getElementById("custom-contact-phone");
+    const customContactAddress = document.getElementById("custom-contact-address");
     if (customObjectives) customObjectives.value = state.content.objectives || '';
     if (customContactEmail) customContactEmail.value = state.content.contactEmail || '';
     if (customContactPhone) customContactPhone.value = state.content.contactPhone || '';
+    if (customContactAddress) customContactAddress.value = state.content.contactAddress || '';
     
     const contactEmailEl = document.getElementById("contact-email");
     const contactPhoneEl = document.getElementById("contact-phone");
     if (contactEmailEl && state.content.contactEmail) contactEmailEl.innerText = state.content.contactEmail;
     if (contactPhoneEl && state.content.contactPhone) contactPhoneEl.innerText = state.content.contactPhone;
+
+    const contactAddressEl = document.getElementById("contact-address");
+    const contactAddressRow = document.getElementById("contact-address-row");
+    if (contactAddressEl && state.content.contactAddress) {
+        contactAddressEl.innerText = state.content.contactAddress;
+        if (contactAddressRow) contactAddressRow.hidden = false;
+    } else if (contactAddressRow) {
+        contactAddressRow.hidden = true;
+    }
+
+    const instagramUrl = state.config?.instagram_url;
+    const instagramEl = document.getElementById("contact-instagram");
+    const instagramRow = document.getElementById("contact-instagram-row");
+    if (instagramEl && instagramUrl) {
+        try {
+            const parsedUrl = new URL(instagramUrl);
+            if (parsedUrl.protocol === 'https:' && ['instagram.com', 'www.instagram.com'].includes(parsedUrl.hostname)) {
+                instagramEl.href = parsedUrl.href;
+                instagramEl.textContent = `@${parsedUrl.pathname.split('/').filter(Boolean)[0] || 'centropsicarte'}`;
+                if (instagramRow) instagramRow.hidden = false;
+            } else {
+                console.error('Instagram URL de configuración inválida.');
+            }
+        } catch (error) {
+            console.error('Instagram URL de configuración inválida:', error);
+        }
+    } else if (instagramRow) {
+        instagramRow.hidden = true;
+    }
 }
 
 function togglePresentation() {

@@ -165,6 +165,7 @@ function updateAuthUI() {
         
         renderSidebarMenu();
         renderDashboardPanes();
+        if (typeof renderArticleSubmissions === 'function') renderArticleSubmissions();
         
         // Fix: show dashboard view if we are on acceso.html with a logged-in user session
         const isAccesoPage = window.location.pathname.includes('acceso.html');

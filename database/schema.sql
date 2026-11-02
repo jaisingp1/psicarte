@@ -28,6 +28,21 @@ CREATE TABLE IF NOT EXISTS content (
     value TEXT
 );
 
+-- 3a. Community articles (authenticated submissions require administrator approval)
+CREATE TABLE IF NOT EXISTS articles (
+    id TEXT PRIMARY KEY,
+    author_id TEXT,
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending_review'
+        CHECK (status IN ('pending_review', 'published', 'rejected')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    published_at DATETIME,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
 -- 4. Rooms table (simplified — schedules moved to room_schedules)
 CREATE TABLE IF NOT EXISTS rooms (
     id TEXT PRIMARY KEY,

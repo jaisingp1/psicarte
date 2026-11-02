@@ -110,7 +110,7 @@
 
 .btn-primary {
     background-color: var(--color-accent);
-    color: #FFF9F3;
+    color: var(--color-accent-text);
     font-weight: 600;
     padding: 10px 20px;
     border-radius: var(--radius-sm);
@@ -118,8 +118,20 @@
 }
 
 .btn-primary:hover {
-    opacity: 0.9;
+    filter: brightness(0.94);
     transform: translateY(-1px);
+}
+
+:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+}
+
+.btn-primary:focus-visible,
+.filter-pill.active:focus-visible,
+.view-toggle-btn.active:focus-visible {
+    outline-color: var(--color-accent-text);
+    box-shadow: 0 0 0 4px var(--color-accent);
 }
 
 .btn-secondary {

@@ -243,14 +243,14 @@
 }
 
 .schedule-cell.drag-over {
-    background: rgba(var(--color-accent-rgb, 191, 161, 95), 0.15);
+    background: var(--color-accent-soft);
     outline: 2px dashed var(--color-accent);
 }
 
 /* Booking Draggable Items */
 .booking-draggable {
-    background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
-    color: white;
+    background: linear-gradient(135deg, var(--color-accent), var(--color-pomegranate));
+    color: var(--color-accent-text);
     padding: 4px 8px;
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
@@ -265,7 +265,7 @@
 }
 
 .booking-draggable:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 12px var(--color-shadow);
     transform: scale(1.02);
     z-index: 20;
 }
@@ -371,5 +371,61 @@
     
     .schedule-grid-body {
         font-size: 0.8rem;
+    }
+}
+
+.agenda-weekday-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.agenda-weekday {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+}
+
+.agenda-weekday legend {
+    padding: 0 6px;
+}
+
+.agenda-weekday legend label {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.agenda-time-ranges {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.agenda-time-range {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 8px;
+}
+
+.agenda-time-range label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.agenda-time-range input {
+    width: 100%;
+}
+
+.agenda-add-range {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+}
+
+@media (max-width: 576px) {
+    .agenda-time-range .agenda-remove-range {
+        grid-column: 1 / -1;
     }
 }

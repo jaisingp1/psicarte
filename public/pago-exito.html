@@ -176,6 +176,8 @@
                         id="contact-phone">+56961676706</span></p>
                 <p><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> Modalidad Online y
                     Presencial</p>
+                <p id="contact-address-row" hidden><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> <span id="contact-address"></span></p>
+                <p id="contact-instagram-row" hidden><i class="fa-brands fa-instagram" style="color: var(--color-gold);"></i> <a id="contact-instagram" target="_blank" rel="noopener noreferrer"></a></p>
             </div>
         </div>
         <div class="footer-bottom">
@@ -206,12 +208,12 @@
 
             if (theme === "dark") {
                 themeBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
-                logoImg.src = "logo_dark.png";
-                if (footerLogo) footerLogo.src = "logo_dark.png";
+                logoImg.src = "images/logo_dark.png";
+                if (footerLogo) footerLogo.src = "images/logo_dark.png";
             } else {
                 themeBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
-                logoImg.src = "logo_light.png";
-                if (footerLogo) footerLogo.src = "logo_light.png";
+                logoImg.src = "images/logo_light.png";
+                if (footerLogo) footerLogo.src = "images/logo_light.png";
             }
         }
 
@@ -286,7 +288,7 @@
         initTheme();
         verifyPayment();
     </script>
+    <script src="js/public-contact.js"></script>
 </body>
 
 </html>
-

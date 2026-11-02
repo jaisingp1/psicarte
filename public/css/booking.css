@@ -54,13 +54,13 @@
 
 .step-indicator.active .step-number {
     background-color: var(--color-accent);
-    color: #FFF9F3;
+    color: var(--color-accent-text);
     border-color: var(--color-accent);
 }
 
 .step-indicator.completed .step-number {
     background-color: var(--color-success);
-    color: #FFF9F3;
+    color: var(--color-accent-text);
     border-color: var(--color-success);
 }
 
@@ -153,7 +153,7 @@
 
 .calendar-cell.selected {
     background-color: var(--color-accent) !important;
-    color: #FFF9F3 !important;
+    color: var(--color-accent-text) !important;
 }
 
 .calendar-cell.disabled {
@@ -192,7 +192,7 @@
 
 .slot-btn.selected {
     background-color: var(--color-accent);
-    color: #FFF9F3;
+    color: var(--color-accent-text);
     border-color: var(--color-accent);
 }
 

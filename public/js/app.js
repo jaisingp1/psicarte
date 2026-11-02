@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderServicesSection();
     renderCommunityCalendar();
     renderActivities();
+    await renderPublicArticles();
     checkPopups();
     updateAuthUI();
     renderFooterYear();
@@ -50,14 +51,11 @@ addService = async function(e) {
         const price = Number(document.getElementById("adm-serv-price").value);
         const duration = Number(document.getElementById("adm-serv-duration").value);
         const roomId = document.getElementById("adm-serv-room").value || null;
-        const serviceType = roomId ? (state.rooms.find(r => r.id === roomId)?.type || 'Presencial') : 'Virtual';
-        const recurrence = document.querySelector('input[name="adm-serv-recurrence"]:checked').value;
-        const singleDate = recurrence === 'single' ? document.getElementById("adm-serv-single-date").value : null;
-        const recurrenceDay = recurrence === 'weekly' ? Number(document.getElementById("adm-serv-recurrence-day").value) : null;
-        const recurrenceStartTime = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-start").value : null;
-        const recurrenceEndTime = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-end").value : null;
-        const recurrenceStartDate = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-start-date").value : singleDate;
-        const recurrenceEndDate = recurrence === 'weekly' ? document.getElementById("adm-serv-recurrence-end-date").value || null : singleDate;
+        const existingService = state.providers
+            .find(provider => provider.id === provId)?.services
+            .find(service => service.id === editingServiceId);
+        const serviceType = existingService?.type ||
+            (roomId ? (state.rooms.find(r => r.id === roomId)?.type || 'Presencial') : 'Virtual');
         const allowReschedule = document.getElementById("adm-serv-allow-reschedule").checked;
         const maxReschedules = Number(document.getElementById("adm-serv-max-reschedules").value) || 1;
         
@@ -67,8 +65,7 @@ addService = async function(e) {
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ 
                     id: editingServiceId, providerId: provId, name, price, duration, 
-                    type: serviceType, roomId, recurrence, recurrenceDay, 
-                    recurrenceStartTime, recurrenceEndTime, recurrenceStartDate, recurrenceEndDate,
+                    type: serviceType, roomId,
                     allowReschedule, maxReschedules 
                 })
             });
@@ -77,6 +74,9 @@ addService = async function(e) {
                 showToast(result.message || "Servicio actualizado correctamente.", "success");
                 editingServiceId = null;
                 document.getElementById("admin-service-form").reset();
+                setServiceScheduleEditable(true);
+                resetAgendaTimeRanges();
+                document.querySelectorAll('.agenda-weekday-check').forEach(input => { input.checked = false; });
                 document.getElementById("adm-serv-allow-reschedule").checked = true;
                 document.getElementById("adm-serv-max-reschedules").value = "1";
                 document.getElementById("adm-serv-max-reschedules-container").style.display = "block";
@@ -87,6 +87,8 @@ addService = async function(e) {
                 await loadAllData();
                 renderDashboardPanes();
                 renderServicesSection();
+            } else {
+                showToast(result.error || "No se pudo actualizar el servicio.", "error");
             }
         } catch (err) {
             showToast("Error al actualizar servicio.", "error");

@@ -10,6 +10,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const content = await contentResponse.json();
         const config = await configResponse.json();
+        if (config.theme_custom_tokens && typeof applyCustomThemeTokens === 'function') {
+            applyCustomThemeTokens(config.theme_custom_tokens);
+        }
         const addressRow = document.getElementById('contact-address-row');
         const address = document.getElementById('contact-address');
         if (address && content.contactAddress) {

@@ -481,6 +481,7 @@ async function processPayment() {
         const mountEl = document.getElementById('khipu-web-root') || document.body;
         mountEl.innerHTML = '';
 
+        const khipuPrimaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim();
         const khipu = new Khipu();
         khipu.startOperation(paymentId, (res) => {
             handleKhipuResult(res, bookingId);
@@ -489,7 +490,7 @@ async function processPayment() {
             modal: true,
             modalOptions: { maxWidth: 450, maxHeight: 860 },
             options: {
-                style: { primaryColor: '#bfa15f', fontFamily: 'Outfit' },
+                style: { primaryColor: khipuPrimaryColor, fontFamily: 'Outfit' },
                 skipExitPage: false
             }
         });

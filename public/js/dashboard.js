@@ -68,6 +68,7 @@ function renderSidebarMenu() {
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-popups', this)"><i class="fa-solid fa-bullhorn"></i> Alertas y Pop-ups</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-calendar', this)"><i class="fa-solid fa-calendar-week"></i> Calendario Comun.</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-content', this)"><i class="fa-solid fa-file-pen"></i> Personalizar Textos</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-theme', this)"><i class="fa-solid fa-palette"></i> Personalizar Colores</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-khipu-notifications', this)"><i class="fa-solid fa-bell"></i> Notificaciones Khipu</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-config-raw', this)"><i class="fa-solid fa-gears"></i> Configuración Avanzada</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('community-articles', this)"><i class="fa-solid fa-newspaper"></i> Noticias y artículos</button></li>
@@ -84,6 +85,9 @@ function switchDashboardPane(paneId, btn) {
 
     if (paneId === 'admin-room-schedule') {
         setTimeout(() => renderRoomSchedule(), 100);
+    }
+    if (paneId === 'admin-theme') {
+        initAdminThemeManager();
     }
 }
 
@@ -2279,4 +2283,1631 @@ async function executeMoveBooking(moveAll) {
     } catch (e) {
         showToast("Error de conexión al mover reserva.", "error");
     }
+}
+
+// ----------------------------------------------------
+// ADMIN THEME & CSS COLOR MANAGER (WCAG 2.1 + ISOLATED SANDBOX)
+// ----------------------------------------------------
+const THEME_COMPONENT_TABS = [
+    {
+        id: 'general',
+        title: 'Fondos y Textos',
+        icon: 'fa-layer-group',
+        description: 'Colores base del lienzo de la página, textos principales, acentos institucionales y bordes divisorios.',
+        properties: [
+            {
+                varName: '--bg-primary',
+                label: 'Fondo Principal de Página',
+                description: 'Color de fondo general de todas las vistas del sitio.',
+                keywords: 'fondo background lienzo body principal pagina',
+                contrastPairs: [
+                    { fg: '--text-primary', bg: '--bg-primary', label: 'Texto Principal sobre Fondo Principal', minRatio: 4.5, kind: 'Texto normal' },
+                    { fg: '--text-secondary', bg: '--bg-primary', label: 'Texto Secundario sobre Fondo Principal', minRatio: 4.5, kind: 'Texto normal' }
+                ]
+            },
+            {
+                varName: '--bg-secondary',
+                label: 'Fondo Secundario / Secciones',
+                description: 'Color de paneles alternos, barras laterales y bloques destacados.',
+                keywords: 'fondo secundario seccion sidebar panel',
+                contrastPairs: [
+                    { fg: '--text-primary', bg: '--bg-secondary', label: 'Texto Principal sobre Fondo Secundario', minRatio: 4.5, kind: 'Texto normal' },
+                    { fg: '--text-secondary', bg: '--bg-secondary', label: 'Texto Secundario sobre Fondo Secundario', minRatio: 4.5, kind: 'Texto normal' }
+                ]
+            },
+            {
+                varName: '--text-primary',
+                label: 'Texto Principal y Títulos',
+                description: 'Color de encabezados (H1-H6) y párrafos principales de lectura.',
+                keywords: 'texto letra fuente titulo parrafo',
+                contrastPairs: [
+                    { fg: '--text-primary', bg: '--bg-primary', label: 'Sobre Fondo Principal', minRatio: 4.5, kind: 'Texto normal' },
+                    { fg: '--text-primary', bg: '--bg-secondary', label: 'Sobre Fondo Secundario', minRatio: 4.5, kind: 'Texto normal' }
+                ]
+            },
+            {
+                varName: '--text-secondary',
+                label: 'Texto Secundario / Subtítulos',
+                description: 'Color de descripciones complementarias, etiquetas y metadatos.',
+                keywords: 'texto secundario subtitulo descripcion gris',
+                contrastPairs: [
+                    { fg: '--text-secondary', bg: '--bg-primary', label: 'Sobre Fondo Principal', minRatio: 4.5, kind: 'Texto normal' },
+                    { fg: '--text-secondary', bg: '--bg-secondary', label: 'Sobre Fondo Secundario', minRatio: 4.5, kind: 'Texto normal' }
+                ]
+            },
+            {
+                varName: '--color-accent',
+                label: 'Color de Acento Principal',
+                description: 'Color de énfasis para enlaces destacados, íconos activos y detalles de marca.',
+                keywords: 'acento marca destacado link icono',
+                contrastPairs: [
+                    { fg: '--color-accent', bg: '--bg-primary', label: 'Acento sobre Fondo Principal', minRatio: 3.0, kind: 'Elemento destacado / Título' },
+                    { fg: '--color-accent-text', bg: '--color-accent', label: 'Texto sobre Fondo de Acento', minRatio: 4.5, kind: 'Texto normal' }
+                ]
+            },
+            {
+                varName: '--color-accent-text',
+                label: 'Texto sobre Superficies de Acento',
+                description: 'Color del texto cuando se muestra encima de un bloque con color de acento.',
+                keywords: 'texto acento contraste inverso',
+                contrastPairs: [
+                    { fg: '--color-accent-text', bg: '--color-accent', label: 'Texto sobre Fondo de Acento', minRatio: 4.5, kind: 'Texto normal' }
+                ]
+            },
+            {
+                varName: '--color-border',
+                label: 'Bordes y Líneas Divisorias',
+                description: 'Líneas separadoras de tablas, contenedores y secciones.',
+                keywords: 'borde linea divisor separador',
+                contrastPairs: []
+            },
+            {
+                varName: '--color-navy',
+                label: 'Azul Institucional (Navy)',
+                description: 'Tono institucional profundo empleado en sombras y contrastes de marca.',
+                keywords: 'azul navy institucional marca',
+                contrastPairs: []
+            },
+            {
+                varName: '--color-gold',
+                label: 'Dorado Institucional (Gold)',
+                description: 'Tono cálido institucional para íconos destacados y detalles visuales.',
+                keywords: 'dorado gold amarillo institucional',
+                contrastPairs: [
+                    { fg: '--color-gold', bg: '--bg-primary', label: 'Ícono Dorado sobre Fondo Principal', minRatio: 3.0, kind: 'Ícono / Elemento gráfico' }
+                ]
+            },
+            {
+                varName: '--color-pomegranate',
+                label: 'Granada Institucional (Pomegranate)',
+                description: 'Tono granada de identidad PsicArte usado en títulos de misión y avatares.',
+                keywords: 'granada pomegranate burdeo vino institucional',
+                contrastPairs: [
+                    { fg: '--color-pomegranate', bg: '--bg-card', label: 'Título Granada sobre Tarjeta', minRatio: 3.0, kind: 'Título grande / Ícono' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'navigation',
+        title: 'Navegación y Footer',
+        icon: 'fa-compass',
+        description: 'Barra de navegación superior (Header), enlaces del menú y pie de página (Footer).',
+        properties: [
+            {
+                varName: '--header-bg',
+                label: 'Fondo de Barra Superior (Header)',
+                description: 'Color base de la cabecera fija superior.',
+                keywords: 'header menu navegacion arriba barra fondo',
+                contrastPairs: [
+                    { fg: '--nav-link-color', bg: '--header-bg', label: 'Enlaces del Menú sobre Header', minRatio: 4.5, kind: 'Texto de menú' }
+                ]
+            },
+            {
+                varName: '--header-border',
+                label: 'Borde Inferior del Header',
+                description: 'Línea divisoria inferior de la barra de navegación.',
+                keywords: 'header borde linea',
+                contrastPairs: []
+            },
+            {
+                varName: '--nav-link-color',
+                label: 'Texto de Enlaces del Menú',
+                description: 'Color normal de los enlaces Inicio, Nosotros, Servicios, Comunidad y Agendar.',
+                keywords: 'menu link enlace navegacion texto',
+                contrastPairs: [
+                    { fg: '--nav-link-color', bg: '--header-bg', label: 'Enlace sobre Fondo del Header', minRatio: 4.5, kind: 'Texto de menú' }
+                ]
+            },
+            {
+                varName: '--nav-link-accent',
+                label: 'Enlace Activo / Hover del Menú',
+                description: 'Color al pasar el cursor o indicar la sección activa en el menú.',
+                keywords: 'menu hover activo subrayado',
+                contrastPairs: [
+                    { fg: '--nav-link-accent', bg: '--header-bg', label: 'Enlace Activo sobre Header', minRatio: 3.0, kind: 'Indicador activo' }
+                ]
+            },
+            {
+                varName: '--footer-bg',
+                label: 'Fondo del Pie de Página (Footer)',
+                description: 'Color de fondo del bloque inferior de contacto y enlaces rápidos.',
+                keywords: 'footer pie pagina abajo fondo',
+                contrastPairs: [
+                    { fg: '--footer-text', bg: '--footer-bg', label: 'Texto del Footer sobre Fondo del Footer', minRatio: 4.5, kind: 'Texto normal' },
+                    { fg: '--footer-accent', bg: '--footer-bg', label: 'Títulos del Footer sobre Fondo del Footer', minRatio: 3.0, kind: 'Título grande / Ícono' }
+                ]
+            },
+            {
+                varName: '--footer-text',
+                label: 'Texto del Pie de Página',
+                description: 'Color de párrafos, enlaces y derechos reservados en el footer.',
+                keywords: 'footer texto letra enlaces',
+                contrastPairs: [
+                    { fg: '--footer-text', bg: '--footer-bg', label: 'Texto sobre Fondo del Footer', minRatio: 4.5, kind: 'Texto normal' }
+                ]
+            },
+            {
+                varName: '--footer-accent',
+                label: 'Títulos e Íconos del Footer',
+                description: 'Color de los encabezados (Enlaces Rápidos, Contacto) e íconos del pie de página.',
+                keywords: 'footer titulo icono dorado acento',
+                contrastPairs: [
+                    { fg: '--footer-accent', bg: '--footer-bg', label: 'Título/Ícono sobre Fondo del Footer', minRatio: 3.0, kind: 'Título grande / Ícono' }
+                ]
+            },
+            {
+                varName: '--footer-border',
+                label: 'Línea Divisoria del Footer',
+                description: 'Línea que separa el contenido del footer del aviso de copyright.',
+                keywords: 'footer borde linea copyright',
+                contrastPairs: []
+            }
+        ]
+    },
+    {
+        id: 'buttons',
+        title: 'Botones y Formularios',
+        icon: 'fa-hand-pointer',
+        description: 'Botones primarios, secundarios, botones de ícono y campos de entrada de formularios (inputs y selects).',
+        properties: [
+            {
+                varName: '--btn-primary-bg',
+                label: 'Fondo de Botón Principal',
+                description: 'Color de relleno de los botones de acción principal (Reservar, Guardar, Ingresar).',
+                keywords: 'boton primario principal fondo accion',
+                contrastPairs: [
+                    { fg: '--btn-primary-text', bg: '--btn-primary-bg', label: 'Texto sobre Botón Principal', minRatio: 4.5, kind: 'Texto de botón' }
+                ]
+            },
+            {
+                varName: '--btn-primary-text',
+                label: 'Texto de Botón Principal',
+                description: 'Color de la letra e íconos dentro del botón principal.',
+                keywords: 'boton primario texto letra',
+                contrastPairs: [
+                    { fg: '--btn-primary-text', bg: '--btn-primary-bg', label: 'Texto sobre Botón Principal', minRatio: 4.5, kind: 'Texto de botón' }
+                ]
+            },
+            {
+                varName: '--btn-secondary-bg',
+                label: 'Fondo de Botón Secundario',
+                description: 'Color de fondo de botones alternativos (Cancelar, Volver, Exportar).',
+                keywords: 'boton secundario alternativo fondo',
+                contrastPairs: [
+                    { fg: '--btn-secondary-text', bg: '--btn-secondary-bg', label: 'Texto sobre Botón Secundario', minRatio: 4.5, kind: 'Texto de botón' }
+                ]
+            },
+            {
+                varName: '--btn-secondary-text',
+                label: 'Texto de Botón Secundario',
+                description: 'Color del texto en botones secundarios.',
+                keywords: 'boton secundario texto letra',
+                contrastPairs: [
+                    { fg: '--btn-secondary-text', bg: '--btn-secondary-bg', label: 'Texto sobre Botón Secundario', minRatio: 4.5, kind: 'Texto de botón' }
+                ]
+            },
+            {
+                varName: '--btn-secondary-border',
+                label: 'Borde de Botón Secundario',
+                description: 'Color del contorno de los botones secundarios.',
+                keywords: 'boton secundario borde contorno',
+                contrastPairs: []
+            },
+            {
+                varName: '--btn-icon-bg',
+                label: 'Fondo de Botón de Ícono',
+                description: 'Fondo del botón circular de cambio de tema (Sol/Luna) y controles de calendario.',
+                keywords: 'boton icono circular tema fondo',
+                contrastPairs: [
+                    { fg: '--btn-icon-text', bg: '--btn-icon-bg', label: 'Ícono sobre Botón Circular', minRatio: 3.0, kind: 'Ícono interactivo' }
+                ]
+            },
+            {
+                varName: '--btn-icon-text',
+                label: 'Color de Ícono en Botón Circular',
+                description: 'Color del símbolo dentro de los botones de ícono.',
+                keywords: 'boton icono color simbolo',
+                contrastPairs: [
+                    { fg: '--btn-icon-text', bg: '--btn-icon-bg', label: 'Ícono sobre Botón Circular', minRatio: 3.0, kind: 'Ícono interactivo' }
+                ]
+            },
+            {
+                varName: '--input-bg',
+                label: 'Fondo de Campos de Formulario',
+                description: 'Color de relleno de cajas de texto (inputs), áreas de texto y listas desplegables.',
+                keywords: 'input formulario campo caja select fondo',
+                contrastPairs: [
+                    { fg: '--input-text', bg: '--input-bg', label: 'Texto escrito sobre Campo de Formulario', minRatio: 4.5, kind: 'Texto de formulario' }
+                ]
+            },
+            {
+                varName: '--input-text',
+                label: 'Texto de Campos de Formulario',
+                description: 'Color del texto que escribe el usuario dentro de los formularios.',
+                keywords: 'input formulario texto letra',
+                contrastPairs: [
+                    { fg: '--input-text', bg: '--input-bg', label: 'Texto escrito sobre Campo de Formulario', minRatio: 4.5, kind: 'Texto de formulario' }
+                ]
+            },
+            {
+                varName: '--input-border',
+                label: 'Borde Normal de Formulario',
+                description: 'Contorno en reposo de los campos de entrada.',
+                keywords: 'input formulario borde',
+                contrastPairs: []
+            },
+            {
+                varName: '--input-focus-border',
+                label: 'Borde Activo (Focus) de Formulario',
+                description: 'Color del borde cuando el usuario hace clic o escribe en un campo.',
+                keywords: 'input focus activo borde foco',
+                contrastPairs: [
+                    { fg: '--input-focus-border', bg: '--input-bg', label: 'Borde Focus respecto al Fondo del Campo', minRatio: 3.0, kind: 'Indicador de foco UI' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'cards',
+        title: 'Tarjetas y Servicios',
+        icon: 'fa-id-card',
+        description: 'Tarjetas de servicios, tarjetas de profesionales, etiquetas de modalidad (Online / Presencial), precios y filtros.',
+        properties: [
+            {
+                varName: '--bg-card',
+                label: 'Fondo de Tarjetas (Cards)',
+                description: 'Superficie de las tarjetas de servicios, profesionales y paneles blancos.',
+                keywords: 'tarjeta card servicio profesional fondo',
+                contrastPairs: [
+                    { fg: '--text-primary', bg: '--bg-card', label: 'Título sobre Fondo de Tarjeta', minRatio: 4.5, kind: 'Texto normal' },
+                    { fg: '--text-secondary', bg: '--bg-card', label: 'Descripción sobre Fondo de Tarjeta', minRatio: 4.5, kind: 'Texto normal' },
+                    { fg: '--service-price-color', bg: '--bg-card', label: 'Precio del Servicio sobre Tarjeta', minRatio: 3.0, kind: 'Texto grande (Precio)' }
+                ]
+            },
+            {
+                varName: '--card-border',
+                label: 'Borde de Tarjetas',
+                description: 'Contorno normal de cada tarjeta.',
+                keywords: 'tarjeta card borde contorno',
+                contrastPairs: []
+            },
+            {
+                varName: '--card-hover-border',
+                label: 'Borde de Tarjeta al Pasar el Mouse (Hover)',
+                description: 'Color que resalta el borde de una tarjeta cuando el usuario pasa el cursor.',
+                keywords: 'tarjeta card hover borde',
+                contrastPairs: []
+            },
+            {
+                varName: '--service-price-color',
+                label: 'Color del Precio de Servicios',
+                description: 'Color numérico del valor en pesos ($) en el catálogo de servicios.',
+                keywords: 'precio valor costo servicio tarjeta',
+                contrastPairs: [
+                    { fg: '--service-price-color', bg: '--bg-card', label: 'Precio sobre Fondo de Tarjeta', minRatio: 3.0, kind: 'Texto grande (Precio 1.5rem)' }
+                ]
+            },
+            {
+                varName: '--color-online',
+                label: 'Fondo de Etiqueta Modalidad Online',
+                description: 'Color de la insignia para consultas virtuales / telemedicina.',
+                keywords: 'badge etiqueta online virtual fondo',
+                contrastPairs: [
+                    { fg: '--color-online-text', bg: '--color-online', label: 'Texto sobre Etiqueta Online', minRatio: 4.5, kind: 'Etiqueta pequeña' }
+                ]
+            },
+            {
+                varName: '--color-online-text',
+                label: 'Texto de Etiqueta Modalidad Online',
+                description: 'Color de la letra en la insignia de atención virtual.',
+                keywords: 'badge etiqueta online virtual texto',
+                contrastPairs: [
+                    { fg: '--color-online-text', bg: '--color-online', label: 'Texto sobre Etiqueta Online', minRatio: 4.5, kind: 'Etiqueta pequeña' }
+                ]
+            },
+            {
+                varName: '--color-in-person',
+                label: 'Fondo de Etiqueta Modalidad Presencial',
+                description: 'Color de la insignia para consultas físicas en el centro.',
+                keywords: 'badge etiqueta presencial fisica fondo',
+                contrastPairs: [
+                    { fg: '--color-in-person-text', bg: '--color-in-person', label: 'Texto sobre Etiqueta Presencial', minRatio: 4.5, kind: 'Etiqueta pequeña' }
+                ]
+            },
+            {
+                varName: '--color-in-person-text',
+                label: 'Texto de Etiqueta Modalidad Presencial',
+                description: 'Color de la letra en la insignia de atención presencial.',
+                keywords: 'badge etiqueta presencial fisica texto',
+                contrastPairs: [
+                    { fg: '--color-in-person-text', bg: '--color-in-person', label: 'Texto sobre Etiqueta Presencial', minRatio: 4.5, kind: 'Etiqueta pequeña' }
+                ]
+            },
+            {
+                varName: '--filter-active-bg',
+                label: 'Fondo de Filtro Activo',
+                description: 'Color del botón de filtro seleccionado en el catálogo de servicios.',
+                keywords: 'filtro pill activo seleccionado fondo',
+                contrastPairs: [
+                    { fg: '--filter-active-text', bg: '--filter-active-bg', label: 'Texto sobre Filtro Activo', minRatio: 4.5, kind: 'Texto de filtro' }
+                ]
+            },
+            {
+                varName: '--filter-active-text',
+                label: 'Texto de Filtro Activo',
+                description: 'Color de la letra dentro del filtro activo.',
+                keywords: 'filtro pill activo texto',
+                contrastPairs: [
+                    { fg: '--filter-active-text', bg: '--filter-active-bg', label: 'Texto sobre Filtro Activo', minRatio: 4.5, kind: 'Texto de filtro' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'modals',
+        title: 'Modales, Pop-ups y Banners',
+        icon: 'fa-window-restore',
+        description: 'Ventanas emergentes (modales), pop-ups de avisos en inicio y cintillo informativo superior.',
+        properties: [
+            {
+                varName: '--modal-bg',
+                label: 'Fondo de Ventanas Modales y Pop-ups',
+                description: 'Superficie interior de las ventanas de diálogo, términos y avisos.',
+                keywords: 'modal ventana dialogo popup fondo',
+                contrastPairs: [
+                    { fg: '--modal-text', bg: '--modal-bg', label: 'Texto del Modal sobre Fondo del Modal', minRatio: 4.5, kind: 'Texto normal' },
+                    { fg: '--popup-title-color', bg: '--modal-bg', label: 'Título de Pop-up sobre Fondo del Modal', minRatio: 3.0, kind: 'Título grande' }
+                ]
+            },
+            {
+                varName: '--modal-text',
+                label: 'Texto de Ventanas Modales',
+                description: 'Color del contenido y encabezados dentro de las ventanas modales.',
+                keywords: 'modal ventana texto letra',
+                contrastPairs: [
+                    { fg: '--modal-text', bg: '--modal-bg', label: 'Texto sobre Fondo del Modal', minRatio: 4.5, kind: 'Texto normal' }
+                ]
+            },
+            {
+                varName: '--modal-border',
+                label: 'Borde de Ventanas Modales',
+                description: 'Líneas divisorias de cabecera y pie dentro de los modales.',
+                keywords: 'modal borde linea',
+                contrastPairs: []
+            },
+            {
+                varName: '--modal-overlay-color',
+                label: 'Color Base del Velo Oscuro (Overlay)',
+                description: 'Tono base semitransparente que oscurece el fondo detrás de un modal abierto.',
+                keywords: 'modal overlay velo sombra fondo detras',
+                contrastPairs: []
+            },
+            {
+                varName: '--popup-title-color',
+                label: 'Título del Pop-up de Aviso Inicial',
+                description: 'Color del encabezado principal en el pop-up informativo de inicio.',
+                keywords: 'popup aviso alerta titulo',
+                contrastPairs: [
+                    { fg: '--popup-title-color', bg: '--modal-bg', label: 'Título de Pop-up sobre Fondo del Modal', minRatio: 3.0, kind: 'Título grande' }
+                ]
+            },
+            {
+                varName: '--banner-bg',
+                label: 'Fondo del Banner Superior de Anuncios',
+                description: 'Color de la franja informativa superior de anuncios importantes.',
+                keywords: 'banner cintillo anuncio superior fondo',
+                contrastPairs: [
+                    { fg: '--banner-text', bg: '--banner-bg', label: 'Texto del Banner sobre Fondo del Banner', minRatio: 4.5, kind: 'Texto de anuncio' }
+                ]
+            },
+            {
+                varName: '--banner-text',
+                label: 'Texto del Banner Superior de Anuncios',
+                description: 'Color de la letra en la franja superior de anuncios.',
+                keywords: 'banner cintillo anuncio texto',
+                contrastPairs: [
+                    { fg: '--banner-text', bg: '--banner-bg', label: 'Texto del Banner sobre Fondo del Banner', minRatio: 4.5, kind: 'Texto de anuncio' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'booking',
+        title: 'Calendario y Agendamiento',
+        icon: 'fa-calendar-check',
+        description: 'Asistente de reserva de horas, indicadores de pasos, días del calendario y bloques horarios (slots).',
+        properties: [
+            {
+                varName: '--booking-widget-bg',
+                label: 'Fondo del Contenedor de Agendamiento',
+                description: 'Superficie principal del asistente de reserva de horas.',
+                keywords: 'agendamiento reserva widget contenedor fondo',
+                contrastPairs: [
+                    { fg: '--text-primary', bg: '--booking-widget-bg', label: 'Texto Principal sobre Widget de Reserva', minRatio: 4.5, kind: 'Texto normal' }
+                ]
+            },
+            {
+                varName: '--step-active-bg',
+                label: 'Fondo de Paso Activo (1, 2, 3)',
+                description: 'Color del círculo numerado del paso actual en el agendamiento.',
+                keywords: 'paso step indicador activo fondo',
+                contrastPairs: [
+                    { fg: '--step-active-text', bg: '--step-active-bg', label: 'Número sobre Círculo de Paso Activo', minRatio: 4.5, kind: 'Indicador numérico' }
+                ]
+            },
+            {
+                varName: '--step-active-text',
+                label: 'Texto de Paso Activo',
+                description: 'Color del número dentro del círculo del paso activo.',
+                keywords: 'paso step indicador activo texto numero',
+                contrastPairs: [
+                    { fg: '--step-active-text', bg: '--step-active-bg', label: 'Número sobre Círculo de Paso Activo', minRatio: 4.5, kind: 'Indicador numérico' }
+                ]
+            },
+            {
+                varName: '--cal-cell-bg',
+                label: 'Fondo de Día Disponible en Calendario',
+                description: 'Color de las celdas de días disponibles en el calendario mensual.',
+                keywords: 'calendario dia celda disponible fondo',
+                contrastPairs: [
+                    { fg: '--cal-cell-text', bg: '--cal-cell-bg', label: 'Número de Día sobre Celda del Calendario', minRatio: 4.5, kind: 'Número de calendario' }
+                ]
+            },
+            {
+                varName: '--cal-cell-text',
+                label: 'Texto de Día Disponible en Calendario',
+                description: 'Color del número de día en las celdas disponibles.',
+                keywords: 'calendario dia celda texto numero',
+                contrastPairs: [
+                    { fg: '--cal-cell-text', bg: '--cal-cell-bg', label: 'Número de Día sobre Celda del Calendario', minRatio: 4.5, kind: 'Número de calendario' }
+                ]
+            },
+            {
+                varName: '--cal-selected-bg',
+                label: 'Fondo de Día Seleccionado en Calendario',
+                description: 'Color de relleno cuando el paciente elige una fecha en el calendario.',
+                keywords: 'calendario dia seleccionado activo fondo',
+                contrastPairs: [
+                    { fg: '--cal-selected-text', bg: '--cal-selected-bg', label: 'Número sobre Día Seleccionado', minRatio: 4.5, kind: 'Número seleccionado' }
+                ]
+            },
+            {
+                varName: '--cal-selected-text',
+                label: 'Texto de Día Seleccionado en Calendario',
+                description: 'Color del número en la fecha seleccionada del calendario.',
+                keywords: 'calendario dia seleccionado texto',
+                contrastPairs: [
+                    { fg: '--cal-selected-text', bg: '--cal-selected-bg', label: 'Número sobre Día Seleccionado', minRatio: 4.5, kind: 'Número seleccionado' }
+                ]
+            },
+            {
+                varName: '--slot-bg',
+                label: 'Fondo de Bloque Horario Disponible (Slot)',
+                description: 'Color de los botones de hora disponible (ej. 10:00, 11:00).',
+                keywords: 'horario hora slot bloque disponible fondo',
+                contrastPairs: [
+                    { fg: '--slot-text', bg: '--slot-bg', label: 'Hora sobre Bloque Disponible', minRatio: 4.5, kind: 'Texto de botón horario' }
+                ]
+            },
+            {
+                varName: '--slot-text',
+                label: 'Texto de Bloque Horario Disponible',
+                description: 'Color del texto de la hora en bloques disponibles.',
+                keywords: 'horario hora slot texto',
+                contrastPairs: [
+                    { fg: '--slot-text', bg: '--slot-bg', label: 'Hora sobre Bloque Disponible', minRatio: 4.5, kind: 'Texto de botón horario' }
+                ]
+            },
+            {
+                varName: '--slot-selected-bg',
+                label: 'Fondo de Bloque Horario Seleccionado',
+                description: 'Color del botón horario cuando está seleccionado o al pasar el cursor.',
+                keywords: 'horario hora slot seleccionado activo fondo',
+                contrastPairs: [
+                    { fg: '--slot-selected-text', bg: '--slot-selected-bg', label: 'Hora sobre Bloque Seleccionado', minRatio: 4.5, kind: 'Texto de botón horario' }
+                ]
+            },
+            {
+                varName: '--slot-selected-text',
+                label: 'Texto de Bloque Horario Seleccionado',
+                description: 'Color del texto de la hora cuando el bloque está seleccionado.',
+                keywords: 'horario hora slot seleccionado texto',
+                contrastPairs: [
+                    { fg: '--slot-selected-text', bg: '--slot-selected-bg', label: 'Hora sobre Bloque Seleccionado', minRatio: 4.5, kind: 'Texto de botón horario' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'states',
+        title: 'Estados, Alertas y Flotantes',
+        icon: 'fa-bell',
+        description: 'Indicadores semánticos (Éxito, Advertencia, Error, Información), notificaciones Toast y botón flotante de WhatsApp.',
+        properties: [
+            {
+                varName: '--color-success',
+                label: 'Color de Éxito / Pagado / Confirmado',
+                description: 'Usado en insignias de reserva pagada, confirmaciones y cupos disponibles.',
+                keywords: 'exito success verde pagado confirmado',
+                contrastPairs: [
+                    { fg: '--color-success', bg: '--bg-card', label: 'Indicador de Éxito sobre Tarjeta/Toast', minRatio: 3.0, kind: 'Estado semántico / Ícono' }
+                ]
+            },
+            {
+                varName: '--color-warning',
+                label: 'Color de Advertencia / Pendiente',
+                description: 'Usado en estados pendientes de pago, alertas preventivas y últimos cupos.',
+                keywords: 'advertencia warning alerta pendiente naranja',
+                contrastPairs: [
+                    { fg: '--color-warning', bg: '--bg-card', label: 'Indicador de Advertencia sobre Tarjeta', minRatio: 3.0, kind: 'Estado semántico / Ícono' }
+                ]
+            },
+            {
+                varName: '--color-error',
+                label: 'Color de Error / Cancelado',
+                description: 'Usado en mensajes de error, reservas canceladas y cupos agotados.',
+                keywords: 'error peligro rojo cancelado agotado',
+                contrastPairs: [
+                    { fg: '--color-error', bg: '--bg-card', label: 'Indicador de Error sobre Tarjeta/Toast', minRatio: 3.0, kind: 'Estado semántico / Ícono' }
+                ]
+            },
+            {
+                varName: '--color-info',
+                label: 'Color Informativo',
+                description: 'Usado en avisos informativos, objetivos y guías de usuario.',
+                keywords: 'info informacion azul aviso',
+                contrastPairs: [
+                    { fg: '--color-info', bg: '--bg-card', label: 'Indicador Informativo sobre Tarjeta/Toast', minRatio: 3.0, kind: 'Estado semántico / Ícono' }
+                ]
+            },
+            {
+                varName: '--toast-bg',
+                label: 'Fondo de Notificaciones Emergentes (Toast)',
+                description: 'Superficie de los mensajes flotantes de confirmación en la esquina inferior.',
+                keywords: 'toast notificacion mensaje flotante fondo',
+                contrastPairs: [
+                    { fg: '--toast-text', bg: '--toast-bg', label: 'Texto de Notificación sobre Fondo Toast', minRatio: 4.5, kind: 'Texto de notificación' }
+                ]
+            },
+            {
+                varName: '--toast-text',
+                label: 'Texto de Notificaciones Emergentes (Toast)',
+                description: 'Color del mensaje dentro de las notificaciones Toast.',
+                keywords: 'toast notificacion texto letra',
+                contrastPairs: [
+                    { fg: '--toast-text', bg: '--toast-bg', label: 'Texto de Notificación sobre Fondo Toast', minRatio: 4.5, kind: 'Texto de notificación' }
+                ]
+            },
+            {
+                varName: '--whatsapp-bg',
+                label: 'Fondo del Botón Flotante de WhatsApp',
+                description: 'Color del botón circular de contacto rápido por WhatsApp.',
+                keywords: 'whatsapp flotante boton verde fondo',
+                contrastPairs: [
+                    { fg: '--whatsapp-text', bg: '--whatsapp-bg', label: 'Ícono de WhatsApp sobre Fondo del Botón', minRatio: 3.0, kind: 'Ícono grande (30px)' }
+                ]
+            },
+            {
+                varName: '--whatsapp-text',
+                label: 'Ícono del Botón Flotante de WhatsApp',
+                description: 'Color del logotipo de WhatsApp dentro del botón flotante.',
+                keywords: 'whatsapp flotante icono texto',
+                contrastPairs: [
+                    { fg: '--whatsapp-text', bg: '--whatsapp-bg', label: 'Ícono de WhatsApp sobre Fondo del Botón', minRatio: 3.0, kind: 'Ícono grande (30px)' }
+                ]
+            }
+        ]
+    }
+];
+
+const themeManagerState = {
+    initialized: false,
+    activeScheme: 'light',
+    activeTabId: 'general',
+    searchQuery: '',
+    saved: { light: {}, dark: {} },
+    draft: { light: {}, dark: {} },
+    defaults: { light: {}, dark: {} }
+};
+
+function getAllThemePropertyNames() {
+    const names = [];
+    THEME_COMPONENT_TABS.forEach(tab => {
+        tab.properties.forEach(prop => {
+            if (!names.includes(prop.varName)) {
+                names.push(prop.varName);
+            }
+        });
+    });
+    return names;
+}
+
+function normalizeToHex(colorStr) {
+    if (!colorStr || typeof colorStr !== 'string') return '';
+    const trimmed = colorStr.trim();
+    const hex6 = /^#([0-9a-f]{6})$/i.exec(trimmed);
+    if (hex6) return '#' + hex6[1].toUpperCase();
+
+    const hex3 = /^#([0-9a-f]{3})$/i.exec(trimmed);
+    if (hex3) {
+        const c = hex3[1].toUpperCase();
+        return '#' + c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+    }
+
+    const rgbMatch = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i.exec(trimmed);
+    if (rgbMatch) {
+        return rgbToHex(
+            Math.min(255, Math.max(0, parseInt(rgbMatch[1], 10))),
+            Math.min(255, Math.max(0, parseInt(rgbMatch[2], 10))),
+            Math.min(255, Math.max(0, parseInt(rgbMatch[3], 10)))
+        );
+    }
+    return trimmed.toUpperCase();
+}
+
+function hexToRgb(hexStr) {
+    const norm = normalizeToHex(hexStr);
+    const match = /^#([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})$/i.exec(norm);
+    if (!match) return { r: 0, g: 0, b: 0 };
+    return {
+        r: parseInt(match[1], 16),
+        g: parseInt(match[2], 16),
+        b: parseInt(match[3], 16)
+    };
+}
+
+function rgbToHex(r, g, b) {
+    const clamp = n => Math.min(255, Math.max(0, Math.round(Number(n) || 0)));
+    const toHex = n => clamp(n).toString(16).padStart(2, '0').toUpperCase();
+    return '#' + toHex(r) + toHex(g) + toHex(b);
+}
+
+function calculateRelativeLuminance(hexColor) {
+    const { r, g, b } = hexToRgb(hexColor);
+    const transform = channel => {
+        const sRGB = channel / 255;
+        return sRGB <= 0.03928 ? sRGB / 12.92 : Math.pow((sRGB + 0.055) / 1.055, 2.4);
+    };
+    const R = transform(r);
+    const G = transform(g);
+    const B = transform(b);
+    return 0.2126 * R + 0.7152 * G + 0.0722 * B;
+}
+
+function calculateContrastRatio(hex1, hex2) {
+    const lum1 = calculateRelativeLuminance(hex1);
+    const lum2 = calculateRelativeLuminance(hex2);
+    const brightest = Math.max(lum1, lum2);
+    const darkest = Math.min(lum1, lum2);
+    return (brightest + 0.05) / (darkest + 0.05);
+}
+
+function evaluateContrastStatus(ratio, minRatio) {
+    const rounded = Math.round(ratio * 100) / 100;
+    if (ratio >= 7.0) {
+        return {
+            passes: true,
+            level: 'AAA',
+            badgeClass: 'badge-paid',
+            shortText: `${rounded.toFixed(2)}:1 · Legibilidad Óptima (WCAG AAA)`,
+            detailText: `Excelente contraste. Supera ampliamente el mínimo internacional (${minRatio.toFixed(1)}:1).`
+        };
+    }
+    if (ratio >= 4.5) {
+        return {
+            passes: true,
+            level: 'AA',
+            badgeClass: 'badge-paid',
+            shortText: `${rounded.toFixed(2)}:1 · Legibilidad Buena (WCAG AA)`,
+            detailText: `Cumple la norma internacional WCAG 2.1 para textos normales y botones (mín. ${minRatio.toFixed(1)}:1).`
+        };
+    }
+    if (ratio >= 3.0) {
+        const passesLarge = minRatio <= 3.0;
+        return {
+            passes: passesLarge,
+            level: 'AA Large',
+            badgeClass: passesLarge ? 'badge-info' : 'badge-pending',
+            shortText: passesLarge
+                ? `${rounded.toFixed(2)}:1 · Cumple para Texto Grande / Íconos (WCAG AA)`
+                : `${rounded.toFixed(2)}:1 · Bajo contraste para texto pequeño (Mín. 4.5:1)`,
+            detailText: passesLarge
+                ? `Cumple el mínimo internacional de 3.0:1 exigido para títulos grandes, íconos o bordes.`
+                : `Solo es legible en letras grandes. Para textos normales la norma WCAG 2.1 recomienda al menos 4.5:1.`
+        };
+    }
+    return {
+        passes: false,
+        level: 'Falla WCAG',
+        badgeClass: 'badge-cancelled',
+        shortText: `${rounded.toFixed(2)}:1 · Bajo Contraste (Difícil de leer)`,
+        detailText: `Los dos colores son muy similares. La norma internacional WCAG 2.1 exige al menos ${minRatio.toFixed(1)}:1 en este componente.`
+    };
+}
+
+function suggestAccessibleColor(targetHex, fixedHex, minRatio) {
+    const targetRgb = hexToRgb(targetHex);
+    const fixedLum = calculateRelativeLuminance(fixedHex);
+    const preferLighter = fixedLum < 0.35;
+
+    const tryDirection = towardsWhite => {
+        for (let step = 1; step <= 100; step++) {
+            const factor = step / 100;
+            const r = towardsWhite
+                ? targetRgb.r + (255 - targetRgb.r) * factor
+                : targetRgb.r * (1 - factor);
+            const g = towardsWhite
+                ? targetRgb.g + (255 - targetRgb.g) * factor
+                : targetRgb.g * (1 - factor);
+            const b = towardsWhite
+                ? targetRgb.b + (255 - targetRgb.b) * factor
+                : targetRgb.b * (1 - factor);
+            const candidate = rgbToHex(r, g, b);
+            if (calculateContrastRatio(candidate, fixedHex) >= minRatio + 0.08) {
+                return candidate;
+            }
+        }
+        return null;
+    };
+
+    return (
+        tryDirection(preferLighter) ||
+        tryDirection(!preferLighter) ||
+        (preferLighter ? rgbToHex(254, 253, 249) : rgbToHex(0, 27, 64))
+    );
+}
+
+function readComputedTokensFromStylesheet() {
+    const names = getAllThemePropertyNames();
+    const currentAttr = document.documentElement.getAttribute('data-theme') || 'light';
+    const customStyleEl = document.getElementById('psicarte-custom-theme');
+    const savedCustomCss = customStyleEl ? customStyleEl.textContent : '';
+    if (customStyleEl) customStyleEl.textContent = '';
+
+    const result = { light: {}, dark: {} };
+    ['light', 'dark'].forEach(scheme => {
+        document.documentElement.setAttribute('data-theme', scheme);
+        const computed = getComputedStyle(document.documentElement);
+        names.forEach(varName => {
+            result[scheme][varName] = normalizeToHex(computed.getPropertyValue(varName));
+        });
+    });
+
+    document.documentElement.setAttribute('data-theme', currentAttr);
+    if (customStyleEl) customStyleEl.textContent = savedCustomCss;
+    return result;
+}
+
+function initAdminThemeManager(forceReload = false) {
+    if (themeManagerState.initialized && !forceReload) {
+        renderAdminThemeManager();
+        return;
+    }
+
+    const baseFromCss = readComputedTokensFromStylesheet();
+    const rawConfig = state.config && state.config.theme_custom_tokens
+        ? parseCustomThemeTokens(state.config.theme_custom_tokens)
+        : null;
+
+    const defaultsLight = {
+        ...baseFromCss.light,
+        ...(rawConfig && rawConfig.defaults && rawConfig.defaults.light ? rawConfig.defaults.light : {})
+    };
+    const defaultsDark = {
+        ...baseFromCss.dark,
+        ...(rawConfig && rawConfig.defaults && rawConfig.defaults.dark ? rawConfig.defaults.dark : {})
+    };
+
+    const savedLight = {
+        ...defaultsLight,
+        ...(rawConfig && rawConfig.light ? rawConfig.light : {})
+    };
+    const savedDark = {
+        ...defaultsDark,
+        ...(rawConfig && rawConfig.dark ? rawConfig.dark : {})
+    };
+
+    Object.keys(savedLight).forEach(k => { savedLight[k] = normalizeToHex(savedLight[k]); });
+    Object.keys(savedDark).forEach(k => { savedDark[k] = normalizeToHex(savedDark[k]); });
+    Object.keys(defaultsLight).forEach(k => { defaultsLight[k] = normalizeToHex(defaultsLight[k]); });
+    Object.keys(defaultsDark).forEach(k => { defaultsDark[k] = normalizeToHex(defaultsDark[k]); });
+
+    themeManagerState.defaults = { light: defaultsLight, dark: defaultsDark };
+    themeManagerState.saved = {
+        light: { ...savedLight },
+        dark: { ...savedDark }
+    };
+    themeManagerState.draft = {
+        light: { ...savedLight },
+        dark: { ...savedDark }
+    };
+
+    const currentDocScheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    if (!themeManagerState.initialized) {
+        themeManagerState.activeScheme = currentDocScheme;
+    }
+    themeManagerState.initialized = true;
+
+    renderAdminThemeManager();
+}
+
+function toggleThemeContrastGuide() {
+    const guide = document.getElementById('theme-contrast-guide');
+    if (guide) {
+        guide.hidden = !guide.hidden;
+    }
+}
+
+function setThemeEditorScheme(scheme) {
+    if (scheme !== 'light' && scheme !== 'dark') return;
+    themeManagerState.activeScheme = scheme;
+    renderAdminThemeManager();
+}
+
+function selectThemeComponentTab(tabId) {
+    themeManagerState.activeTabId = tabId;
+    renderAdminThemeManager();
+}
+
+function handleThemeComponentSearch(query) {
+    themeManagerState.searchQuery = (query || '').trim();
+    const clearBtn = document.getElementById('theme-search-clear-btn');
+    if (clearBtn) clearBtn.hidden = themeManagerState.searchQuery.length === 0;
+    renderThemeTabsNav();
+    renderThemePropertiesColumn();
+}
+
+function clearThemeComponentSearch() {
+    const input = document.getElementById('theme-component-search');
+    if (input) input.value = '';
+    handleThemeComponentSearch('');
+}
+
+function countTabContrastWarnings(tab, scheme) {
+    const palette = themeManagerState.draft[scheme] || {};
+    let warnings = 0;
+    tab.properties.forEach(prop => {
+        (prop.contrastPairs || []).forEach(pair => {
+            const fgHex = palette[pair.fg];
+            const bgHex = palette[pair.bg];
+            if (fgHex && bgHex) {
+                const ratio = calculateContrastRatio(fgHex, bgHex);
+                if (ratio < pair.minRatio) warnings++;
+            }
+        });
+    });
+    return warnings;
+}
+
+function hasUnsavedThemeChanges() {
+    return ['light', 'dark'].some(scheme => {
+        const savedMap = themeManagerState.saved[scheme] || {};
+        const draftMap = themeManagerState.draft[scheme] || {};
+        return Object.keys(draftMap).some(k => normalizeToHex(draftMap[k]) !== normalizeToHex(savedMap[k]));
+    });
+}
+
+function renderAdminThemeManager() {
+    const lightBtn = document.getElementById('theme-edit-light-btn');
+    const darkBtn = document.getElementById('theme-edit-dark-btn');
+    if (lightBtn && darkBtn) {
+        lightBtn.classList.toggle('active', themeManagerState.activeScheme === 'light');
+        darkBtn.classList.toggle('active', themeManagerState.activeScheme === 'dark');
+    }
+
+    updateThemeDraftStatusBanner();
+    renderThemeTabsNav();
+    renderThemePropertiesColumn();
+    renderThemeIsolatedSandbox();
+}
+
+function updateThemeDraftStatusBanner() {
+    const statusContainer = document.getElementById('theme-draft-status');
+    if (!statusContainer) return;
+
+    const unsaved = hasUnsavedThemeChanges();
+    if (unsaved) {
+        statusContainer.innerHTML = '<span class="badge badge-pending"><i class="fa-solid fa-pen-ruler"></i> Tienes cambios en borrador (visibles solo en la Vista Previa Aislada). Presiona Guardar para aplicarlos al sitio.</span>';
+    } else {
+        statusContainer.innerHTML = '<span class="badge badge-info"><i class="fa-solid fa-eye"></i> Vista previa aislada activa: prueba combinaciones con seguridad antes de guardar.</span>';
+    }
+}
+
+function renderThemeTabsNav() {
+    const nav = document.getElementById('theme-tabs-nav');
+    if (!nav) return;
+
+    const scheme = themeManagerState.activeScheme;
+    nav.innerHTML = THEME_COMPONENT_TABS.map(tab => {
+        const isActive = !themeManagerState.searchQuery && tab.id === themeManagerState.activeTabId;
+        const warningCount = countTabContrastWarnings(tab, scheme);
+        const warningIcon = warningCount > 0
+            ? `<i class="fa-solid fa-triangle-exclamation theme-tab-warning-dot" title="Hay combinaciones con bajo contraste en esta sección"></i>`
+            : '';
+        return `
+            <button type="button" role="tab" aria-selected="${isActive ? 'true' : 'false'}"
+                class="theme-tab-pill ${isActive ? 'active' : ''}"
+                onclick="selectThemeComponentTab('${tab.id}')">
+                <i class="fa-solid ${tab.icon}"></i>
+                <span>${tab.title}</span>
+                <span class="theme-tab-count">${tab.properties.length}</span>
+                ${warningIcon}
+            </button>
+        `;
+    }).join('');
+}
+
+function getFilteredThemeProperties() {
+    const q = themeManagerState.searchQuery.toLowerCase();
+    const scheme = themeManagerState.activeScheme;
+    const draftMap = themeManagerState.draft[scheme] || {};
+
+    if (!q) {
+        const activeTab = THEME_COMPONENT_TABS.find(t => t.id === themeManagerState.activeTabId) || THEME_COMPONENT_TABS[0];
+        return {
+            mode: 'tab',
+            tab: activeTab,
+            items: activeTab.properties.map(p => ({ ...p, tabTitle: activeTab.title, tabId: activeTab.id }))
+        };
+    }
+
+    const matches = [];
+    THEME_COMPONENT_TABS.forEach(tab => {
+        tab.properties.forEach(prop => {
+            const hexVal = (draftMap[prop.varName] || '').toLowerCase();
+            const rgbObj = hexToRgb(hexVal);
+            const rgbStr = `rgb(${rgbObj.r}, ${rgbObj.g}, ${rgbObj.b})`;
+            const haystack = `${prop.label} ${prop.description} ${prop.varName} ${prop.keywords || ''} ${tab.title} ${hexVal} ${rgbStr}`.toLowerCase();
+            if (haystack.includes(q)) {
+                matches.push({ ...prop, tabTitle: tab.title, tabId: tab.id });
+            }
+        });
+    });
+
+    return {
+        mode: 'search',
+        tab: null,
+        items: matches
+    };
+}
+
+function renderThemePropertiesColumn() {
+    const headerEl = document.getElementById('theme-active-tab-header');
+    const listEl = document.getElementById('theme-properties-list');
+    if (!headerEl || !listEl) return;
+
+    const scheme = themeManagerState.activeScheme;
+    const schemeLabel = scheme === 'light' ? 'Modo Claro' : 'Modo Oscuro';
+    const filtered = getFilteredThemeProperties();
+
+    if (filtered.mode === 'search') {
+        headerEl.innerHTML = `
+            <h4><i class="fa-solid fa-magnifying-glass"></i> Resultados de búsqueda para "${escapeHtmlText(themeManagerState.searchQuery)}" (${filtered.items.length})</h4>
+            <p>Mostrando componentes coincidentes en todas las pestañas para <strong>${schemeLabel}</strong>.</p>
+        `;
+    } else if (filtered.tab) {
+        headerEl.innerHTML = `
+            <h4><i class="fa-solid ${filtered.tab.icon}"></i> ${filtered.tab.title} — ${schemeLabel}</h4>
+            <p>${filtered.tab.description}</p>
+        `;
+    }
+
+    if (filtered.items.length === 0) {
+        listEl.innerHTML = `
+            <div class="card" style="box-shadow: none; text-align: center; padding: 30px;">
+                <p style="color: var(--text-secondary);">No se encontraron componentes que coincidan con "${escapeHtmlText(themeManagerState.searchQuery)}".</p>
+                <button type="button" class="btn-secondary" style="margin-top: 10px;" onclick="clearThemeComponentSearch()">Ver todos los componentes</button>
+            </div>
+        `;
+        return;
+    }
+
+    const paletteSwatches = getQuickPaletteSwatches(scheme);
+    listEl.innerHTML = filtered.items.map(prop => renderSingleThemePropertyCard(prop, scheme, paletteSwatches)).join('');
+}
+
+function escapeHtmlText(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function getQuickPaletteSwatches(scheme) {
+    const draftMap = themeManagerState.draft[scheme] || {};
+    const keyVars = [
+        '--bg-primary',
+        '--bg-secondary',
+        '--bg-card',
+        '--text-primary',
+        '--text-secondary',
+        '--color-accent',
+        '--color-navy',
+        '--color-gold',
+        '--color-pomegranate',
+        '--color-success',
+        '--color-warning',
+        '--color-error'
+    ];
+    const unique = [];
+    keyVars.forEach(v => {
+        const hex = normalizeToHex(draftMap[v]);
+        if (hex && !unique.includes(hex)) unique.push(hex);
+    });
+    return unique;
+}
+
+function renderSingleThemePropertyCard(prop, scheme, quickSwatches) {
+    const savedHex = normalizeToHex(themeManagerState.saved[scheme][prop.varName]);
+    const draftHex = normalizeToHex(themeManagerState.draft[scheme][prop.varName]);
+    const defaultHex = normalizeToHex(themeManagerState.defaults[scheme][prop.varName]);
+    const rgb = hexToRgb(draftHex);
+    const savedRgb = hexToRgb(savedHex);
+    const isModified = draftHex !== savedHex;
+
+    let hasWarning = false;
+    const contrastRowsHtml = (prop.contrastPairs || []).map(pair => {
+        const fgHex = normalizeToHex(themeManagerState.draft[scheme][pair.fg]);
+        const bgHex = normalizeToHex(themeManagerState.draft[scheme][pair.bg]);
+        const ratio = calculateContrastRatio(fgHex, bgHex);
+        const evalResult = evaluateContrastStatus(ratio, pair.minRatio);
+        if (!evalResult.passes) hasWarning = true;
+
+        const otherVar = pair.fg === prop.varName ? pair.bg : pair.fg;
+        const fixBtnHtml = !evalResult.passes
+            ? `<button type="button" class="theme-contrast-fix-btn" onclick="autoFixPropertyContrast('${prop.varName}', '${otherVar}', ${pair.minRatio})">
+                   <i class="fa-solid fa-wand-magic-sparkles"></i> Sugerir color legible
+               </button>`
+            : '';
+
+        return `
+            <div class="theme-contrast-row">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span class="theme-contrast-sample" style="background-color: ${bgHex}; color: ${fgHex};">Aa Texto</span>
+                    <div>
+                        <div><strong>${pair.label}</strong> <small style="color: var(--text-secondary);">(${pair.kind})</small></div>
+                        <div style="font-size: 0.78rem; color: var(--text-secondary);">${evalResult.detailText}</div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span class="badge ${evalResult.badgeClass}">${evalResult.shortText}</span>
+                    ${fixBtnHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const swatchesHtml = quickSwatches.map(swHex => `
+        <button type="button" class="theme-quick-swatch" style="background-color: ${swHex};"
+            title="Usar color ${swHex}"
+            onclick="updateThemeDraftProperty('${prop.varName}', '${swHex}')"></button>
+    `).join('');
+
+    const sectionTag = themeManagerState.searchQuery
+        ? `<span class="badge badge-info" style="font-size: 0.7rem; margin-right: 6px;">${prop.tabTitle}</span>`
+        : '';
+
+    return `
+        <div class="theme-prop-card ${isModified ? 'is-modified' : ''} ${hasWarning ? 'has-contrast-warning' : ''}" data-var-card="${prop.varName}">
+            <div class="theme-prop-top">
+                <div>
+                    <div class="theme-prop-title">${sectionTag}${prop.label}</div>
+                    <div class="theme-prop-desc">${prop.description}</div>
+                </div>
+                <span class="theme-prop-var-badge" title="Variable CSS">${prop.varName}</span>
+            </div>
+
+            <div class="theme-color-comparison">
+                <div class="theme-swatch-pair">
+                    <div class="theme-swatch-box" title="Color guardado actualmente: ${savedHex} / rgb(${savedRgb.r}, ${savedRgb.g}, ${savedRgb.b})">
+                        <small>Actual</small>
+                        <div class="theme-swatch-circle" style="background-color: ${savedHex};"></div>
+                        <small style="font-family: monospace; font-size: 0.7rem;">${savedHex}</small>
+                    </div>
+                    <i class="fa-solid fa-arrow-right" style="color: var(--text-secondary); font-size: 0.85rem;"></i>
+                    <div class="theme-swatch-box" title="Color en vista previa: ${draftHex} / rgb(${rgb.r}, ${rgb.g}, ${rgb.b})">
+                        <small>Nuevo</small>
+                        <div class="theme-swatch-circle" style="background-color: ${draftHex};"></div>
+                        <small style="font-family: monospace; font-size: 0.7rem;">${draftHex}</small>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <input type="color" class="theme-picker-native"
+                        aria-label="Selector visual de color para ${prop.label}"
+                        value="${draftHex}"
+                        oninput="updateThemeDraftProperty('${prop.varName}', this.value)">
+                </div>
+
+                <div class="theme-inputs-grid" style="flex: 1;">
+                    <div class="theme-input-field theme-hex-field">
+                        <label>HEX (#RRGGBB)</label>
+                        <input type="text" maxlength="7" value="${draftHex}"
+                            aria-label="Código HEX para ${prop.label}"
+                            onchange="handleHexInputChange('${prop.varName}', this.value)">
+                    </div>
+                    <div class="theme-input-field">
+                        <label>R (0-255)</label>
+                        <input type="number" min="0" max="255" value="${rgb.r}"
+                            aria-label="Canal Rojo R para ${prop.label}"
+                            oninput="handleRgbInputChange('${prop.varName}', 'r', this.value)">
+                    </div>
+                    <div class="theme-input-field">
+                        <label>G (0-255)</label>
+                        <input type="number" min="0" max="255" value="${rgb.g}"
+                            aria-label="Canal Verde G para ${prop.label}"
+                            oninput="handleRgbInputChange('${prop.varName}', 'g', this.value)">
+                    </div>
+                    <div class="theme-input-field">
+                        <label>B (0-255)</label>
+                        <input type="number" min="0" max="255" value="${rgb.b}"
+                            aria-label="Canal Azul B para ${prop.label}"
+                            oninput="handleRgbInputChange('${prop.varName}', 'b', this.value)">
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <button type="button" class="btn-secondary" style="padding: 7px 10px; font-size: 0.78rem;"
+                            title="Revertir al color guardado (${savedHex})"
+                            onclick="updateThemeDraftProperty('${prop.varName}', '${savedHex}')"
+                            ${!isModified ? 'disabled' : ''}>
+                            <i class="fa-solid fa-undo"></i>
+                        </button>
+                        <button type="button" class="btn-secondary" style="padding: 7px 10px; font-size: 0.78rem;"
+                            title="Restaurar al color original de fábrica (${defaultHex})"
+                            onclick="updateThemeDraftProperty('${prop.varName}', '${defaultHex}')">
+                            <i class="fa-solid fa-rotate-left"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="theme-rgb-copy-row">
+                <span>Formato RGB: <code>rgb(${rgb.r}, ${rgb.g}, ${rgb.b})</code> · Buscador por RGB o HEX:</span>
+                <input type="text" class="form-control" style="max-width: 210px; padding: 4px 8px; font-size: 0.78rem; font-family: monospace;"
+                    value="rgb(${rgb.r}, ${rgb.g}, ${rgb.b})"
+                    aria-label="Escribir color en formato rgb(r, g, b) o #hex para ${prop.label}"
+                    onchange="handleRgbOrHexStringInput('${prop.varName}', this.value)">
+                <div class="theme-quick-swatches" title="Colores rápidos de la paleta actual">
+                    <small style="margin-right: 4px;">Paleta rápida:</small>
+                    ${swatchesHtml}
+                </div>
+            </div>
+
+            ${contrastRowsHtml ? `<div class="theme-contrast-panel">${contrastRowsHtml}</div>` : ''}
+        </div>
+    `;
+}
+
+function updateThemeDraftProperty(varName, newColorValue) {
+    const normHex = normalizeToHex(newColorValue);
+    if (!/^#[0-9A-F]{6}$/i.test(normHex)) {
+        showToast('Ingresa un color válido en formato HEX (#RRGGBB) o RGB (0 a 255).', 'error');
+        renderThemePropertiesColumn();
+        return;
+    }
+
+    const scheme = themeManagerState.activeScheme;
+    themeManagerState.draft[scheme][varName] = normHex;
+
+    updateThemeDraftStatusBanner();
+    renderThemeTabsNav();
+    renderThemePropertiesColumn();
+    renderThemeIsolatedSandbox();
+
+    if (themeManagerState.searchQuery) {
+        const ownerTab = THEME_COMPONENT_TABS.find(t => t.properties.some(p => p.varName === varName));
+        if (ownerTab && ownerTab.id !== themeManagerState.activeTabId) {
+            themeManagerState.activeTabId = ownerTab.id;
+            renderThemeIsolatedSandbox();
+        }
+    }
+}
+
+function handleHexInputChange(varName, rawValue) {
+    const val = (rawValue || '').trim();
+    const withHash = val.startsWith('#') ? val : '#' + val;
+    updateThemeDraftProperty(varName, withHash);
+}
+
+function handleRgbInputChange(varName, channel, rawValue) {
+    const scheme = themeManagerState.activeScheme;
+    const currentHex = themeManagerState.draft[scheme][varName];
+    const currentRgb = hexToRgb(currentHex);
+    const num = Math.min(255, Math.max(0, parseInt(rawValue, 10) || 0));
+    currentRgb[channel] = num;
+    const nextHex = rgbToHex(currentRgb.r, currentRgb.g, currentRgb.b);
+    updateThemeDraftProperty(varName, nextHex);
+}
+
+function handleRgbOrHexStringInput(varName, rawStr) {
+    const trimmed = (rawStr || '').trim();
+    if (!trimmed) return;
+    if (trimmed.startsWith('#') || /^[0-9a-f]{3,6}$/i.test(trimmed)) {
+        handleHexInputChange(varName, trimmed);
+        return;
+    }
+    const nums = trimmed.match(/\d{1,3}/g);
+    if (nums && nums.length >= 3) {
+        const nextHex = rgbToHex(nums[0], nums[1], nums[2]);
+        updateThemeDraftProperty(varName, nextHex);
+        return;
+    }
+    showToast('Formato no reconocido. Usa #RRGGBB o rgb(r, g, b).', 'error');
+    renderThemePropertiesColumn();
+}
+
+function autoFixPropertyContrast(varName, fixedVarName, minRatio) {
+    const scheme = themeManagerState.activeScheme;
+    const targetHex = themeManagerState.draft[scheme][varName];
+    const fixedHex = themeManagerState.draft[scheme][fixedVarName];
+    if (!targetHex || !fixedHex) return;
+
+    const suggested = suggestAccessibleColor(targetHex, fixedHex, minRatio);
+    updateThemeDraftProperty(varName, suggested);
+    const newRatio = calculateContrastRatio(suggested, fixedHex);
+    showToast(`Color ajustado a ${suggested} (Contraste ${newRatio.toFixed(2)}:1 — Cumple WCAG 2.1).`, 'info');
+}
+
+function applyDraftVariablesToSandboxElement(sandboxEl, scheme) {
+    const draftMap = themeManagerState.draft[scheme] || {};
+    Object.entries(draftMap).forEach(([varName, hexVal]) => {
+        sandboxEl.style.setProperty(varName, hexVal);
+    });
+    sandboxEl.style.setProperty('--color-shadow', 'color-mix(in srgb, var(--color-navy) 12%, transparent)');
+    sandboxEl.style.setProperty('--color-glass-bg', 'color-mix(in srgb, var(--header-bg) 92%, transparent)');
+    sandboxEl.style.setProperty('--color-glass-border', 'var(--header-border)');
+    sandboxEl.style.setProperty('--modal-overlay-bg', 'color-mix(in srgb, var(--modal-overlay-color) 62%, transparent)');
+    sandboxEl.style.setProperty('--color-accent-soft', 'color-mix(in srgb, var(--color-accent) 15%, transparent)');
+    sandboxEl.style.setProperty('--color-success-bg', 'color-mix(in srgb, var(--color-success) 15%, transparent)');
+    sandboxEl.style.setProperty('--color-warning-bg', 'color-mix(in srgb, var(--color-warning) 15%, transparent)');
+    sandboxEl.style.setProperty('--color-error-bg', 'color-mix(in srgb, var(--color-error) 15%, transparent)');
+    sandboxEl.style.setProperty('--color-info-bg', 'color-mix(in srgb, var(--color-info) 15%, transparent)');
+    sandboxEl.style.setProperty('--whatsapp-shadow', 'color-mix(in srgb, var(--whatsapp-bg) 40%, transparent)');
+}
+
+function renderThemeIsolatedSandbox() {
+    const sandboxEl = document.getElementById('theme-preview-sandbox');
+    const schemeLabelEl = document.getElementById('theme-preview-scheme-label');
+    const summaryBadgeEl = document.getElementById('theme-preview-contrast-summary');
+    if (!sandboxEl) return;
+
+    const scheme = themeManagerState.activeScheme;
+    const activeTab = THEME_COMPONENT_TABS.find(t => t.id === themeManagerState.activeTabId) || THEME_COMPONENT_TABS[0];
+
+    if (schemeLabelEl) {
+        schemeLabelEl.textContent = `Vista previa aislada en ${scheme === 'light' ? 'Modo Claro ☀️' : 'Modo Oscuro 🌙'} · Sección: ${activeTab.title}`;
+    }
+
+    const warningsInTab = countTabContrastWarnings(activeTab, scheme);
+    if (summaryBadgeEl) {
+        if (warningsInTab === 0) {
+            summaryBadgeEl.className = 'badge badge-paid';
+            summaryBadgeEl.innerHTML = '<i class="fa-solid fa-check-circle"></i> Contraste WCAG OK';
+        } else {
+            summaryBadgeEl.className = 'badge badge-pending';
+            summaryBadgeEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${warningsInTab} aviso(s) de contraste`;
+        }
+    }
+
+    applyDraftVariablesToSandboxElement(sandboxEl, scheme);
+    sandboxEl.innerHTML = buildSandboxMarkupForTab(activeTab.id);
+}
+
+function buildSandboxMarkupForTab(tabId) {
+    if (tabId === 'general') {
+        return `
+            <div class="sandbox-section-label">Muestra: Fondos y Textos Generales</div>
+            <div class="sandbox-mock-box" style="background-color: var(--bg-primary); color: var(--text-primary); border-color: var(--color-border);">
+                <h4 style="color: var(--text-primary); margin-bottom: 6px;">Centro Integral PsicArte</h4>
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 10px;">
+                    Psicología, talleres y artes escénicas orientados al bienestar emocional y desarrollo humano.
+                </p>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <span style="background-color: var(--color-accent); color: var(--color-accent-text); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600;">
+                        Bloque de Acento
+                    </span>
+                    <span style="color: var(--color-pomegranate); font-weight: 700; font-size: 0.85rem;">
+                        <i class="fa-solid fa-bullseye"></i> Misión (Granada)
+                    </span>
+                    <span style="color: var(--color-gold); font-weight: 700; font-size: 0.85rem;">
+                        <i class="fa-solid fa-eye"></i> Visión (Dorado)
+                    </span>
+                </div>
+            </div>
+            <div class="sandbox-mock-box" style="background-color: var(--bg-secondary); color: var(--text-primary); border-color: var(--color-border); margin-bottom: 0;">
+                <strong style="color: var(--text-primary); font-size: 0.9rem;">Sección con Fondo Secundario</strong>
+                <p style="color: var(--text-secondary); font-size: 0.83rem; margin-top: 4px;">
+                    Así se ven los paneles laterales y fondos alternos junto al borde divisor.
+                </p>
+            </div>
+        `;
+    }
+
+    if (tabId === 'navigation') {
+        return `
+            <div class="sandbox-section-label">Muestra: Barra de Navegación (Header)</div>
+            <div class="sandbox-mock-box" style="background-color: var(--header-bg); border-bottom: 2px solid var(--header-border); display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <strong style="color: var(--nav-link-color); font-family: var(--font-heading);">PsicArte</strong>
+                <div style="display: flex; gap: 12px; font-size: 0.85rem; font-weight: 500;">
+                    <span style="color: var(--nav-link-accent); border-bottom: 2px solid var(--nav-link-accent);">Inicio</span>
+                    <span style="color: var(--nav-link-color);">Nosotros</span>
+                    <span style="color: var(--nav-link-color);">Servicios</span>
+                </div>
+            </div>
+            <div class="sandbox-section-label" style="margin-top: 12px;">Muestra: Pie de Página (Footer)</div>
+            <div class="sandbox-mock-box" style="background-color: var(--footer-bg); color: var(--footer-text); border-color: var(--footer-border); margin-bottom: 0;">
+                <h5 style="color: var(--footer-accent); margin-bottom: 6px; font-size: 0.92rem;">Contacto PsicArte</h5>
+                <p style="color: var(--footer-text); font-size: 0.82rem; opacity: 0.9; margin-bottom: 8px;">
+                    <i class="fa-solid fa-envelope" style="color: var(--footer-accent);"></i> contacto@centropsicarte.cl
+                </p>
+                <div style="border-top: 1px solid var(--footer-border); padding-top: 8px; font-size: 0.75rem; color: var(--footer-text); opacity: 0.75;">
+                    &copy; Centro Integral PsicArte. Todos los derechos reservados.
+                </div>
+            </div>
+        `;
+    }
+
+    if (tabId === 'buttons') {
+        return `
+            <div class="sandbox-section-label">Muestra: Botones Interactivos</div>
+            <div class="sandbox-mock-box" style="background-color: var(--bg-card); display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <button type="button" class="btn-primary" style="pointer-events: none;">
+                    <i class="fa-solid fa-calendar-check"></i> Botón Principal
+                </button>
+                <button type="button" class="btn-secondary" style="pointer-events: none;">
+                    Botón Secundario
+                </button>
+                <button type="button" class="btn-icon" style="pointer-events: none;" title="Botón de Ícono">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+            </div>
+            <div class="sandbox-section-label" style="margin-top: 12px;">Muestra: Campos de Formulario</div>
+            <div class="sandbox-mock-box" style="background-color: var(--bg-card); margin-bottom: 0;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Nombre del Paciente (Normal):</label>
+                <input type="text" class="form-control" value="María González" readonly style="margin-bottom: 10px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Campo Activo (Borde Focus):</label>
+                <input type="text" class="form-control" value="maria@ejemplo.cl" readonly style="border-color: var(--input-focus-border); background-color: var(--bg-card);">
+            </div>
+        `;
+    }
+
+    if (tabId === 'cards') {
+        return `
+            <div class="sandbox-section-label">Muestra: Filtros y Tarjeta de Servicio</div>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                <span class="filter-pill active" style="pointer-events: none;">Todos los Servicios</span>
+                <span class="filter-pill" style="pointer-events: none;">Psicología</span>
+            </div>
+            <div class="card service-card" style="box-shadow: none; margin-bottom: 0;">
+                <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+                    <span class="service-type-badge service-badge-virtual" style="position: static;">
+                        <i class="fa-solid fa-video"></i> Online
+                    </span>
+                    <span class="service-type-badge service-badge-physical" style="position: static;">
+                        <i class="fa-solid fa-location-dot"></i> Presencial
+                    </span>
+                </div>
+                <h4 style="color: var(--text-primary); margin-bottom: 4px;">Psicoterapia Individual Adultos</h4>
+                <p style="color: var(--text-secondary); font-size: 0.84rem; margin-bottom: 10px;">
+                    Atención clínica integral de 50 minutos con especialista.
+                </p>
+                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--card-border); padding-top: 10px;">
+                    <span class="price-amount" style="font-size: 1.25rem;">$35.000</span>
+                    <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 0.8rem; pointer-events: none;">Agendar</button>
+                </div>
+            </div>
+        `;
+    }
+
+    if (tabId === 'modals') {
+        return `
+            <div class="sandbox-section-label">Muestra: Banner Superior de Anuncio</div>
+            <div style="background-color: var(--banner-bg); color: var(--banner-text); padding: 10px 12px; border-radius: var(--radius-sm); font-size: 0.84rem; font-weight: 500; text-align: center; margin-bottom: 12px;">
+                <i class="fa-solid fa-bullhorn"></i> ¡Agende sus horas de consulta en línea de forma rápida y segura!
+            </div>
+            <div class="sandbox-section-label">Muestra: Ventana Modal / Pop-up sobre Velo</div>
+            <div style="background-color: var(--modal-overlay-bg); padding: 14px; border-radius: var(--radius-md);">
+                <div style="background-color: var(--modal-bg); color: var(--modal-text); border: 1px solid var(--modal-border); border-radius: var(--radius-md); padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--modal-border); padding-bottom: 8px; margin-bottom: 8px;">
+                        <h4 style="color: var(--popup-title-color); font-size: 0.95rem; margin: 0;">Aviso Importante</h4>
+                        <i class="fa-solid fa-xmark" style="color: var(--text-secondary);"></i>
+                    </div>
+                    <p style="color: var(--modal-text); font-size: 0.83rem; margin-bottom: 10px;">
+                        Así se visualiza el texto dentro de las ventanas emergentes y modales del sistema.
+                    </p>
+                    <div style="text-align: right;">
+                        <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 0.8rem; pointer-events: none;">Entendido</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    if (tabId === 'booking') {
+        return `
+            <div class="sandbox-section-label">Muestra: Widget de Reserva, Calendario y Horarios</div>
+            <div style="background-color: var(--booking-widget-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 14px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                    <span class="step-indicator active" style="width: 28px; height: 28px; font-size: 0.82rem;">1</span>
+                    <strong style="color: var(--text-primary); font-size: 0.88rem;">Selecciona Fecha y Hora</strong>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px;">
+                    <div class="calendar-cell available" style="padding: 6px; font-size: 0.82rem;">12</div>
+                    <div class="calendar-cell selected" style="padding: 6px; font-size: 0.82rem;">13</div>
+                    <div class="calendar-cell available" style="padding: 6px; font-size: 0.82rem;">14</div>
+                    <div class="calendar-cell disabled" style="padding: 6px; font-size: 0.82rem;">15</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button type="button" class="slot-btn" style="padding: 7px; font-size: 0.8rem; pointer-events: none;">10:00 - 10:50</button>
+                    <button type="button" class="slot-btn selected" style="padding: 7px; font-size: 0.8rem; pointer-events: none;">11:00 - 11:50</button>
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="sandbox-section-label">Muestra: Insignias de Estado, Toast y WhatsApp</div>
+        <div class="sandbox-mock-box" style="background-color: var(--bg-card); display: flex; gap: 8px; flex-wrap: wrap;">
+            <span class="badge badge-paid">Pagado / Éxito</span>
+            <span class="badge badge-pending">Pendiente</span>
+            <span class="badge badge-cancelled">Cancelado</span>
+            <span class="badge badge-info">Información</span>
+        </div>
+        <div style="background-color: var(--toast-bg); color: var(--toast-text); border-left: 5px solid var(--color-success); padding: 10px 14px; border-radius: var(--radius-sm); box-shadow: 0 4px 12px var(--color-shadow); display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 0.84rem;">
+            <span><i class="fa-solid fa-circle-check" style="color: var(--color-success); margin-right: 6px;"></i> Reserva confirmada con éxito</span>
+            <i class="fa-solid fa-xmark" style="color: var(--text-secondary);"></i>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; background-color: var(--bg-secondary); padding: 10px 14px; border-radius: var(--radius-sm);">
+            <span style="font-size: 0.83rem; color: var(--text-primary);">Botón flotante de WhatsApp:</span>
+            <span style="width: 46px; height: 46px; border-radius: 50%; background-color: var(--whatsapp-bg); color: var(--whatsapp-text); display: inline-flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 4px 10px var(--whatsapp-shadow);">
+                <i class="fa-brands fa-whatsapp"></i>
+            </span>
+        </div>
+    `;
+}
+
+function collectAllContrastWarnings() {
+    const warnings = [];
+    ['light', 'dark'].forEach(scheme => {
+        const schemeName = scheme === 'light' ? 'Modo Claro' : 'Modo Oscuro';
+        const palette = themeManagerState.draft[scheme] || {};
+        const seenPairs = new Set();
+
+        THEME_COMPONENT_TABS.forEach(tab => {
+            tab.properties.forEach(prop => {
+                (prop.contrastPairs || []).forEach(pair => {
+                    const pairKey = `${scheme}:${pair.fg}:${pair.bg}:${pair.label}`;
+                    if (seenPairs.has(pairKey)) return;
+                    seenPairs.add(pairKey);
+
+                    const fgHex = normalizeToHex(palette[pair.fg]);
+                    const bgHex = normalizeToHex(palette[pair.bg]);
+                    if (!fgHex || !bgHex) return;
+
+                    const ratio = calculateContrastRatio(fgHex, bgHex);
+                    if (ratio < pair.minRatio) {
+                        warnings.push({
+                            scheme,
+                            schemeName,
+                            tabTitle: tab.title,
+                            propLabel: prop.label,
+                            pairLabel: pair.label,
+                            kind: pair.kind,
+                            fgHex,
+                            bgHex,
+                            ratio,
+                            minRatio: pair.minRatio
+                        });
+                    }
+                });
+            });
+        });
+    });
+    return warnings;
+}
+
+function attemptSaveThemeChanges() {
+    const warnings = collectAllContrastWarnings();
+    if (warnings.length > 0) {
+        const listEl = document.getElementById('theme-contrast-warning-list');
+        const modal = document.getElementById('theme-contrast-warning-modal');
+        if (listEl && modal) {
+            listEl.innerHTML = warnings.map(w => `
+                <div class="theme-contrast-warning-item">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+                        <strong>${w.schemeName} · ${w.tabTitle}: ${w.pairLabel}</strong>
+                        <span class="badge badge-cancelled">Contraste actual: ${w.ratio.toFixed(2)}:1 (Mínimo WCAG: ${w.minRatio.toFixed(1)}:1)</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px;">
+                        <span class="theme-contrast-sample" style="background-color: ${w.bgHex}; color: ${w.fgHex};">Muestra de lectura (${w.fgHex} sobre ${w.bgHex})</span>
+                        <span style="color: var(--text-secondary); font-size: 0.8rem;">Tipo: ${w.kind}</span>
+                    </div>
+                </div>
+            `).join('');
+            modal.classList.add('active');
+            return;
+        }
+    }
+
+    confirmSaveThemeChanges(false);
+}
+
+function closeThemeContrastWarningModal() {
+    const modal = document.getElementById('theme-contrast-warning-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function confirmSaveThemeChanges(fromModal = false) {
+    if (fromModal) {
+        closeThemeContrastWarningModal();
+    }
+
+    const payloadObj = {
+        light: { ...themeManagerState.draft.light },
+        dark: { ...themeManagerState.draft.dark },
+        defaults: {
+            light: { ...themeManagerState.defaults.light },
+            dark: { ...themeManagerState.defaults.dark }
+        }
+    };
+    const serialized = JSON.stringify(payloadObj);
+
+    try {
+        await saveConfig({ theme_custom_tokens: serialized });
+        if (!state.config) state.config = {};
+        state.config.theme_custom_tokens = serialized;
+
+        themeManagerState.saved = {
+            light: { ...themeManagerState.draft.light },
+            dark: { ...themeManagerState.draft.dark }
+        };
+
+        if (typeof applyCustomThemeTokens === 'function') {
+            applyCustomThemeTokens(payloadObj, true);
+        }
+
+        renderAdminThemeManager();
+        showToast('Colores y tema CSS guardados y aplicados exitosamente en todo el sitio.', 'success');
+    } catch (e) {
+        console.error('Error guardando configuración de tema:', e);
+    }
+}
+
+function cancelThemeDraftChanges() {
+    themeManagerState.draft = {
+        light: { ...themeManagerState.saved.light },
+        dark: { ...themeManagerState.saved.dark }
+    };
+    renderAdminThemeManager();
+    showToast('Cambios en borrador descartados. Se mantuvo la configuración guardada.', 'info');
+}
+
+function restoreDefaultThemeTokens() {
+    themeManagerState.draft = {
+        light: { ...themeManagerState.defaults.light },
+        dark: { ...themeManagerState.defaults.dark }
+    };
+    renderAdminThemeManager();
+    showToast('Colores originales de PsicArte cargados en la vista previa. Presiona Guardar Cambios para aplicarlos al sitio.', 'info');
 }

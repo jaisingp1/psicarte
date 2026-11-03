@@ -948,6 +948,107 @@
                         </div>
                     </div>
 
+                    <div id="pane-admin-theme" class="dashboard-pane">
+                        <div class="theme-manager-header">
+                            <div>
+                                <h3>Personalización de Colores y Tema CSS</h3>
+                                <p class="theme-manager-subtitle">Ajusta los colores de cada componente del sitio en formato HEX o RGB, revisa la vista previa aislada y valida que los textos sean fáciles de leer según las normas internacionales.</p>
+                            </div>
+                            <button type="button" class="btn-secondary theme-guide-toggle" onclick="toggleThemeContrastGuide()">
+                                <i class="fa-solid fa-circle-question"></i> ¿Qué es el contraste y la norma WCAG?
+                            </button>
+                        </div>
+
+                        <div id="theme-contrast-guide" class="theme-contrast-guide" hidden>
+                            <div class="theme-guide-header">
+                                <h4><i class="fa-solid fa-universal-access"></i> Guía Rápida de Contraste y Legibilidad (Estándar Internacional WCAG 2.1)</h4>
+                                <button type="button" class="btn-icon" onclick="toggleThemeContrastGuide()" title="Cerrar guía">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                            <p>El <strong>contraste de color</strong> mide qué tan bien se distingue un texto o ícono respecto a su color de fondo. Si ambos colores son muy parecidos (por ejemplo, texto amarillo claro sobre fondo blanco), muchas personas no podrán leer el contenido, especialmente en pantallas con brillo bajo o usuarios con dificultad visual.</p>
+                            <p>La <strong>WCAG 2.1</strong> (<em>Web Content Accessibility Guidelines</em>) es la norma internacional que mide esta diferencia en una escala de <strong>1:1</strong> (invisible) a <strong>21:1</strong> (máxima nitidez):</p>
+                            <div class="theme-guide-levels">
+                                <div class="theme-guide-level level-aaa">
+                                    <strong>7.0:1 o más — Legibilidad Óptima (Nivel AAA)</strong>
+                                    <span>Excelente nitidez para todo tipo de textos y lectores.</span>
+                                </div>
+                                <div class="theme-guide-level level-aa">
+                                    <strong>4.5:1 o más — Legibilidad Buena (Nivel AA Recomendado)</strong>
+                                    <span>Estándar internacional mínimo exigido para textos normales, botones y menús.</span>
+                                </div>
+                                <div class="theme-guide-level level-large">
+                                    <strong>3.0:1 a 4.49:1 — Solo para Texto Grande o Bordes (AA Large)</strong>
+                                    <span>Aceptable únicamente en títulos grandes, íconos o bordes decorativos, pero difícil de leer en textos pequeños.</span>
+                                </div>
+                                <div class="theme-guide-level level-fail">
+                                    <strong>Menos de 3.0:1 — Bajo Contraste (Difícil de leer)</strong>
+                                    <span>No cumple las normas internacionales. El sistema te ofrecerá un botón para sugerir automáticamente un tono legible.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="theme-toolbar">
+                            <div class="theme-mode-switcher" role="group" aria-label="Seleccionar esquema de color a editar">
+                                <button type="button" id="theme-edit-light-btn" class="theme-mode-btn active" onclick="setThemeEditorScheme('light')">
+                                    <i class="fa-solid fa-sun"></i> Editando Modo Claro
+                                </button>
+                                <button type="button" id="theme-edit-dark-btn" class="theme-mode-btn" onclick="setThemeEditorScheme('dark')">
+                                    <i class="fa-solid fa-moon"></i> Editando Modo Oscuro
+                                </button>
+                            </div>
+
+                            <div class="theme-search-box">
+                                <i class="fa-solid fa-magnifying-glass theme-search-icon"></i>
+                                <input type="text" id="theme-component-search" class="form-control"
+                                    placeholder="Buscar componente, sección, variable (--btn) o color (#782050, rgb)..."
+                                    oninput="handleThemeComponentSearch(this.value)">
+                                <button type="button" id="theme-search-clear-btn" class="theme-search-clear" onclick="clearThemeComponentSearch()" hidden title="Limpiar búsqueda">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="theme-actions-bar">
+                            <div id="theme-draft-status" class="theme-draft-status">
+                                <span class="badge badge-info"><i class="fa-solid fa-eye"></i> Vista previa aislada: los cambios solo se aplicarán al sitio cuando presiones Guardar</span>
+                            </div>
+                            <div class="theme-action-buttons">
+                                <button type="button" class="btn-secondary" onclick="restoreDefaultThemeTokens()">
+                                    <i class="fa-solid fa-rotate-left"></i> Restaurar Originales
+                                </button>
+                                <button type="button" id="theme-cancel-btn" class="btn-secondary" onclick="cancelThemeDraftChanges()">
+                                    <i class="fa-solid fa-ban"></i> Cancelar Cambios
+                                </button>
+                                <button type="button" id="theme-save-btn" class="btn-primary" onclick="attemptSaveThemeChanges()">
+                                    <i class="fa-solid fa-floppy-disk"></i> Guardar Cambios
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="theme-tabs-nav" class="theme-tabs-nav" role="tablist" aria-label="Secciones de componentes"></div>
+
+                        <div class="theme-workspace-grid">
+                            <div class="theme-controls-column">
+                                <div id="theme-active-tab-header" class="theme-active-tab-header"></div>
+                                <div id="theme-properties-list" class="theme-properties-list"></div>
+                            </div>
+
+                            <div class="theme-preview-column">
+                                <div class="theme-preview-sticky">
+                                    <div class="theme-preview-header">
+                                        <div>
+                                            <h4><i class="fa-solid fa-desktop"></i> Vista Previa Aislada de Combinación</h4>
+                                            <small id="theme-preview-scheme-label">Mostrando vista previa en Modo Claro</small>
+                                        </div>
+                                        <span id="theme-preview-contrast-summary" class="badge badge-paid">Contraste OK</span>
+                                    </div>
+                                    <div id="theme-preview-sandbox" class="theme-preview-sandbox"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="pane-community-articles" class="dashboard-pane">
                         <h3>Noticias y artículos de interés</h3>
                         <p style="color: var(--text-secondary); margin-bottom: 20px;">Envía una propuesta para revisión del equipo PsicArte. Solo los artículos aprobados se publican en la página.</p>
@@ -1178,6 +1279,33 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" onclick="closeAdminEnrollmentsModal()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Contrast Warning Confirmation Modal -->
+    <div id="theme-contrast-warning-modal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 680px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-triangle-exclamation" style="color: var(--color-warning);"></i> Advertencia de Contraste y Legibilidad</h3>
+                <button type="button" class="modal-close" onclick="closeThemeContrastWarningModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 12px; color: var(--text-primary);">
+                    Detectamos que algunas combinaciones de colores seleccionadas tienen <strong>bajo contraste</strong>. Esto significa que el color del texto y el color del fondo son demasiado parecidos, por lo que a los visitantes podría costarles leer esa sección.
+                </p>
+                <p style="margin-bottom: 15px; font-size: 0.9rem; color: var(--text-secondary);">
+                    Según la norma internacional de accesibilidad web <strong>WCAG 2.1 (Nivel AA)</strong>, se recomienda una relación mínima de <strong>4.5:1</strong> para textos normales y de <strong>3.0:1</strong> para textos grandes o elementos gráficos.
+                </p>
+                <div id="theme-contrast-warning-list" class="theme-contrast-warning-list"></div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+                <button type="button" class="btn-secondary" onclick="closeThemeContrastWarningModal()">
+                    <i class="fa-solid fa-arrow-left"></i> Volver y Corregir Colores
+                </button>
+                <button type="button" class="btn-primary" onclick="confirmSaveThemeChanges(true)">
+                    <i class="fa-solid fa-check"></i> Guardar de Todos Modos
+                </button>
             </div>
         </div>
     </div>

@@ -106,12 +106,12 @@
 }
 
 .activity-capacity-badge.available {
-    background-color: rgba(47, 133, 90, 0.15);
+    background-color: var(--color-success-bg);
     color: var(--color-success);
 }
 
 .activity-capacity-badge.full {
-    background-color: rgba(197, 48, 48, 0.15);
+    background-color: var(--color-error-bg);
     color: var(--color-error);
 }
 

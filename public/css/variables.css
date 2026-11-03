@@ -7,32 +7,97 @@
     --font-heading: 'Outfit', sans-serif;
     --font-body: 'Inter', sans-serif;
 
-    /* Light Theme Palette */
+    /* 1. Fondos y Textos Generales (Light Theme) */
     --bg-primary: #FEFDF9;
     --bg-secondary: #F7F1E2;
-    --bg-card: #FFFFFF;
     --text-primary: #001B40;
     --text-secondary: #4A5568;
+    --color-accent: #782050;
+    --color-accent-text: #FEFDF9;
+    --color-border: #E2E8F0;
     --color-navy: #001B40;
     --color-gold: #D8A048;
     --color-pomegranate: #782050;
-    --color-accent: #782050;
-    --color-accent-text: #FEFDF9;
-    --color-in-person: #B88028;
+
+    /* 2. Navegación y Pie de Página */
+    --header-bg: #FEFDF9;
+    --header-border: #E2E8F0;
+    --nav-link-color: #001B40;
+    --nav-link-accent: #782050;
+    --footer-bg: #001B40;
+    --footer-text: #FEFDF9;
+    --footer-accent: #D8A048;
+    --footer-border: #2D4363;
+
+    /* 3. Botones y Formularios */
+    --btn-primary-bg: #782050;
+    --btn-primary-text: #FEFDF9;
+    --btn-secondary-bg: #FEFDF9;
+    --btn-secondary-text: #001B40;
+    --btn-secondary-border: #E2E8F0;
+    --btn-icon-bg: #FEFDF9;
+    --btn-icon-text: #001B40;
+    --input-bg: #F7F1E2;
+    --input-text: #001B40;
+    --input-border: #E2E8F0;
+    --input-focus-border: #782050;
+
+    /* 4. Tarjetas y Servicios */
+    --bg-card: #FFFFFF;
+    --card-border: #E2E8F0;
+    --card-hover-border: #782050;
+    --service-price-color: #782050;
     --color-online: #802850;
-    --color-border: #E2E8F0;
-    --color-shadow: rgba(0, 27, 64, 0.08);
-    --color-glass-bg: rgba(254, 253, 249, 0.92);
-    --color-glass-border: rgba(255, 255, 255, 0.4);
-    
-    /* Utility States */
+    --color-online-text: #FEFDF9;
+    --color-in-person: #B88028;
+    --color-in-person-text: #001B40;
+    --filter-active-bg: #782050;
+    --filter-active-text: #FEFDF9;
+
+    /* 5. Modales, Pop-ups y Banners */
+    --modal-bg: #FFFFFF;
+    --modal-text: #001B40;
+    --modal-border: #E2E8F0;
+    --modal-overlay-color: #001933;
+    --popup-title-color: #782050;
+    --banner-bg: #782050;
+    --banner-text: #FFF9F3;
+
+    /* 6. Calendario y Agendamiento */
+    --booking-widget-bg: #FFFFFF;
+    --step-active-bg: #782050;
+    --step-active-text: #FEFDF9;
+    --cal-cell-bg: #F7F1E2;
+    --cal-cell-text: #001B40;
+    --cal-selected-bg: #782050;
+    --cal-selected-text: #FEFDF9;
+    --slot-bg: #F7F1E2;
+    --slot-text: #001B40;
+    --slot-selected-bg: #782050;
+    --slot-selected-text: #FEFDF9;
+
+    /* 7. Estados, Alertas y Flotantes */
     --color-success: #2F855A;
-    --color-success-bg: rgba(47, 133, 90, 0.12);
+    --color-warning: #B75012;
     --color-error: #C53030;
     --color-info: #2B6CB0;
-    --color-warning: #DD6B20;
-    --color-accent-soft: rgba(120, 32, 80, 0.15);
-    
+    --toast-bg: #FFFFFF;
+    --toast-text: #001B40;
+    --whatsapp-bg: #1E8E46;
+    --whatsapp-text: #FFFFFF;
+
+    /* Tokens Derivados Automáticos (Sin colores hardcodeados en componentes) */
+    --color-shadow: color-mix(in srgb, var(--color-navy) 8%, transparent);
+    --color-glass-bg: color-mix(in srgb, var(--header-bg) 92%, transparent);
+    --color-glass-border: var(--header-border);
+    --modal-overlay-bg: color-mix(in srgb, var(--modal-overlay-color) 60%, transparent);
+    --color-accent-soft: color-mix(in srgb, var(--color-accent) 15%, transparent);
+    --color-success-bg: color-mix(in srgb, var(--color-success) 15%, transparent);
+    --color-warning-bg: color-mix(in srgb, var(--color-warning) 15%, transparent);
+    --color-error-bg: color-mix(in srgb, var(--color-error) 15%, transparent);
+    --color-info-bg: color-mix(in srgb, var(--color-info) 15%, transparent);
+    --whatsapp-shadow: color-mix(in srgb, var(--whatsapp-bg) 40%, transparent);
+
     /* Layout Constants */
     --radius-sm: 8px;
     --radius-md: 12px;
@@ -41,24 +106,96 @@
 }
 
 [data-theme="dark"] {
-    /* Dark Theme Palette */
-    --bg-primary: #031c32;
-    --bg-secondary: #0a2542;
-    --bg-card: #0d2c4d;
+    /* 1. Fondos y Textos Generales (Dark Theme) */
+    --bg-primary: #031C32;
+    --bg-secondary: #0A2542;
     --text-primary: #FEFDF9;
     --text-secondary: #CBD5E1;
+    --color-accent: #D8A048;
+    --color-accent-text: #001B40;
+    --color-border: #1E3A5F;
     --color-navy: #001B40;
     --color-gold: #D8A048;
     --color-pomegranate: #782050;
-    --color-accent: #D8A048;
-    --color-accent-text: #001B40;
+
+    /* 2. Navegación y Pie de Página */
+    --header-bg: #031C32;
+    --header-border: #1E3A5F;
+    --nav-link-color: #FEFDF9;
+    --nav-link-accent: #D8A048;
+    --footer-bg: #001B40;
+    --footer-text: #FEFDF9;
+    --footer-accent: #D8A048;
+    --footer-border: #1E3A5F;
+
+    /* 3. Botones y Formularios */
+    --btn-primary-bg: #D8A048;
+    --btn-primary-text: #001B40;
+    --btn-secondary-bg: #0D2C4D;
+    --btn-secondary-text: #FEFDF9;
+    --btn-secondary-border: #1E3A5F;
+    --btn-icon-bg: #0D2C4D;
+    --btn-icon-text: #FEFDF9;
+    --input-bg: #0A2542;
+    --input-text: #FEFDF9;
+    --input-border: #1E3A5F;
+    --input-focus-border: #D8A048;
+
+    /* 4. Tarjetas y Servicios */
+    --bg-card: #0D2C4D;
+    --card-border: #1E3A5F;
+    --card-hover-border: #D8A048;
+    --service-price-color: #D8A048;
+    --color-online: #802850;
+    --color-online-text: #FEFDF9;
     --color-in-person: #D8A048;
-    --color-online: #C35B88;
-    --color-border: #1E3A5F;
-    --color-shadow: rgba(0, 0, 0, 0.3);
-    --color-glass-bg: rgba(3, 28, 50, 0.92);
-    --color-glass-border: rgba(255, 255, 255, 0.08);
-    --color-accent-soft: rgba(216, 160, 72, 0.15);
+    --color-in-person-text: #001B40;
+    --filter-active-bg: #D8A048;
+    --filter-active-text: #001B40;
+
+    /* 5. Modales, Pop-ups y Banners */
+    --modal-bg: #0D2C4D;
+    --modal-text: #FEFDF9;
+    --modal-border: #1E3A5F;
+    --modal-overlay-color: #000D1A;
+    --popup-title-color: #D8A048;
+    --banner-bg: #782050;
+    --banner-text: #FFF9F3;
+
+    /* 6. Calendario y Agendamiento */
+    --booking-widget-bg: #0D2C4D;
+    --step-active-bg: #D8A048;
+    --step-active-text: #001B40;
+    --cal-cell-bg: #0A2542;
+    --cal-cell-text: #FEFDF9;
+    --cal-selected-bg: #D8A048;
+    --cal-selected-text: #001B40;
+    --slot-bg: #0A2542;
+    --slot-text: #FEFDF9;
+    --slot-selected-bg: #D8A048;
+    --slot-selected-text: #001B40;
+
+    /* 7. Estados, Alertas y Flotantes */
+    --color-success: #48BB78;
+    --color-warning: #F6AD55;
+    --color-error: #FC8181;
+    --color-info: #63B3ED;
+    --toast-bg: #0D2C4D;
+    --toast-text: #FEFDF9;
+    --whatsapp-bg: #25D366;
+    --whatsapp-text: #001B40;
+
+    /* Tokens Derivados Automáticos */
+    --color-shadow: color-mix(in srgb, var(--modal-overlay-color) 35%, transparent);
+    --color-glass-bg: color-mix(in srgb, var(--header-bg) 92%, transparent);
+    --color-glass-border: var(--header-border);
+    --modal-overlay-bg: color-mix(in srgb, var(--modal-overlay-color) 68%, transparent);
+    --color-accent-soft: color-mix(in srgb, var(--color-accent) 15%, transparent);
+    --color-success-bg: color-mix(in srgb, var(--color-success) 15%, transparent);
+    --color-warning-bg: color-mix(in srgb, var(--color-warning) 15%, transparent);
+    --color-error-bg: color-mix(in srgb, var(--color-error) 15%, transparent);
+    --color-info-bg: color-mix(in srgb, var(--color-info) 15%, transparent);
+    --whatsapp-shadow: color-mix(in srgb, var(--whatsapp-bg) 40%, transparent);
 }
 
 /* Reset */

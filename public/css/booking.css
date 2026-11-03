@@ -1,6 +1,6 @@
 /* Dynamic Schedule / Booking System Widget */
 .booking-widget {
-    background-color: var(--bg-card);
+    background-color: var(--booking-widget-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     box-shadow: 0 20px 25px -5px var(--color-shadow);
@@ -29,7 +29,7 @@
 .step-indicator {
     position: relative;
     z-index: 2;
-    background-color: var(--bg-card);
+    background-color: var(--booking-widget-bg);
     padding: 0 10px;
     display: flex;
     flex-direction: column;
@@ -53,14 +53,14 @@
 }
 
 .step-indicator.active .step-number {
-    background-color: var(--color-accent);
-    color: var(--color-accent-text);
-    border-color: var(--color-accent);
+    background-color: var(--step-active-bg);
+    color: var(--step-active-text);
+    border-color: var(--step-active-bg);
 }
 
 .step-indicator.completed .step-number {
     background-color: var(--color-success);
-    color: var(--color-accent-text);
+    color: var(--step-active-text);
     border-color: var(--color-success);
 }
 
@@ -140,8 +140,8 @@
     justify-content: center;
     border-radius: var(--radius-sm);
     font-size: 0.95rem;
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
+    background-color: var(--cal-cell-bg);
+    color: var(--cal-cell-text);
     transition: var(--transition-smooth);
     border: 1px solid transparent;
 }
@@ -152,8 +152,8 @@
 }
 
 .calendar-cell.selected {
-    background-color: var(--color-accent) !important;
-    color: var(--color-accent-text) !important;
+    background-color: var(--cal-selected-bg) !important;
+    color: var(--cal-selected-text) !important;
 }
 
 .calendar-cell.disabled {
@@ -175,30 +175,30 @@
 }
 
 .slot-btn {
-    background-color: var(--bg-secondary);
+    background-color: var(--slot-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     padding: 10px;
     text-align: center;
     font-size: 0.9rem;
-    color: var(--text-primary);
+    color: var(--slot-text);
     transition: var(--transition-smooth);
 }
 
 .slot-btn:hover:not(.disabled) {
-    border-color: var(--color-accent);
+    border-color: var(--slot-selected-bg);
     background-color: var(--bg-card);
 }
 
 .slot-btn.selected {
-    background-color: var(--color-accent);
-    color: var(--color-accent-text);
-    border-color: var(--color-accent);
+    background-color: var(--slot-selected-bg);
+    color: var(--slot-selected-text);
+    border-color: var(--slot-selected-bg);
 }
 
 .slot-btn.disabled {
     opacity: 0.3;
     cursor: not-allowed;
-    background-color: var(--bg-secondary);
+    background-color: var(--slot-bg);
     text-decoration: line-through;
 }

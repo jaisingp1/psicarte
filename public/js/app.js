@@ -3,14 +3,14 @@
 // ----------------------------------------------------
 document.addEventListener("DOMContentLoaded", async () => {
     initTheme();
-    
+
     // Show logout message if redirected from forceLogout
     const logoutMsg = sessionStorage.getItem("psicarte_logout_msg");
     if (logoutMsg) {
         sessionStorage.removeItem("psicarte_logout_msg");
         setTimeout(() => showToast(logoutMsg, "info"), 300);
     }
-    
+
     // Validate session before loading data - stop if invalid
     if (state.currentUser) {
         const isValid = await validateSession();
@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return; // Don't load anything, already redirecting
         }
     }
-    
+
     await loadAllData();
     setupEventListeners();
     initBookingWidget();
@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateAuthUI();
     renderFooterYear();
     renderWhatsAppButton();
-    
+
     // Populate room selects for admin forms
     if (typeof populateRoomSelects === 'function') {
         populateRoomSelects();
@@ -42,9 +42,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 // SERVICE EDIT MODE (overrides addService from dashboard.js)
 // ----------------------------------------------------
 const originalAddService = addService;
-addService = async function(e) {
+addService = async function (e) {
     e.preventDefault();
-    
+
     if (editingServiceId) {
         const provId = document.getElementById("adm-serv-provider").value;
         const name = document.getElementById("adm-serv-name").value;
@@ -58,15 +58,15 @@ addService = async function(e) {
             (roomId ? (state.rooms.find(r => r.id === roomId)?.type || 'Presencial') : 'Virtual');
         const allowReschedule = document.getElementById("adm-serv-allow-reschedule").checked;
         const maxReschedules = Number(document.getElementById("adm-serv-max-reschedules").value) || 1;
-        
+
         try {
             const res = await fetch('/api/services', {
                 method: 'POST',
                 headers: getAuthHeaders(),
-                body: JSON.stringify({ 
-                    id: editingServiceId, providerId: provId, name, price, duration, 
+                body: JSON.stringify({
+                    id: editingServiceId, providerId: provId, name, price, duration,
                     type: serviceType, roomId,
-                    allowReschedule, maxReschedules 
+                    allowReschedule, maxReschedules
                 })
             });
             const result = await res.json();
@@ -95,7 +95,7 @@ addService = async function(e) {
         }
         return;
     }
-    
+
     originalAddService(e);
 };
 
@@ -105,16 +105,16 @@ addService = async function(e) {
 function initAdminBookingMode() {
     const isAdminMode = sessionStorage.getItem("admin_booking_mode") === "true";
     if (!isAdminMode) return;
-    
+
     const widget = document.querySelector('.booking-widget');
     if (widget) {
         const banner = document.createElement('div');
         banner.id = 'admin-booking-banner';
-        banner.style.cssText = 'background: var(--color-info); color: #fff; padding: 12px 20px; border-radius: var(--radius-sm); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;';
+        banner.style.cssText = 'background: var(--color-info); color: var(--color-accent-text); padding: 12px 20px; border-radius: var(--radius-sm); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;';
         banner.innerHTML = '<i class="fa-solid fa-user-shield"></i> <strong>Modo Administrador:</strong> Estás creando una reserva para un cliente. El pago se omitirá automáticamente.';
         widget.insertBefore(banner, widget.firstChild);
     }
-    
+
     const step3 = document.getElementById("pane-step-3");
     if (step3) {
         const existingSearch = document.getElementById("admin-client-search-booking");
@@ -129,7 +129,7 @@ function initAdminBookingMode() {
                 </select>
             `;
             step3.insertBefore(searchDiv, step3.firstChild);
-            
+
             const select = document.getElementById("admin-booking-client-select");
             state.clients.forEach(c => {
                 select.innerHTML += `<option value="${c.email}">${c.name} (${c.email})</option>`;
@@ -147,7 +147,7 @@ function onAdminBookingClientChange() {
         document.getElementById("client-phone").value = '';
         return;
     }
-    
+
     const client = state.clients.find(c => c.email === email);
     if (client) {
         document.getElementById("client-name").value = client.name || '';
@@ -158,9 +158,9 @@ function onAdminBookingClientChange() {
 }
 
 const originalGoToStep = goToStep;
-goToStep = function(stepNum) {
+goToStep = function (stepNum) {
     originalGoToStep(stepNum);
-    
+
     const isAdminMode = sessionStorage.getItem("admin_booking_mode") === "true";
     if (isAdminMode && stepNum === 3) {
         initAdminBookingMode();
@@ -168,22 +168,22 @@ goToStep = function(stepNum) {
 };
 
 const originalProcessPayment = processPayment;
-processPayment = async function() {
+processPayment = async function () {
     const isAdminMode = sessionStorage.getItem("admin_booking_mode") === "true";
-    
+
     if (isAdminMode) {
         bookingState.client.name = document.getElementById("client-name").value;
         bookingState.client.rut = document.getElementById("client-rut").value;
         bookingState.client.email = document.getElementById("client-email").value;
         bookingState.client.phone = document.getElementById("client-phone").value;
-        
+
         if (!bookingState.client.name || !bookingState.client.email) {
             showToast("Debe completar los datos del cliente.", "error");
             return;
         }
-        
+
         showToast("Registrando reserva como administrador...", "info");
-        
+
         const newBooking = {
             id: "bk-" + Date.now(),
             providerId: bookingState.provider.id,
@@ -203,28 +203,28 @@ processPayment = async function() {
             clientPhone: bookingState.client.phone,
             adminMode: true
         };
-        
+
         try {
             const response = await fetch('/api/bookings', {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify(newBooking)
             });
-            
+
             const result = await response.json();
-            
+
             if (response.ok) {
                 showToast("Reserva registrada exitosamente por el administrador.", "success");
                 sessionStorage.removeItem("admin_booking_mode");
                 const banner = document.getElementById("admin-booking-banner");
                 if (banner) banner.remove();
-                
+
                 bookingState = {
                     step: 1, provider: null, service: null, room: null,
                     date: null, timeSlot: null, startTime: null, endTime: null,
                     client: { name: "", rut: "", email: "", phone: "" }
                 };
-                
+
                 await loadAllData();
                 window.location.href = 'acceso.html';
             } else {
@@ -235,6 +235,6 @@ processPayment = async function() {
         }
         return;
     }
-    
+
     originalProcessPayment();
 };

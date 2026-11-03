@@ -194,9 +194,9 @@
 }
 
 .filter-pill.active {
-    background-color: var(--color-accent);
-    color: var(--color-accent-text);
-    border-color: var(--color-accent);
+    background-color: var(--filter-active-bg);
+    color: var(--filter-active-text);
+    border-color: var(--filter-active-bg);
 }
 
 .filter-pill:focus-visible {
@@ -213,7 +213,7 @@
 
 .service-card {
     background-color: var(--bg-card);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--card-border);
     border-radius: var(--radius-md);
     padding: 24px;
     box-shadow: 0 4px 6px -1px var(--color-shadow);
@@ -226,7 +226,7 @@
 .service-card:hover {
     transform: translateY(-4px);
     box-shadow: 0 12px 20px -4px var(--color-shadow);
-    border-color: var(--color-accent);
+    border-color: var(--card-hover-border);
 }
 
 .service-card-header {
@@ -258,12 +258,12 @@
 
 .service-badge-virtual {
     background-color: var(--color-online);
-    color: var(--color-accent-text);
+    color: var(--color-online-text);
 }
 
 .service-badge-physical {
     background-color: var(--color-in-person);
-    color: var(--color-accent-text);
+    color: var(--color-in-person-text);
 }
 
 .service-card-meta {
@@ -286,13 +286,13 @@
     gap: 6px;
     margin-top: auto;
     padding-top: 12px;
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--card-border);
 }
 
 .price-amount {
     font-size: 1.4rem;
     font-weight: 700;
-    color: var(--color-accent);
+    color: var(--service-price-color);
     font-family: var(--font-heading);
 }
 

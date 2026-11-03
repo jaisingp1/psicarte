@@ -64,6 +64,9 @@ async function loadAllData() {
         };
         
         state.config = { ...cfg, max_reschedules: cfg.max_reschedules || '1' };
+        if (cfg.theme_custom_tokens && typeof applyCustomThemeTokens === 'function') {
+            applyCustomThemeTokens(cfg.theme_custom_tokens);
+        }
     } catch (e) {
         console.error("Error loading API data:", e);
         showToast("Error al conectar con el servidor backend.", "error");

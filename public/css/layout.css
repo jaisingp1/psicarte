@@ -53,7 +53,7 @@ nav {
 .nav-links a {
     font-family: var(--font-heading);
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--nav-link-color);
     position: relative;
     padding: 6px 0;
     transition: var(--transition-smooth);
@@ -66,7 +66,7 @@ nav {
     left: 0;
     width: 0;
     height: 2px;
-    background-color: var(--color-accent);
+    background-color: var(--nav-link-accent);
     transition: var(--transition-smooth);
 }
 
@@ -137,10 +137,10 @@ section.info-section {
 
 /* Footer styling */
 footer {
-    background-color: var(--color-navy);
-    color: var(--color-accent-text);
+    background-color: var(--footer-bg);
+    color: var(--footer-text);
     padding: 60px 24px 30px;
-    border-top: 4px solid var(--color-gold);
+    border-top: 4px solid var(--footer-accent);
 }
 
 .footer-container {
@@ -219,7 +219,7 @@ footer {
 .footer-links h4, .footer-contact h4 {
     font-size: 1.15rem;
     margin-bottom: 20px;
-    color: var(--color-gold);
+    color: var(--footer-accent);
 }
 
 .footer-links ul {
@@ -231,7 +231,7 @@ footer {
 }
 
 .footer-links a:hover {
-    color: var(--color-gold);
+    color: var(--footer-accent);
 }
 
 .footer-contact p {
@@ -247,7 +247,7 @@ footer {
     max-width: 1200px;
     margin: 40px auto 0;
     padding-top: 20px;
-    border-top: 1px solid rgba(255, 249, 243, 0.1);
+    border-top: 1px solid var(--footer-border);
     text-align: center;
     font-size: 0.85rem;
     opacity: 0.7;

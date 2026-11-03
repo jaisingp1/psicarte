@@ -8,20 +8,32 @@ Este documento registra la implementación y el QA de los cambios acordados.
 
 ## Estado de implementación
 
-- **Implementado:** paleta y variantes visuales; logos en páginas públicas y de pago; contacto administrable; envío de artículos con moderación administrativa; edición de salas; agendas puntuales y recurrentes con múltiples días e intervalos; regeneración de horarios preservando reservas existentes.
+- **Implementado previamente según el plan existente (revisar contra el diff actual):** paleta y variantes visuales; logos en páginas públicas y de pago; contacto administrable; envío de artículos con moderación administrativa; edición de salas; agendas puntuales y recurrentes con múltiples días e intervalos; regeneración de horarios preservando reservas existentes.
 - **Pendiente por decisión/entorno:** proveedor y credenciales de correo transaccional, configuración DNS y pruebas de entrega; consentimiento para publicar el registro SIS; aprobación final del texto de cobertura/aranceles.
-- **QA realizado:** validación estática, arranque del servidor, endpoints públicos, protección de envíos de artículos sin token, logo/contacto en páginas públicas/de pago, temas claro/oscuro, y ausencia de desbordamiento horizontal en móvil.
-- **QA pendiente:** flujo autenticado de envío/moderación y creación de agendas con datos de staging. No se debe regenerar ni borrar la base de datos real para probar.
+- **QA registrado previamente:** validación estática, arranque del servidor, endpoints públicos, protección de envíos de artículos sin token, logo/contacto en páginas públicas/de pago, temas claro/oscuro y ausencia de desbordamiento horizontal en móvil. Este registro no valida los cambios locales actuales.
+- **Cambios locales en curso:** el worktree contiene cambios sin confirmar en 18 archivos: SQL de datos iniciales, páginas HTML, hojas CSS, módulos JS y este plan. Preservarlos; revisar los diffs completos y no considerar una funcionalidad terminada solo porque su archivo esté modificado.
+- **QA pendiente:** repetir validaciones relevantes para los cambios locales; probar el flujo autenticado de envío/moderación y la creación de agendas con datos de staging. No se debe regenerar ni borrar la base de datos real para probar.
 - **Decisiones aplicadas:** moderación de artículos (1B), mantener tema oscuro (2A), logo horizontal en navegación y emblema en portada (3A), intervalos múltiples por día (8A), configuración administrable de contacto (9A).
 
 ## Estado actual observado
 
-- Los estilos se ensamblan desde `public/css/style.css`; los tokens de tema están en `public/css/variables.css`. La paleta actual no coincide con la del brief.
+- Los estilos se ensamblan desde `public/css/style.css`; `public/css/variables.css` ya contiene la paleta del brief y tokens semánticos para componentes. Hay cambios locales en los estilos y el frontend que deben preservarse y verificarse antes de cerrar.
 - La página pública y las vistas de acceso, nosotros y pago reutilizan CSS; el cambio visual debe cubrir todas esas rutas y los temas claro/oscuro.
 - La aplicación está modularizada en `public/js/`, usa `server/server.js` para la API y mantiene esquema y datos iniciales en `database/`.
-- El esquema ya incluye servicios, salas y horarios, agendas, actividades, reservas, configuración y notificaciones Khipu; se debe revisar el modelo existente antes de introducir tablas o columnas.
+- El esquema ya incluye artículos con moderación, servicios, salas y horarios, agendas, actividades, reservas, configuración y notificaciones Khipu; revisar el modelo y las funciones ya implementadas antes de proponer nuevas tablas, columnas o flujos duplicados.
 - No se encontró una dependencia ni un módulo de envío de correo en el servidor. El mecanismo actual de `contacto@centropsicarte.cl` y la administración DNS deben confirmarse antes de elegir una integración.
 - El proyecto ya contiene una integración Khipu. La confirmación de reserva debe depender de la confirmación del pago desde el servidor, no únicamente del retorno del navegador. La notificación de Khipu puede reintentarse, por lo que el procesamiento y el envío de correo deben ser idempotentes.
+
+## Plan de acción inmediato
+
+| Orden | Acción | Criterio de salida |
+|---|---|---|
+| 1 | Proteger los cambios locales de todos los archivos modificados (incluidos SQL, HTML, CSS y JS); revisar el diff existente sin sobrescribirlo y distinguir cambios listos de cambios en curso. | Alcance de cada archivo modificado identificado; ningún cambio previo perdido ni funcionalidad asumida como completa sin verificación. |
+| 2 | Completar la coherencia visual: verificar tokens semánticos, contrastes, variantes claro/oscuro y responsive en las páginas públicas, acceso, Nosotros y pago. | Sin colores literales en CSS de componentes; sin logos deformados ni regresiones visuales; validación en breakpoints acordados. |
+| 3 | Comparar las funciones ya registradas como implementadas con el código actual: artículos/moderación, contacto configurable, edición de salas, recurrencias y tarjetas de prestadores. Corregir solo brechas reproducibles. | Pruebas de regresión de cada flujo pasan sin duplicar capacidades ni alterar datos reales. |
+| 4 | Resolver las decisiones editoriales y de contenido abiertas (registro SIS, texto de prestaciones/reembolsos, proveedor de correo y avatar) antes de publicar afirmaciones o integrar servicios externos. | Aprobaciones registradas y requisitos operativos disponibles. |
+| 5 | Completar el flujo de correo de reserva únicamente tras confirmar proveedor, SPF/DKIM/DMARC y el estado de pago confirmado por servidor; hacer idempotentes los envíos y tratar reintentos. | Correos de prueba al comprador y al centro sin duplicados; contenido correcto según modalidad. |
+| 6 | Ejecutar QA integral en entorno de prueba, respaldar base de datos antes de cualquier cambio de esquema y desplegar gradualmente con reversión preparada. | Criterios de QA de la fase 6 cumplidos y plan de reversión comprobado. |
 
 ## Fases
 

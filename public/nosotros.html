@@ -145,38 +145,8 @@
     <!-- Toast Container for Notifications -->
     <div id="toast-container"></div>
 
+    <script src="js/theme.js"></script>
     <script>
-        // Theme management (synchronized with localStorage)
-        function initTheme() {
-            const savedTheme = localStorage.getItem("psicarte_theme") || "light";
-            document.documentElement.setAttribute("data-theme", savedTheme);
-            updateThemeUI(savedTheme);
-        }
-
-        function toggleTheme() {
-            const currentTheme = document.documentElement.getAttribute("data-theme");
-            const newTheme = currentTheme === "dark" ? "light" : "dark";
-            document.documentElement.setAttribute("data-theme", newTheme);
-            localStorage.setItem("psicarte_theme", newTheme);
-            updateThemeUI(newTheme);
-        }
-
-        function updateThemeUI(theme) {
-            const themeBtn = document.getElementById("theme-toggle");
-            const logoImg = document.getElementById("nav-logo");
-            const footerLogo = document.getElementById("footer-logo");
-
-            if (theme === "dark") {
-                themeBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
-                logoImg.src = "images/logo_dark.png";
-                if (footerLogo) footerLogo.src = "images/logo_dark.png";
-            } else {
-                themeBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
-                logoImg.src = "images/logo_light.png";
-                if (footerLogo) footerLogo.src = "images/logo_light.png";
-            }
-        }
-
         document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 
         // Toggle presentation expand/collapse
@@ -305,6 +275,7 @@
 
         // Initialize on load
         initTheme();
+        renderFooterYear();
         loadContent();
         loadProviders();
     </script>

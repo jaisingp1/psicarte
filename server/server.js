@@ -37,17 +37,8 @@ function authenticateToken(req, res, next) {
 
 // Middleware
 app.use(cors());
-app.use(express.json({
-    verify: (req, res, buf) => {
-        if (req.originalUrl && (
-            req.originalUrl.startsWith('/api/khipu/notify') ||
-            req.originalUrl.startsWith('/api/khipu/webhook') ||
-            req.originalUrl.startsWith('/notificacion')
-        )) {
-            req.rawBody = buf;
-        }
-    }
-}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 // Serve static frontend files from /public directory
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -145,46 +136,6 @@ function normalizeAgendaRecurrenceRule(value) {
 // =====================================================
 // SECTION 2: KHIPU PAYMENT GATEWAY HELPERS (API v3)
 // =====================================================
-function verifyKhipuSignature(rawBody, signatureHeader, secret) {
-    if (!rawBody || !signatureHeader || !secret) return false;
-    try {
-        const parts = signatureHeader.split(',');
-        let tValue = null;
-        let sValue = null;
-        for (const part of parts) {
-            const eqIdx = part.indexOf('=');
-            if (eqIdx === -1) continue;
-            const key = part.slice(0, eqIdx).trim();
-            const val = part.slice(eqIdx + 1).trim();
-            if (key === 't') tValue = val;
-            if (key === 's') sValue = val;
-        }
-        if (!tValue || !sValue) return false;
-
-        // Mitigación de replay attacks: validar frescura del timestamp (tolerancia de 5 minutos)
-        const tNum = Number(tValue);
-        if (!Number.isNaN(tNum)) {
-            const timestampMs = tNum < 1e11 ? tNum * 1000 : tNum;
-            const ageMs = Math.abs(Date.now() - timestampMs);
-            if (ageMs > 5 * 60 * 1000) {
-                console.warn(`Webhook: timestamp expirado o desfasado (${ageMs}ms de diferencia).`);
-                return false;
-            }
-        }
-
-        const toHash = `${tValue}.${rawBody.toString('utf8')}`;
-        const computedSig = crypto.createHmac('sha256', secret).update(toHash).digest('base64');
-
-        const sigBuffer = Buffer.from(sValue);
-        const computedBuffer = Buffer.from(computedSig);
-        if (sigBuffer.length !== computedBuffer.length) return false;
-        return crypto.timingSafeEqual(sigBuffer, computedBuffer);
-    } catch (e) {
-        console.error('Error verifying Khipu signature:', e.message);
-        return false;
-    }
-}
-
 async function callKhipuApi(method, path, body = null) {
     const apiKey = process.env.KHIPU_API_KEY;
     if (!apiKey) {
@@ -2005,19 +1956,6 @@ app.post('/api/khipu/create-payment', (req, res) => {
 });
 
 function handleKhipuWebhook(req, res) {
-    const signatureHeader = req.headers['x-khipu-signature'];
-    const webhookSecret = process.env.KHIPU_SECRET;
-
-    if (!webhookSecret) {
-        console.error('Webhook: KHIPU_SECRET no está configurada.');
-        return res.status(503).send('Webhook no configurado');
-    }
-
-    if (!verifyKhipuSignature(req.rawBody, signatureHeader, webhookSecret)) {
-        console.warn('Webhook: Firma x-khipu-signature inválida o faltante.');
-        return res.status(401).send('Firma inválida');
-    }
-
     const paymentEvent = req.body;
     const notifId = crypto.randomUUID();
     const type = 'payment_3.0';
@@ -2033,16 +1971,26 @@ function handleKhipuWebhook(req, res) {
         }
     );
 
+    if (!process.env.KHIPU_API_KEY) {
+        console.error('Webhook: KHIPU_API_KEY no está configurada.');
+        return res.status(503).send('KHIPU_API_KEY no configurada');
+    }
+
     const bookingId = paymentEvent?.transaction_id || paymentEvent?.data?.transaction_id;
     const paymentId = paymentEvent?.payment_id || paymentEvent?.data?.payment_id;
 
-    if (!bookingId || !paymentId) {
+    if (!bookingId && !paymentId) {
         return res.status(200).send('Payload incompleto');
     }
 
-    db.get("SELECT * FROM bookings WHERE id = ?", [bookingId], async (errBk, booking) => {
+    const lookupQuery = bookingId
+        ? "SELECT * FROM bookings WHERE id = ?"
+        : "SELECT * FROM bookings WHERE khipuPaymentId = ?";
+    const lookupParam = bookingId || paymentId;
+
+    db.get(lookupQuery, [lookupParam], async (errBk, booking) => {
         if (errBk || !booking) {
-            console.error('Webhook: Booking not found:', bookingId);
+            console.error('Webhook: Booking not found:', lookupParam);
             return res.status(200).send('Booking not found');
         }
 
@@ -2050,21 +1998,28 @@ function handleKhipuWebhook(req, res) {
             return res.status(200).send('Already processed');
         }
 
-        if (booking.khipuPaymentId && booking.khipuPaymentId !== paymentId) {
-            console.error(`Webhook: Mismatch de payment_id para booking ${bookingId}`);
+        const targetPaymentId = paymentId || booking.khipuPaymentId;
+        if (!targetPaymentId) {
+            return res.status(200).send('Payment ID missing');
+        }
+
+        if (booking.khipuPaymentId && paymentId && booking.khipuPaymentId !== paymentId) {
+            console.error(`Webhook: Mismatch de payment_id para booking ${booking.id}`);
             return res.status(200).send('Payment ID mismatch');
         }
 
-        const eventAmount = paymentEvent?.amount != null ? paymentEvent.amount : paymentEvent?.data?.amount;
-        if (eventAmount != null && Number(eventAmount) !== Number(booking.price)) {
-            console.error(`Webhook: Monto discrepante para booking ${bookingId}`);
-            return res.status(200).send('Amount mismatch');
-        }
-
         try {
-            const paymentDetails = await callKhipuApi('GET', `/payments/${paymentId}`);
+            const paymentDetails = await callKhipuApi('GET', `/payments/${targetPaymentId}`);
+            if (paymentDetails.transaction_id && paymentDetails.transaction_id !== booking.id) {
+                console.error(`Webhook: Mismatch de transaction_id en Khipu para booking ${booking.id}`);
+                return res.status(200).send('Transaction ID mismatch');
+            }
+            if (paymentDetails.amount != null && Number(paymentDetails.amount) !== Number(booking.price)) {
+                console.error(`Webhook: Monto discrepante en Khipu para booking ${booking.id}`);
+                return res.status(200).send('Amount mismatch');
+            }
             if (paymentDetails.status === 'done') {
-                reconcileBookingPayment(bookingId, (errRec) => {
+                reconcileBookingPayment(booking.id, (errRec) => {
                     if (errRec) return res.status(500).send('Error updating booking');
                     return res.status(200).send('Notification received and processed');
                 });

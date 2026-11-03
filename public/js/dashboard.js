@@ -206,9 +206,12 @@ function renderDashboardPanes() {
         if (roomsList) {
             roomsList.innerHTML = "";
             state.rooms.forEach(r => {
+                const linkBadge = r.type === 'Virtual' && r.meeting_link
+                    ? `<br><small style="color: var(--text-secondary);"><i class="fa-solid fa-video"></i> <a href="${r.meeting_link}" target="_blank" rel="noopener noreferrer">${r.meeting_link}</a></small>`
+                    : '';
                 roomsList.innerHTML += `
                     <tr>
-                        <td><strong>${r.name}</strong></td>
+                        <td><strong>${r.name}</strong>${linkBadge}</td>
                         <td>${r.type}</td>
                         <td>${r.openTime} a ${r.closeTime}</td>
                         <td class="action-btns">
@@ -458,13 +461,16 @@ async function saveRoom(e) {
     const type = document.getElementById("room-type").value;
     const open = document.getElementById("room-open").value;
     const close = document.getElementById("room-close").value;
+    const meetingLinkEl = document.getElementById("room-meeting-link");
+    const meetingLink = meetingLinkEl ? meetingLinkEl.value.trim() : "";
 
     const roomPayload = {
         id: editingRoomId || crypto.randomUUID(),
         name,
         type,
         openTime: open,
-        closeTime: close
+        closeTime: close,
+        meeting_link: meetingLink
     };
 
     try {
@@ -496,6 +502,8 @@ function editRoom(id) {
         document.getElementById("room-type").value = room.type;
         document.getElementById("room-open").value = room.openTime;
         document.getElementById("room-close").value = room.closeTime;
+        const meetingLinkEl = document.getElementById("room-meeting-link");
+        if (meetingLinkEl) meetingLinkEl.value = room.meeting_link || "";
         editingRoomId = id;
         document.getElementById("pane-admin-rooms").scrollIntoView({ behavior: 'smooth' });
     }
@@ -1095,18 +1103,34 @@ async function saveContentCustomizations(e) {
         contactPhone: document.getElementById("custom-contact-phone").value,
         contactAddress: document.getElementById("custom-contact-address").value
     };
+    const instagramInput = document.getElementById("custom-instagram-url");
+    const instagramUrl = instagramInput ? instagramInput.value.trim() : "";
 
     try {
-        const res = await fetch('/api/content', {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(payload)
-        });
-        if (res.ok) {
+        const requests = [
+            fetch('/api/content', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(payload)
+            })
+        ];
+        if (instagramInput) {
+            requests.push(
+                fetch('/api/config', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ instagram_url: instagramUrl })
+                })
+            );
+        }
+        const responses = await Promise.all(requests);
+        if (responses.every(r => r.ok)) {
             showToast("Contenidos de la página actualizados y publicados.", "success");
             await loadAllData();
             renderContent();
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            showToast("Error al guardar algunos campos de contenido.", "error");
         }
     } catch (e) {
         showToast("Error al guardar contenidos.", "error");
@@ -1297,7 +1321,7 @@ function startAdminBooking() {
 // ----------------------------------------------------
 let editingServiceId = null;
 
-function editService(provId, servId) {
+async function editService(provId, servId) {
     const provider = state.providers.find(p => p.id === provId);
     if (!provider) return;
     const service = provider.services.find(s => s.id === servId);
@@ -1310,30 +1334,94 @@ function editService(provId, servId) {
     document.getElementById("adm-serv-price").value = service.price;
     document.getElementById("adm-serv-duration").value = service.duration;
 
-    // Set room
-    const roomSelect = document.getElementById("adm-serv-room");
-    if (roomSelect) {
-        roomSelect.value = service.roomId || '';
-        roomSelect.required = false;
-        roomSelect.disabled = true;
-    }
-    setServiceScheduleEditable(false);
-
-    const recurrence = 'single';
-    const recurrenceRadio = document.querySelector('input[name="adm-serv-recurrence"][value="single"]');
-    if (recurrenceRadio) recurrenceRadio.checked = true;
-    const singleDateConfig = document.getElementById("single-date-config");
-    const recurrenceConfig = document.getElementById("recurrence-config");
-
-    if (singleDateConfig) {
-        singleDateConfig.style.display = recurrence === 'single' ? 'block' : 'none';
-    }
-    if (recurrenceConfig) {
-        recurrenceConfig.style.display = recurrence === 'weekly' ? 'block' : 'none';
-    }
-
+    setServiceScheduleEditable(true);
     resetAgendaTimeRanges();
     document.querySelectorAll('.agenda-weekday-check').forEach(input => { input.checked = false; });
+
+    const roomSelect = document.getElementById("adm-serv-room");
+    let matchedRoomId = service.roomId || '';
+
+    try {
+        const agendasRes = await fetch(`/api/agendas?service_id=${encodeURIComponent(servId)}`, {
+            headers: getAuthHeaders()
+        });
+        const agendas = agendasRes.ok ? await agendasRes.json() : [];
+        const primaryAgenda = agendas[0] || null;
+
+        if (primaryAgenda && primaryAgenda.room_id) {
+            matchedRoomId = primaryAgenda.room_id;
+        }
+        if (roomSelect) {
+            roomSelect.value = matchedRoomId;
+        }
+
+        const singleDateConfig = document.getElementById("single-date-config");
+        const recurrenceConfig = document.getElementById("recurrence-config");
+
+        if (primaryAgenda && primaryAgenda.type === 'recurrent') {
+            const weeklyRadio = document.querySelector('input[name="adm-serv-recurrence"][value="weekly"]');
+            if (weeklyRadio) weeklyRadio.checked = true;
+            if (singleDateConfig) singleDateConfig.style.display = 'none';
+            if (recurrenceConfig) recurrenceConfig.style.display = 'block';
+
+            let rule = {};
+            try {
+                rule = primaryAgenda.recurrence_rule ? JSON.parse(primaryAgenda.recurrence_rule) : {};
+            } catch {
+                rule = {};
+            }
+
+            const weekdays = Array.isArray(rule.byweekday) ? rule.byweekday.map(Number) : [];
+            const timeRangesMap = rule.time_ranges && typeof rule.time_ranges === 'object' ? rule.time_ranges : {};
+
+            weekdays.forEach(day => {
+                const check = document.querySelector(`.agenda-weekday-check[value="${day}"]`);
+                if (check) check.checked = true;
+
+                const dayRanges = Array.isArray(timeRangesMap[String(day)]) && timeRangesMap[String(day)].length > 0
+                    ? timeRangesMap[String(day)]
+                    : [{ start: primaryAgenda.start_time || '09:00', end: primaryAgenda.end_time || '13:00' }];
+
+                const container = document.querySelector(`.agenda-time-ranges[data-day="${day}"]`);
+                if (container) {
+                    while (container.querySelectorAll('.agenda-time-range').length < dayRanges.length) {
+                        addAgendaTimeRange(day);
+                    }
+                    const rows = [...container.querySelectorAll('.agenda-time-range')];
+                    dayRanges.forEach((range, idx) => {
+                        if (rows[idx]) {
+                            const startInput = rows[idx].querySelector('.agenda-range-start');
+                            const endInput = rows[idx].querySelector('.agenda-range-end');
+                            if (startInput) startInput.value = range.start || '09:00';
+                            if (endInput) endInput.value = range.end || '13:00';
+                        }
+                    });
+                }
+            });
+
+            const startDateInput = document.getElementById("adm-serv-recurrence-start-date");
+            const endDateInput = document.getElementById("adm-serv-recurrence-end-date");
+            if (startDateInput) startDateInput.value = primaryAgenda.start_date || rule.dtstart || new Date().toISOString().slice(0, 10);
+            if (endDateInput) endDateInput.value = primaryAgenda.end_date || '';
+        } else {
+            const singleRadio = document.querySelector('input[name="adm-serv-recurrence"][value="single"]');
+            if (singleRadio) singleRadio.checked = true;
+            if (singleDateConfig) singleDateConfig.style.display = 'block';
+            if (recurrenceConfig) recurrenceConfig.style.display = 'none';
+
+            if (primaryAgenda) {
+                const singleDateInput = document.getElementById("adm-serv-single-date");
+                const singleStartInput = document.getElementById("adm-serv-single-start");
+                const singleEndInput = document.getElementById("adm-serv-single-end");
+                if (singleDateInput) singleDateInput.value = primaryAgenda.specific_date || '';
+                if (singleStartInput) singleStartInput.value = primaryAgenda.start_time || '09:00';
+                if (singleEndInput) singleEndInput.value = primaryAgenda.end_time || '12:00';
+            }
+        }
+    } catch (e) {
+        console.error("Error loading service agendas for edit:", e);
+        if (roomSelect) roomSelect.value = matchedRoomId;
+    }
 
     document.getElementById("adm-serv-allow-reschedule").checked = service.allowReschedule !== 0;
     document.getElementById("adm-serv-max-reschedules").value = service.maxReschedules || 1;
@@ -1532,8 +1620,11 @@ let editingUserId = null;
 function toggleAdminUserFields() {
     const role = document.getElementById("adm-user-role").value;
     const fields = document.getElementById("adm-user-client-fields");
+    const providerFields = document.getElementById("adm-user-provider-fields");
     const rutInput = document.getElementById("adm-user-rut");
     const phoneInput = document.getElementById("adm-user-phone");
+    const specialtyInput = document.getElementById("adm-user-specialty");
+    const bioInput = document.getElementById("adm-user-bio");
 
     if (fields) {
         if (role === 'usuario') {
@@ -1544,6 +1635,15 @@ function toggleAdminUserFields() {
             fields.style.display = 'none';
             if (rutInput) { rutInput.required = false; rutInput.value = ''; }
             if (phoneInput) { phoneInput.required = false; phoneInput.value = ''; }
+        }
+    }
+    if (providerFields) {
+        if (role === 'prestador') {
+            providerFields.style.display = 'block';
+        } else {
+            providerFields.style.display = 'none';
+            if (specialtyInput) specialtyInput.value = '';
+            if (bioInput) bioInput.value = '';
         }
     }
 }
@@ -1612,11 +1712,18 @@ function editAdminUser(id) {
 
         const rutInput = document.getElementById("adm-user-rut");
         const phoneInput = document.getElementById("adm-user-phone");
+        const specialtyInput = document.getElementById("adm-user-specialty");
+        const bioInput = document.getElementById("adm-user-bio");
         if (rutInput) rutInput.value = user.rut || '';
         if (phoneInput) phoneInput.value = user.phone || '';
 
         document.getElementById("admin-user-form-title").innerText = "Editar Usuario";
         toggleAdminUserFields();
+        if (user.role === 'prestador') {
+            const provider = state.providers.find(p => p.id === user.id);
+            if (specialtyInput) specialtyInput.value = user.specialty || provider?.specialty || '';
+            if (bioInput) bioInput.value = user.bio || provider?.bio || '';
+        }
     });
 }
 
@@ -1638,10 +1745,12 @@ async function saveAdminUser(e) {
 
     const rut = document.getElementById("adm-user-rut") ? document.getElementById("adm-user-rut").value : '';
     const phone = document.getElementById("adm-user-phone") ? document.getElementById("adm-user-phone").value : '';
+    const specialty = document.getElementById("adm-user-specialty") ? document.getElementById("adm-user-specialty").value.trim() : '';
+    const bio = document.getElementById("adm-user-bio") ? document.getElementById("adm-user-bio").value.trim() : '';
 
     try {
         if (editingId) {
-            const payload = { name, email, role, rut, phone };
+            const payload = { name, email, role, rut, phone, specialty, bio };
             if (password) payload.password = password;
             await updateUser(editingId, payload);
             showToast("Usuario actualizado correctamente.", "success");
@@ -1650,7 +1759,7 @@ async function saveAdminUser(e) {
                 showToast("La contraseña es obligatoria para nuevos usuarios.", "error");
                 return;
             }
-            await createUser({ name, email, role, password, rut, phone });
+            await createUser({ name, email, role, password, rut, phone, specialty, bio });
             showToast("Usuario creado correctamente.", "success");
         }
         await loadAllData();

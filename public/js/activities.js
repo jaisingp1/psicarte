@@ -4,26 +4,24 @@
 function updateActivitiesVisibility() {
     const section = document.getElementById("calendario");
     const calendarLinks = document.querySelectorAll('a[href="#calendario"]');
-    const hasActivities = state.activities && state.activities.length > 0;
+    const hasActivities = Array.isArray(state.activities) && state.activities.length > 0;
+    const hasArticles = Array.isArray(state.articles) && state.articles.length > 0;
+    const shouldShowCommunity = hasActivities || hasArticles;
     
     if (section) {
-        section.style.display = hasActivities ? "" : "none";
+        section.style.display = shouldShowCommunity ? "" : "none";
     }
     
     calendarLinks.forEach(link => {
         const parentLi = link.parentElement;
         if (parentLi && parentLi.tagName === 'LI') {
-            parentLi.style.display = hasActivities ? "" : "none";
+            parentLi.style.display = shouldShowCommunity ? "" : "none";
         }
     });
 }
 
 function renderCommunityCalendar() {
     updateActivitiesVisibility();
-    
-    if (!state.activities || state.activities.length === 0) {
-        return;
-    }
 
     const grid = document.getElementById("community-calendar-grid");
     const monthLabel = document.getElementById("activity-month-year");
@@ -45,12 +43,13 @@ function renderCommunityCalendar() {
     }
     
     const monthStr = String(activityMonth + 1).padStart(2, '0');
+    const activitiesList = Array.isArray(state.activities) ? state.activities : [];
     
     for (let day = 1; day <= daysInMonth; day++) {
         const dayStr = String(day).padStart(2, '0');
         const dateStr = `${activityYear}-${monthStr}-${dayStr}`;
         
-        const hasActivity = state.activities.some(a => a.date === dateStr);
+        const hasActivity = activitiesList.some(a => a.date === dateStr);
         let cellClass = "calendar-cell";
         if (hasActivity) cellClass += " has-activity";
         if (selectedActivityDate === dateStr) cellClass += " active-selected";
@@ -88,11 +87,12 @@ function selectActivityDate(dateStr) {
 }
 
 function renderActivities() {
-    if (!state.activities || state.activities.length === 0) {
-        return;
-    }
     const list = document.getElementById("community-activities-list");
     if (!list) return;
+    if (!state.activities || state.activities.length === 0) {
+        list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 30px;">No hay actividades programadas por el momento.</p>';
+        return;
+    }
     list.innerHTML = "";
     
     const monthStr = String(activityMonth + 1).padStart(2, '0');
@@ -335,20 +335,25 @@ function escapeArticleText(value) {
 
 async function renderPublicArticles() {
     const list = document.getElementById('public-articles-list');
-    if (!list) return;
+    const homeSection = document.getElementById('home-articles-section');
+    const homeList = document.getElementById('home-articles-list');
+    if (!list && !homeList) return;
 
     try {
         const response = await fetch('/api/articles');
         if (!response.ok) throw new Error('No se pudieron cargar las noticias.');
         const articles = await response.json();
         state.articles = articles;
+        updateActivitiesVisibility();
 
         if (!articles.length) {
-            list.innerHTML = '<p class="article-empty">Pronto compartiremos novedades y artículos de interés.</p>';
+            if (list) list.innerHTML = '<p class="article-empty">Pronto compartiremos novedades y artículos de interés.</p>';
+            if (homeSection) homeSection.style.display = 'none';
+            if (homeList) homeList.innerHTML = '';
             return;
         }
 
-        list.innerHTML = articles.slice(0, 3).map(article => `
+        const cardsHtml = articles.slice(0, 3).map(article => `
             <article class="article-card">
                 <p class="article-date">${new Date(article.published_at || article.created_at).toLocaleDateString('es-CL')}</p>
                 <h4>${escapeArticleText(article.title)}</h4>
@@ -359,9 +364,14 @@ async function renderPublicArticles() {
                 </details>
             </article>
         `).join('');
+
+        if (list) list.innerHTML = cardsHtml;
+        if (homeList) homeList.innerHTML = cardsHtml;
+        if (homeSection) homeSection.style.display = 'block';
     } catch (error) {
         console.error('Error al cargar artículos:', error);
-        list.innerHTML = '<p class="article-empty">No se pudieron cargar las noticias. Intenta nuevamente más tarde.</p>';
+        if (list) list.innerHTML = '<p class="article-empty">No se pudieron cargar las noticias. Intenta nuevamente más tarde.</p>';
+        if (homeSection) homeSection.style.display = 'none';
     }
 }
 
@@ -434,8 +444,13 @@ async function submitArticle(e) {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'No se pudo enviar el artículo.');
         form.reset();
-        showToast('Artículo enviado para revisión editorial.', 'success');
-        await renderArticleSubmissions();
+        showToast(
+            result.status === 'published'
+                ? 'Artículo publicado correctamente.'
+                : 'Artículo enviado para revisión editorial.',
+            'success'
+        );
+        await Promise.all([renderArticleSubmissions(), renderPublicArticles()]);
     } catch (error) {
         showToast(error.message || 'Error al enviar el artículo.', 'error');
     }

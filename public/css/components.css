@@ -149,6 +149,25 @@
     background-color: var(--bg-secondary);
 }
 
+.btn-whatsapp {
+    background-color: var(--whatsapp-bg);
+    color: var(--whatsapp-text);
+    border: 1px solid var(--whatsapp-bg);
+    font-weight: 600;
+    padding: 12px 24px;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-smooth);
+}
+
+.btn-whatsapp:hover {
+    filter: brightness(0.94);
+    transform: translateY(-1px);
+}
+
 /* Grid & Cards */
 .grid-2 {
     display: grid;

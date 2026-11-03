@@ -85,9 +85,7 @@ function updateThemeUI(theme) {
         ? "images/logo_dark.png"
         : "images/logo_light.png";
     if (accentLogo) accentLogo.src = "images/logo-original.webp";
-    if (footerLogo) footerLogo.src = theme === "dark"
-        ? "images/logo_dark.png"
-        : "images/logo_light.png";
+    if (footerLogo) footerLogo.src = "images/logo_dark.png";
 }
 
 function renderFooterYear() {

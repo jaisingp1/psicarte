@@ -20,6 +20,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (addressRow) addressRow.hidden = false;
         }
 
+        const emailEl = document.getElementById('contact-email');
+        if (emailEl && content.contactEmail) {
+            emailEl.textContent = content.contactEmail;
+        }
+        const phoneEl = document.getElementById('contact-phone');
+        if (phoneEl && content.contactPhone) {
+            phoneEl.textContent = content.contactPhone;
+        }
+
+        const whatsappSupportLink = document.getElementById('whatsapp-support-link');
+        if (whatsappSupportLink && config.whatsapp_number) {
+            const cleanNum = String(config.whatsapp_number).replace(/\D/g, '');
+            if (cleanNum) {
+                whatsappSupportLink.href = `https://wa.me/${cleanNum}`;
+                whatsappSupportLink.hidden = false;
+            }
+        }
+
         const instagramUrl = config.instagram_url;
         const instagramLink = document.getElementById('contact-instagram');
         const instagramRow = document.getElementById('contact-instagram-row');

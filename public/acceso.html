@@ -231,6 +231,12 @@
                                     <input type="time" id="room-close" class="form-control" value="18:30" required>
                                 </div>
                             </div>
+                            <div class="form-group">
+                                <label for="room-meeting-link">Enlace de Videollamada (para Salas Virtuales):</label>
+                                <input type="url" id="room-meeting-link" class="form-control"
+                                    placeholder="Ej: https://meet.google.com/xxx-yyyy-zzz o enlace de Zoom">
+                                <small style="color: var(--text-secondary);">Se incluirá automáticamente en el correo de confirmación de reservas online en esta sala.</small>
+                            </div>
                             <button type="submit" class="btn-primary">Añadir / Guardar Sala</button>
                         </form>
 
@@ -661,6 +667,11 @@
                                 <input type="text" id="custom-contact-address" class="form-control" maxlength="250"
                                     placeholder="Dirección que se mostrará en el sitio">
                             </div>
+                            <div class="form-group">
+                                <label for="custom-instagram-url">Instagram (URL oficial):</label>
+                                <input type="url" id="custom-instagram-url" class="form-control"
+                                    placeholder="https://www.instagram.com/tu_cuenta/">
+                            </div>
                             <button type="submit" class="btn-primary">Publicar Cambios</button>
                         </form>
                     </div>
@@ -876,6 +887,18 @@
                                                 <input type="tel" id="adm-user-phone" class="form-control"
                                                     placeholder="+56912345678">
                                             </div>
+                                        </div>
+                                    </div>
+                                    <div id="adm-user-provider-fields" style="display: none;">
+                                        <div class="form-group">
+                                            <label for="adm-user-specialty">Especialidad / Cargo Visible:</label>
+                                            <input type="text" id="adm-user-specialty" class="form-control"
+                                                placeholder="Ej: Psicóloga clínica y laboral (Registro SIS 710236)">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="adm-user-bio">Biografía / Presentación Profesional:</label>
+                                            <textarea id="adm-user-bio" class="form-control" rows="3"
+                                                placeholder="Descripción profesional visible en Nosotros..."></textarea>
                                         </div>
                                     </div>
                                     <div class="form-group">
@@ -1108,6 +1131,8 @@
                         id="contact-phone">+56961676706</span></p>
                 <p><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> Modalidad Online y
                     Presencial</p>
+                <p id="contact-address-row" hidden><i class="fa-solid fa-location-dot" style="color: var(--color-gold);"></i> <span id="contact-address"></span></p>
+                <p id="contact-instagram-row" hidden><i class="fa-brands fa-instagram" style="color: var(--color-gold);"></i> <a id="contact-instagram" target="_blank" rel="noopener noreferrer"></a></p>
             </div>
         </div>
         <div class="footer-bottom">

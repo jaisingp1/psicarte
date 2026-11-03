@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- 2. Provider Profiles table (auxiliar para datos específicos de prestadores)
 CREATE TABLE IF NOT EXISTS provider_profiles (
     userId TEXT PRIMARY KEY,
+    specialty TEXT,
     blocks TEXT,
     bio TEXT,
     FOREIGN KEY (userId) REFERENCES users(id)
@@ -47,7 +48,8 @@ CREATE TABLE IF NOT EXISTS articles (
 CREATE TABLE IF NOT EXISTS rooms (
     id TEXT PRIMARY KEY,
     name TEXT,
-    type TEXT
+    type TEXT,
+    meeting_link TEXT DEFAULT ''
 );
 
 -- 5. Room Schedules table (per day-of-week operating blocks)
@@ -156,6 +158,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     rescheduleCount INTEGER DEFAULT 0,
     khipuPaymentId TEXT,
     khipuPaymentUrl TEXT,
+    confirmation_email_sent INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (spot_id) REFERENCES spots(id),
     FOREIGN KEY (client_id) REFERENCES users(id)

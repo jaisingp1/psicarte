@@ -28,7 +28,7 @@ function renderServicesSection() {
                 <span class="provider-tab-avatar">${initials}</span>
                 <span class="provider-tab-info">
                     <strong>${p.name}</strong>
-                    <small>${p.role.split(' (')[0]}</small>
+                    <small>${p.specialty || p.role}</small>
                 </span>
             </button>
         `;

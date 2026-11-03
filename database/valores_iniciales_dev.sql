@@ -15,7 +15,9 @@ VALUES ('heroTitle', 'Centro Integral PsicArte'),
     ),
     (
         'presentationFull',
-        'PsicArte es un centro integral orientado al bienestar emocional, el desarrollo personal, la expresión creativa y la formación de personas, familias, comunidades educativas y equipos de trabajo. Integra psicología, talleres, capacitaciones, yoga, teatro y artes escénicas, articulando distintas herramientas para acompañar procesos terapéuticos, educativos, corporales y expresivos.\n\nDesde nuestras distintas áreas de trabajo, abordamos temáticas vinculadas a salud mental, ansiedad, autoestima, desregulación emocional, habilidades sociales, comunicación efectiva, convivencia escolar, autocuidado, manejo de conflictos, bienestar laboral, riesgos psicosociales, expresión escénica, creatividad y desarrollo humano. Nuestro trabajo se sostiene en una mirada ética, respetuosa y humana, donde la psicología y el arte se encuentran como caminos complementarios para comprender, expresar, resignificar y transformar la experiencia personal y colectiva.'
+        'PsicArte es un centro integral orientado al bienestar emocional, el desarrollo personal, la expresión creativa y la formación de personas, familias, comunidades educativas y equipos de trabajo. Integra psicología, talleres, capacitaciones, yoga, teatro y artes escénicas, articulando distintas herramientas para acompañar procesos terapéuticos, educativos, corporales y expresivos.
+
+Desde nuestras distintas áreas de trabajo, abordamos temáticas vinculadas a salud mental, ansiedad, autoestima, desregulación emocional, habilidades sociales, comunicación efectiva, convivencia escolar, autocuidado, manejo de conflictos, bienestar laboral, riesgos psicosociales, expresión escénica, creatividad y desarrollo humano. Nuestro trabajo se sostiene en una mirada ética, respetuosa y humana, donde la psicología y el arte se encuentran como caminos complementarios para comprender, expresar, resignificar y transformar la experiencia personal y colectiva.'
     ),
     (
         'mission',
@@ -30,12 +32,13 @@ VALUES ('heroTitle', 'Centro Integral PsicArte'),
         'Fomentar el bienestar emocional y el desarrollo humano integral mediante servicios de psicología, talleres artísticos, capacitaciones y experiencias corporales que promuevan la salud mental, la creatividad y el fortalecimiento de vínculos en personas, familias y comunidades.'
     ),
     ('contactEmail', 'contacto@centropsicarte.cl'),
-    ('contactPhone', '+56961676706');
+    ('contactPhone', '+56961676706'),
+    ('contactAddress', 'Oficina Virtual Las Bellotas 199, Providencia, RM');
 -- 2. Seed Rooms (no openTime/closeTime — moved to room_schedules)
 INSERT
-    OR REPLACE INTO rooms (id, name, type)
-VALUES ('room-1', 'Sala Física Principal', 'Física'),
-    ('room-2', 'Sala Virtual Zoom', 'Virtual');
+    OR REPLACE INTO rooms (id, name, type, meeting_link)
+VALUES ('room-1', 'Sala Física Principal', 'Física', ''),
+    ('room-2', 'Sala Virtual Zoom', 'Virtual', 'https://meet.google.com/psicarte-sala-virtual');
 -- 3. Seed Room Schedules (per day-of-week operating blocks)
 -- Room 1: Mon-Fri 8:30-12:00 and 13:00-17:00
 INSERT
@@ -97,7 +100,7 @@ VALUES (
         'prov-macarena',
         'macarena@centropsicarte.cl',
         '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa',
-        'Macarena Méndez',
+        'Macarena Zamora',
         'prestador',
         '',
         ''
@@ -242,19 +245,22 @@ VALUES (
     );
 -- 5. Seed Provider Profiles
 INSERT
-    OR REPLACE INTO provider_profiles (userId, blocks, bio)
+    OR REPLACE INTO provider_profiles (userId, specialty, blocks, bio)
 VALUES (
         'prov-ivan',
+        'Actor, coach, capacitador',
         '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}',
         'Actor teatral y audiovisual, profesor de teatro, dramaturgo e instructor de yoga, con formación universitaria en actuación y puesta en escena. Mi trabajo integra el arte, la expresión corporal, la comunicación y el bienestar, articulando herramientas escénicas, pedagógicas y socioemocionales para acompañar procesos creativos, educativos y personales.'
     ),
     (
         'prov-valentina',
+        'Psicóloga clínica y laboral (Registro SIS 710236)',
         '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}',
         'Psicóloga clínica titulada de la Universidad Andrés Bello, graduada Cum Laude, con formación en enfoques psicoanalítico, sistémico-narrativo y centrado en soluciones. Cuento con experiencia en atención presencial y online a niños, niñas, adolescentes y adultos, acompañando procesos terapéuticos desde una mirada integral.'
     ),
     (
         'prov-macarena',
+        'Coordinadora eventos',
         '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}',
         'Coordinación de ventas de obras y artes escénicas para empresas, centros educativos o particulares. Reuniones informativas de proyectos teatrales y artísticos en PsicArte.'
     );
@@ -551,6 +557,36 @@ VALUES (
         'Charla práctica sobre técnicas de comunicación asertiva en el día a día.',
         20
     );
+-- 10b. Seed Community Articles (Publicados para prueba de Inicio y Comunidad)
+INSERT
+    OR REPLACE INTO articles (id, author_id, title, summary, body, status, created_at, updated_at, published_at)
+VALUES (
+        'art-1',
+        'prov-valentina',
+        'Salud Mental y Expresión Creativa: Un puente hacia el bienestar',
+        'Cómo la integración de la psicoterapia y las herramientas expresivas fortalece los procesos de autoconocimiento y regulación emocional.',
+        'En Centro Integral PsicArte comprendemos que cada proceso humano requiere distintas formas de expresión y elaboración.
+
+Integrar el espacio psicoterapéutico con herramientas corporales y escénicas permite abordar la ansiedad, el estrés laboral y los desafíos vinculares desde una perspectiva ética, cercana y respetuosa del ritmo de cada persona.',
+        'published',
+        datetime('now', '-5 days'),
+        datetime('now', '-5 days'),
+        datetime('now', '-5 days')
+    ),
+    (
+        'art-2',
+        'prov-ivan',
+        'El Cuerpo y la Voz en la Comunicación Efectiva',
+        'Herramientas de las artes escénicas aplicadas al desarrollo de habilidades blandas, liderazgo y convivencia en equipos de trabajo.',
+        'La comunicación efectiva no ocurre únicamente desde la palabra hablada: involucra la presencia corporal, la escucha activa y el reconocimiento del otro.
+
+A través del entrenamiento escénico y el coaching, acompañamos a personas, comunidades educativas y organizaciones a fortalecer sus habilidades socioemocionales y expresivas.',
+        'published',
+        datetime('now', '-2 days'),
+        datetime('now', '-2 days'),
+        datetime('now', '-2 days')
+    );
+
 -- 11. Seed Configurations
 INSERT
     OR REPLACE INTO config (key, value)
@@ -565,8 +601,9 @@ VALUES ('popup_active', 'true'),
         'banner_text',
         '¡Agende sus horas de consulta en línea de forma rápida y segura! Sistema de pago habilitado.'
     ),
-    ('whatsapp_number', '56952182998'),
+    ('whatsapp_number', '56961676706'),
     ('whatsapp_enabled', 'true'),
+    ('instagram_url', 'https://www.instagram.com/centropsicarte/'),
     ('max_reschedules', '1'),
     ('theme_custom_tokens', '{"light":{"--bg-primary":"#FEFDF9","--bg-secondary":"#F7F1E2","--text-primary":"#001B40","--text-secondary":"#4A5568","--color-accent":"#782050","--color-accent-text":"#FEFDF9","--color-border":"#E2E8F0","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#FEFDF9","--header-border":"#E2E8F0","--nav-link-color":"#001B40","--nav-link-accent":"#782050","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#2D4363","--btn-primary-bg":"#782050","--btn-primary-text":"#FEFDF9","--btn-secondary-bg":"#FEFDF9","--btn-secondary-text":"#001B40","--btn-secondary-border":"#E2E8F0","--btn-icon-bg":"#FEFDF9","--btn-icon-text":"#001B40","--input-bg":"#F7F1E2","--input-text":"#001B40","--input-border":"#E2E8F0","--input-focus-border":"#782050","--bg-card":"#FFFFFF","--card-border":"#E2E8F0","--card-hover-border":"#782050","--service-price-color":"#782050","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#B88028","--color-in-person-text":"#001B40","--filter-active-bg":"#782050","--filter-active-text":"#FEFDF9","--modal-bg":"#FFFFFF","--modal-text":"#001B40","--modal-border":"#E2E8F0","--modal-overlay-color":"#001933","--popup-title-color":"#782050","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#FFFFFF","--step-active-bg":"#782050","--step-active-text":"#FEFDF9","--cal-cell-bg":"#F7F1E2","--cal-cell-text":"#001B40","--cal-selected-bg":"#782050","--cal-selected-text":"#FEFDF9","--slot-bg":"#F7F1E2","--slot-text":"#001B40","--slot-selected-bg":"#782050","--slot-selected-text":"#FEFDF9","--color-success":"#2F855A","--color-warning":"#B75012","--color-error":"#C53030","--color-info":"#2B6CB0","--toast-bg":"#FFFFFF","--toast-text":"#001B40","--whatsapp-bg":"#1E8E46","--whatsapp-text":"#FFFFFF"},"dark":{"--bg-primary":"#031C32","--bg-secondary":"#0A2542","--text-primary":"#FEFDF9","--text-secondary":"#CBD5E1","--color-accent":"#D8A048","--color-accent-text":"#001B40","--color-border":"#1E3A5F","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#031C32","--header-border":"#1E3A5F","--nav-link-color":"#FEFDF9","--nav-link-accent":"#D8A048","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#1E3A5F","--btn-primary-bg":"#D8A048","--btn-primary-text":"#001B40","--btn-secondary-bg":"#0D2C4D","--btn-secondary-text":"#FEFDF9","--btn-secondary-border":"#1E3A5F","--btn-icon-bg":"#0D2C4D","--btn-icon-text":"#FEFDF9","--input-bg":"#0A2542","--input-text":"#FEFDF9","--input-border":"#1E3A5F","--input-focus-border":"#D8A048","--bg-card":"#0D2C4D","--card-border":"#1E3A5F","--card-hover-border":"#D8A048","--service-price-color":"#D8A048","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#D8A048","--color-in-person-text":"#001B40","--filter-active-bg":"#D8A048","--filter-active-text":"#001B40","--modal-bg":"#0D2C4D","--modal-text":"#FEFDF9","--modal-border":"#1E3A5F","--modal-overlay-color":"#000D1A","--popup-title-color":"#D8A048","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#0D2C4D","--step-active-bg":"#D8A048","--step-active-text":"#001B40","--cal-cell-bg":"#0A2542","--cal-cell-text":"#FEFDF9","--cal-selected-bg":"#D8A048","--cal-selected-text":"#001B40","--slot-bg":"#0A2542","--slot-text":"#FEFDF9","--slot-selected-bg":"#D8A048","--slot-selected-text":"#001B40","--color-success":"#48BB78","--color-warning":"#F6AD55","--color-error":"#FC8181","--color-info":"#63B3ED","--toast-bg":"#0D2C4D","--toast-text":"#FEFDF9","--whatsapp-bg":"#25D366","--whatsapp-text":"#001B40"},"defaults":{"light":{"--bg-primary":"#FEFDF9","--bg-secondary":"#F7F1E2","--text-primary":"#001B40","--text-secondary":"#4A5568","--color-accent":"#782050","--color-accent-text":"#FEFDF9","--color-border":"#E2E8F0","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#FEFDF9","--header-border":"#E2E8F0","--nav-link-color":"#001B40","--nav-link-accent":"#782050","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#2D4363","--btn-primary-bg":"#782050","--btn-primary-text":"#FEFDF9","--btn-secondary-bg":"#FEFDF9","--btn-secondary-text":"#001B40","--btn-secondary-border":"#E2E8F0","--btn-icon-bg":"#FEFDF9","--btn-icon-text":"#001B40","--input-bg":"#F7F1E2","--input-text":"#001B40","--input-border":"#E2E8F0","--input-focus-border":"#782050","--bg-card":"#FFFFFF","--card-border":"#E2E8F0","--card-hover-border":"#782050","--service-price-color":"#782050","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#B88028","--color-in-person-text":"#001B40","--filter-active-bg":"#782050","--filter-active-text":"#FEFDF9","--modal-bg":"#FFFFFF","--modal-text":"#001B40","--modal-border":"#E2E8F0","--modal-overlay-color":"#001933","--popup-title-color":"#782050","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#FFFFFF","--step-active-bg":"#782050","--step-active-text":"#FEFDF9","--cal-cell-bg":"#F7F1E2","--cal-cell-text":"#001B40","--cal-selected-bg":"#782050","--cal-selected-text":"#FEFDF9","--slot-bg":"#F7F1E2","--slot-text":"#001B40","--slot-selected-bg":"#782050","--slot-selected-text":"#FEFDF9","--color-success":"#2F855A","--color-warning":"#B75012","--color-error":"#C53030","--color-info":"#2B6CB0","--toast-bg":"#FFFFFF","--toast-text":"#001B40","--whatsapp-bg":"#1E8E46","--whatsapp-text":"#FFFFFF"},"dark":{"--bg-primary":"#031C32","--bg-secondary":"#0A2542","--text-primary":"#FEFDF9","--text-secondary":"#CBD5E1","--color-accent":"#D8A048","--color-accent-text":"#001B40","--color-border":"#1E3A5F","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#031C32","--header-border":"#1E3A5F","--nav-link-color":"#FEFDF9","--nav-link-accent":"#D8A048","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#1E3A5F","--btn-primary-bg":"#D8A048","--btn-primary-text":"#001B40","--btn-secondary-bg":"#0D2C4D","--btn-secondary-text":"#FEFDF9","--btn-secondary-border":"#1E3A5F","--btn-icon-bg":"#0D2C4D","--btn-icon-text":"#FEFDF9","--input-bg":"#0A2542","--input-text":"#FEFDF9","--input-border":"#1E3A5F","--input-focus-border":"#D8A048","--bg-card":"#0D2C4D","--card-border":"#1E3A5F","--card-hover-border":"#D8A048","--service-price-color":"#D8A048","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#D8A048","--color-in-person-text":"#001B40","--filter-active-bg":"#D8A048","--filter-active-text":"#001B40","--modal-bg":"#0D2C4D","--modal-text":"#FEFDF9","--modal-border":"#1E3A5F","--modal-overlay-color":"#000D1A","--popup-title-color":"#D8A048","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#0D2C4D","--step-active-bg":"#D8A048","--step-active-text":"#001B40","--cal-cell-bg":"#0A2542","--cal-cell-text":"#FEFDF9","--cal-selected-bg":"#D8A048","--cal-selected-text":"#001B40","--slot-bg":"#0A2542","--slot-text":"#FEFDF9","--slot-selected-bg":"#D8A048","--slot-selected-text":"#001B40","--color-success":"#48BB78","--color-warning":"#F6AD55","--color-error":"#FC8181","--color-info":"#63B3ED","--toast-bg":"#0D2C4D","--toast-text":"#FEFDF9","--whatsapp-bg":"#25D366","--whatsapp-text":"#001B40"}}}');
 -- 12. Seed Khipu Notifications

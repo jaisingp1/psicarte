@@ -89,7 +89,10 @@ function renderContent() {
     const visionEl = document.getElementById("vision-text");
     
     if (presShort) presShort.innerText = state.content.presentationShort;
-    if (presFull) presFull.innerHTML = state.content.presentationFull.replace(/\n/g, "<br>");
+    if (presFull && state.content.presentationFull) {
+        const normalizedFull = state.content.presentationFull.replace(/\\n/g, "\n");
+        presFull.innerHTML = normalizedFull.replace(/\n/g, "<br>");
+    }
     if (missionEl) missionEl.innerText = state.content.mission;
     if (visionEl) visionEl.innerText = state.content.vision;
     
@@ -102,7 +105,9 @@ function renderContent() {
     
     if (customHeroTitle) customHeroTitle.value = state.content.heroTitle;
     if (customHeroSubtitle) customHeroSubtitle.value = state.content.heroSubtitle;
-    if (customPresentation) customPresentation.value = state.content.presentationFull;
+    if (customPresentation && state.content.presentationFull) {
+        customPresentation.value = state.content.presentationFull.replace(/\\n/g, "\n");
+    }
     if (customMission) customMission.value = state.content.mission;
     if (customVision) customVision.value = state.content.vision;
     
@@ -110,10 +115,12 @@ function renderContent() {
     const customContactEmail = document.getElementById("custom-contact-email");
     const customContactPhone = document.getElementById("custom-contact-phone");
     const customContactAddress = document.getElementById("custom-contact-address");
+    const customInstagramUrl = document.getElementById("custom-instagram-url");
     if (customObjectives) customObjectives.value = state.content.objectives || '';
     if (customContactEmail) customContactEmail.value = state.content.contactEmail || '';
     if (customContactPhone) customContactPhone.value = state.content.contactPhone || '';
     if (customContactAddress) customContactAddress.value = state.content.contactAddress || '';
+    if (customInstagramUrl) customInstagramUrl.value = state.config?.instagram_url || '';
     
     const contactEmailEl = document.getElementById("contact-email");
     const contactPhoneEl = document.getElementById("contact-phone");

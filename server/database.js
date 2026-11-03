@@ -85,29 +85,18 @@ function initializeDatabase() {
                         db.exec(seedSql, (err3) => {
                             if (err3) {
                                 console.error('Error executing values seed SQL:', err3.message);
-                            } else {
-                                console.log('Database seeded successfully from SQL file.');
+                                rejectDatabaseReady(err3);
+                                return;
                             }
-                            applyContactDefaults(defaultsErr => {
-                                if (defaultsErr) {
-                                    rejectDatabaseReady(defaultsErr);
-                                    return;
-                                }
-                                resolveDatabaseReady();
-                                setImmediate(() => {
-                                    generateSpotsForAllAgendas();
-                                });
+                            console.log('Database seeded successfully from SQL file.');
+                            resolveDatabaseReady();
+                            setImmediate(() => {
+                                generateSpotsForAllAgendas();
                             });
                         });
                     } else {
                         console.log('Database already initialized. Skipping seeding.');
-                        applyContactDefaults(defaultsErr => {
-                            if (defaultsErr) {
-                                rejectDatabaseReady(defaultsErr);
-                                return;
-                            }
-                            resolveDatabaseReady();
-                        });
+                        resolveDatabaseReady();
                     }
                 });
             });
@@ -116,20 +105,6 @@ function initializeDatabase() {
             rejectDatabaseReady(e);
         }
     });
-}
-
-function applyContactDefaults(callback) {
-    try {
-        const defaultsPath = path.join(__dirname, '..', 'database', 'valores_configuracion_contacto.sql');
-        const defaultsSql = fs.readFileSync(defaultsPath, 'utf8');
-        db.exec(defaultsSql, err => {
-            if (err) console.error('Error applying contact defaults:', err.message);
-            callback(err);
-        });
-    } catch (error) {
-        console.error('Failed to read contact defaults SQL:', error.message);
-        callback(error);
-    }
 }
 
 function generateSpotsForAllAgendas() {

@@ -1,147 +1,149 @@
-# Plan de implementación — Cambios de página PsicArte
+# Plan de Implementación y Acción — Cambios Página PsicArte
 
-## Objetivo
+## 1. Estado de Reglas del Agente (`.agents/AGENTS.md`)
 
-Actualizar la identidad visual y la presentación pública de PsicArte, aclarar la navegación y la oferta, habilitar publicación de artículos con permisos definidos y corregir los problemas reportados en salas, agendas, tarjetas de prestadores y confirmaciones por correo.
+- **Archivo único de reglas**: [`.agents/AGENTS.md`](.agents/AGENTS.md) contiene la totalidad de las reglas (`R0` a `R22`), incluyendo `R21` (integración Khipu migrada desde `.github/copilot-instructions.md`).
+- **Eliminación de duplicado**: `.github/copilot-instructions.md` ya no existe y el directorio vacío `.github/` fue limpiado.
+- **Lectura obligatoria garantizada**: [`AGENTS.md`](AGENTS.md) en la raíz del proyecto actúa como puntero de arranque automático exigiendo la lectura íntegra de [`.agents/AGENTS.md`](.agents/AGENTS.md) (`R1`) antes de cualquier tarea.
 
-Este documento registra la implementación y el QA de los cambios acordados.
+---
 
-## Estado de implementación
+## 2. Auditoría Crítica: Documento `.docx` vs. Estado Real del Código
 
-- **Implementado previamente según el plan existente (revisar contra el diff actual):** paleta y variantes visuales; logos en páginas públicas y de pago; contacto administrable; envío de artículos con moderación administrativa; edición de salas; agendas puntuales y recurrentes con múltiples días e intervalos; regeneración de horarios preservando reservas existentes.
-- **Pendiente por decisión/entorno:** proveedor y credenciales de correo transaccional, configuración DNS y pruebas de entrega; consentimiento para publicar el registro SIS; aprobación final del texto de cobertura/aranceles.
-- **QA registrado previamente:** validación estática, arranque del servidor, endpoints públicos, protección de envíos de artículos sin token, logo/contacto en páginas públicas/de pago, temas claro/oscuro y ausencia de desbordamiento horizontal en móvil. Este registro no valida los cambios locales actuales.
-- **Cambios locales en curso:** el worktree contiene cambios sin confirmar en 18 archivos: SQL de datos iniciales, páginas HTML, hojas CSS, módulos JS y este plan. Preservarlos; revisar los diffs completos y no considerar una funcionalidad terminada solo porque su archivo esté modificado.
-- **QA pendiente:** repetir validaciones relevantes para los cambios locales; probar el flujo autenticado de envío/moderación y la creación de agendas con datos de staging. No se debe regenerar ni borrar la base de datos real para probar.
-- **Decisiones aplicadas:** moderación de artículos (1B), mantener tema oscuro (2A), logo horizontal en navegación y emblema en portada (3A), intervalos múltiples por día (8A), configuración administrable de contacto (9A).
+Tras extraer el texto y las 12 imágenes embebidas en `.agents/Cambios página PsicArte.docx` y contrastarlas línea por línea con el código actual, este es el diagnóstico real:
 
-## Estado actual observado
+| # | Requerimiento en `Cambios página PsicArte.docx` | Estado Real | Brecha / Problema Detectado (Critical Thinking & R15) |
+|---|---|---|---|
+| **1** | **Paleta de colores del nuevo logo** (`#FEFDF9`, `#001B40`, `#782050`, `#D8A048`, `#B88028`, `#802850`) | 🟢 **95% Listo** | Implementado en `public/css/variables.css`, semillas SQL y Administrador de Colores (`#pane-admin-theme`). **Violación detectada (`R18` y `R22`)**: En `public/pago-exito.html` persiste un botón con `background: #25D366; color: white` y número de WhatsApp hardcodeado (`56952182998`), y ni `pago-exito.html` ni `pago-cancelado.html` cargan `public/js/theme.js`. |
+| **2** | **Logo pequeño de navegación**: *"Cambiar logo pequeño por este (`image7.png` horizontal), un poco más grande para que se vea"* | 🔴 **Pendiente** | En `public/images/logo_light.png` y `logo_dark.png` siguen estando los logos cuadrados antiguos del 03/08 (`300x300`). Nunca se extrajo `word/media/image7.png` (el nuevo logo horizontal `2048x797`) hacia `public/images/`. |
+| **3** | **Logo original en presentación principal**: *"Agregar a la presentación de la página principal logo original (`image10.png`)"* | 🟡 **Parcial** | Se agregó `public/images/logo-original.webp` en el Hero de `public/index.html`. Sin embargo, la imagen tiene esquinas exteriores blancas opacas que en Modo Oscuro (`#031C32`) se ven como un recuadro cuadrado blanco alrededor del sello circular; requiere recorte circular (`border-radius: 50%`) o transparencia. |
+| **4** | **Sobre trabajadores**: Cambiar `(prestador)` por especialidades reales (*Iván Pastén: actor, coach, capacitador; Valentina Maldonado: psicóloga clínica y laboral (Registro SIS 710236); Macarena Zamora: coordinadora eventos*) | 🔴 **Pendiente** | En `public/nosotros.html` y `public/js/services.js` se imprime `p.role`, que es el rol de sistema (`prestador`). Falta el campo de especialidad/cargo público en `provider_profiles`, falta corregir el apellido `Macarena Méndez` → `Macarena Zamora` en `database/valores_iniciales_dev.sql`, y en `database/valores_iniciales.sql` (producción) ni siquiera están sembrados los 3 profesionales. |
+| **5** | **Comunidad y Noticias/Artículos**: Zona de noticias en Comunidad + opción para subir/escribir artículos desde usuarios/Acceder | 🟡 **Parcial (con bug crítico)** | La tabla `articles`, endpoints y panel `#pane-community-articles` existen. **Bug crítico (`R15`)**: En `public/js/activities.js`, `updateActivitiesVisibility()` oculta toda la sección `#calendario` y el enlace "Comunidad" del menú si `state.activities.length === 0`, escondiendo también los artículos publicados cuando no hay eventos en el mes. Además, el administrador no puede publicar un artículo directo sin enviarlo primero como borrador y aprobarlo en 2 pasos, ni eliminar artículos ya publicados. |
+| **6** | **Diferenciar Inicio, Servicios y Agendar Hora**: Inicio con noticias destacadas; Servicios con definición de prestaciones + boleta/Isapre/Fonasa (ej. `redpsique.cl/services/`); Agendar Hora directo al agendamiento | 🔴 **Incompleto** | 1) `#inicio` solo tiene el Hero y no muestra noticias/artículos destacados. 2) `#servicios` solo tiene una línea de texto sobre boleta/Isapre/Fonasa y las tarjetas de cobro, pero carece de la sección descriptiva de cada área/prestación (Psicoterapia, Evaluación, Coaching, Talleres, Capacitaciones, Yoga). |
+| **7** | **Sobre Contacto**: Instagram `@centropsicarte` y dirección `Oficina Virtual Las Bellotas 199, Providencia, RM` | 🟡 **Parcial** | Funciona en `index.html`, `nosotros.html` y páginas de pago, pero: 1) Falta en el footer de `public/acceso.html`; 2) No hay input para editar `instagram_url` en `#pane-admin-content` de `public/acceso.html`; 3) En `database/valores_iniciales_dev.sql` faltan `contactAddress` e `instagram_url` y existe un archivo suelto `database/valores_configuracion_contacto.sql` que viola `R11`. |
+| **8** | **Bug Logos rotos + texto en Nosotros, Footer y Pago Efectuado** (`image11.png`, `image12.png`, `image3.png`) | 🔴 **Incompleto** | 1) En `image11.png` se observa `\n\n` literal en el texto de Presentación de `public/nosotros.html` y `public/js/api.js` porque SQLite almacena `\\n` literal desde `database/valores_iniciales.sql` y el `.replace(/\n/g, '<br>')` no convierte `\\n`. 2) En modo claro, `public/js/theme.js` asigna `logo_light.png` al `#footer-logo`, pero el footer siempre es oscuro (`#001B40`), por lo que con el nuevo logo horizontal las letras oscuras `#001B40` quedarían invisibles sobre el footer oscuro. |
+| **9** | **Bug Edición de Salas**: *"Cuando se editan salas, no se guardan los cambios"* | 🟡 **Con Bug Lógico** | Se implementó `PUT /api/rooms/:id` en `server/server.js`, pero si una sala tiene más de 1 bloque horario en un día (como `room-1` en `valores_iniciales_dev.sql` que tiene mañana y tarde), `multiBlockDays` es `true` y **el backend ignora el cambio de horario**. Además, el formulario no muestra botón "Cancelar edición" ni permite gestionar bloques múltiples de sala. |
+| **10** | **Bug Recurrencia Semanal Múltiples Días e Intervalos**: Lunes y jueves de 09:00-13:00 y 19:00-22:00 (`image4.png`) | 🟡 **Solo al crear, bloqueado al editar** | Al crear un servicio nuevo sí permite elegir varios días y varios intervalos por día. **Pero al editar un servicio existente** (`public/js/app.js` y `public/js/dashboard.js`), `setServiceScheduleEditable(false)` bloquea la sala, los días y los intervalos horarios, impidiendo modificar los horarios de servicios ya creados. |
+| **11** | **Bug Tarjetas en Servicios y Aranceles**: *"Cuando uno apreta la tarjeta del prestador, no lleva a ninguna parte"* (`image2.png`) | 🟡 **Parcial** | Se añadió el botón `"Reservar este servicio"` en cada tarjeta de servicio (`public/js/services.js`), pero hacer clic en la tarjeta completa o en el nombre del profesional no ejecuta acción ni muestra resumen del profesional. |
+| **12** | **Correos y Confirmación Post-Khipu**: Spam en correos personales, foto de perfil en mail, y envío de correo de confirmación (al cliente y al centro) con link online o dirección presencial, día, hora y prestador (`image9.png`) | 🔴 **Pendiente (0%)** | No existe integración de correo (`nodemailer` / SMTP / API) en `server/server.js` ni en `package.json`. Tampoco existe un campo `meeting_link` en las salas virtuales (`rooms`) o agendas para enviar el link de atención online automáticamente tras conciliarse el pago en `reconcileBookingPayment()`. |
 
-- Los estilos se ensamblan desde `public/css/style.css`; `public/css/variables.css` ya contiene la paleta del brief y tokens semánticos para componentes. Hay cambios locales en los estilos y el frontend que deben preservarse y verificarse antes de cerrar.
-- La página pública y las vistas de acceso, nosotros y pago reutilizan CSS; el cambio visual debe cubrir todas esas rutas y los temas claro/oscuro.
-- La aplicación está modularizada en `public/js/`, usa `server/server.js` para la API y mantiene esquema y datos iniciales en `database/`.
-- El esquema ya incluye artículos con moderación, servicios, salas y horarios, agendas, actividades, reservas, configuración y notificaciones Khipu; revisar el modelo y las funciones ya implementadas antes de proponer nuevas tablas, columnas o flujos duplicados.
-- No se encontró una dependencia ni un módulo de envío de correo en el servidor. El mecanismo actual de `contacto@centropsicarte.cl` y la administración DNS deben confirmarse antes de elegir una integración.
-- El proyecto ya contiene una integración Khipu. La confirmación de reserva debe depender de la confirmación del pago desde el servidor, no únicamente del retorno del navegador. La notificación de Khipu puede reintentarse, por lo que el procesamiento y el envío de correo deben ser idempotentes.
+---
 
-## Plan de acción inmediato
+## 3. Plan de Acción Paso a Paso
 
-| Orden | Acción | Criterio de salida |
-|---|---|---|
-| 1 | Proteger los cambios locales de todos los archivos modificados (incluidos SQL, HTML, CSS y JS); revisar el diff existente sin sobrescribirlo y distinguir cambios listos de cambios en curso. | Alcance de cada archivo modificado identificado; ningún cambio previo perdido ni funcionalidad asumida como completa sin verificación. |
-| 2 | Completar la coherencia visual: verificar tokens semánticos, contrastes, variantes claro/oscuro y responsive en las páginas públicas, acceso, Nosotros y pago. | Sin colores literales en CSS de componentes; sin logos deformados ni regresiones visuales; validación en breakpoints acordados. |
-| 3 | Comparar las funciones ya registradas como implementadas con el código actual: artículos/moderación, contacto configurable, edición de salas, recurrencias y tarjetas de prestadores. Corregir solo brechas reproducibles. | Pruebas de regresión de cada flujo pasan sin duplicar capacidades ni alterar datos reales. |
-| 4 | Resolver las decisiones editoriales y de contenido abiertas (registro SIS, texto de prestaciones/reembolsos, proveedor de correo y avatar) antes de publicar afirmaciones o integrar servicios externos. | Aprobaciones registradas y requisitos operativos disponibles. |
-| 5 | Completar el flujo de correo de reserva únicamente tras confirmar proveedor, SPF/DKIM/DMARC y el estado de pago confirmado por servidor; hacer idempotentes los envíos y tratar reintentos. | Correos de prueba al comprador y al centro sin duplicados; contenido correcto según modalidad. |
-| 6 | Ejecutar QA integral en entorno de prueba, respaldar base de datos antes de cualquier cambio de esquema y desplegar gradualmente con reversión preparada. | Criterios de QA de la fase 6 cumplidos y plan de reversión comprobado. |
+### Fase 1: Saneamiento de Reglas, Datos SQL y Bugs Inmediatos (`R11`, `R15`, `R18`, `R22`)
+1. **Unificación de Semillas SQL (`R11`)**:
+   - Integrar `contactAddress` e `instagram_url` directamente en `database/valores_iniciales_dev.sql` (igualando con `database/valores_iniciales.sql`).
+   - Eliminar el archivo auxiliar `database/valores_configuracion_contacto.sql` y su llamada `applyContactDefaults` en `server/database.js` para respetar estrictamente `R11`.
+   - Sembrar al menos 2 artículos iniciales publicados en `articles` dentro de `valores_iniciales.sql` y `valores_iniciales_dev.sql` para que las secciones de Noticias en Inicio y Comunidad tengan contenido real desde el primer arranque.
+2. **Corrección de `pago-exito.html` y `pago-cancelado.html` (`R18`, `R22`)**:
+   - Eliminar colores (`#25D366`, `white`) y enlace de WhatsApp hardcodeado en `public/pago-exito.html`; alimentar el botón de WhatsApp dinámicamente desde `config.whatsapp_number` y usar las variables CSS `--whatsapp-bg` y `--whatsapp-text`.
+   - Reemplazar el `<script>` inline duplicado de tema en `pago-exito.html` y `pago-cancelado.html` por `<script src="js/theme.js"></script>` para que reciban `applyCustomThemeTokens()`.
+3. **Corrección de `\n\n` literal en Presentación (`R15`)**:
+   - En `public/nosotros.html` y `public/js/api.js`, reemplazar `.replace(/\n/g, "<br>")` por `.replace(/\\n|\n/g, "<br>")`.
 
-## Fases
+### Fase 2: Logos y Coherencia Visual (`image7.png` y `image10.png`)
+1. **Nuevo Logo Horizontal en Navegación y Footer**:
+   - Extraer `word/media/image7.png` de `.agents/Cambios página PsicArte.docx` hacia `public/images/`:
+     - Generar `logo_light.png` (fondo transparente para cabeceras claras) y `logo_dark.png` (versión clara/blanca-dorada legible sobre fondos oscuros `#001B40` y `#031C32`).
+   - En `public/js/theme.js`, asegurar que `#footer-logo` use **siempre** `images/logo_dark.png` (ya que `--footer-bg` es oscuro `#001B40` tanto en tema claro como en oscuro) y usar rutas `/images/...` consistentes para evitar logos rotos en `/exito` y `/cancelado`.
+   - Ajustar `.logo-container img` en `public/css/layout.css` para que el logo horizontal se vea nítido y un poco más grande sin romper el header en móvil.
+2. **Logo Emblema Circular en Hero (`#hero-logo`)**:
+   - Aplicar `border-radius: 50%` y sombra sutil a `.hero-logo` en `public/css/layout.css` para eliminar las esquinas blancas cuadradas en Modo Oscuro.
 
-### 1. Definiciones y activos visuales
+### Fase 3: Profesionales y Especialidades (`image8.png`)
+1. **Esquema y Datos (`schema.sql` y `valores_iniciales*.sql`)**:
+   - Agregar columna `specialty TEXT DEFAULT ''` en `provider_profiles` dentro de `database/schema.sql` (regenerando `.sqlite` sin `ALTER TABLE`, conforme a `R13`).
+   - Actualizar los 3 profesionales en `database/valores_iniciales.sql` y `database/valores_iniciales_dev.sql`:
+     - **Iván Pastén Fuentes** (`prov-ivan`): `specialty = 'Actor, coach, capacitador'`
+     - **Valentina Maldonado Terroba** (`prov-valentina`): `specialty = 'Psicóloga clínica y laboral (Registro SIS 710236)'`
+     - **Macarena Zamora** (`prov-macarena`, corrigiendo `Macarena Méndez`): `specialty = 'Coordinadora de eventos'`
+2. **Backend y Frontend**:
+   - Exponer `p.specialty` en `GET /api/providers` (`server/server.js`) y permitir editarlo desde Gestión de Usuarios en el panel de administración cuando `role === 'prestador'`.
+   - Mostrar `p.specialty || 'Profesional PsicArte'` en lugar de `p.role` (`prestador`) tanto en `public/nosotros.html` como en las pestañas de `public/js/services.js`.
 
-1. El brief muestra un logotipo horizontal junto al cambio del logo pequeño de navegación y un emblema circular junto a la indicación de agregar el logo original a la presentación principal. Preparar esas dos variantes para cabecera y portada, respectivamente, y compararlas con `public/images/logo_light.png` y `public/images/logo_dark.png`.
-2. Aplicar los colores del brief a los tokens centrales:
-   - Fondo: `#FEFDF9`.
-   - Texto principal: `#001B40`.
-   - Acento principal: `#782050`.
-   - Acento secundario: `#D8A048`.
-   - Presencial: `#B88028`.
-   - Online: `#802850`.
-3. Conservar el tema oscuro y revisar ambos temas en cada superficie afectada; no trasladar automáticamente los colores claros al modo oscuro.
-4. Ajustar tamaño, proporción y variantes de logo en cabecera, portada, pie y páginas de confirmación, evitando deformación, recorte o pérdida al hacer scroll.
+### Fase 4: Separación Clara de Inicio, Servicios, Comunidad y Contacto
+1. **Inicio (`#inicio` + Novedades Destacadas)**:
+   - Agregar bajo el Hero en `public/index.html` un bloque compacto de **"Últimas Noticias y Artículos"** (mostrando los 2-3 artículos más recientes con enlace a `#calendario` / Comunidad).
+2. **Servicios (`#servicios`) — Definición de Prestaciones y Cobertura (estilo `redpsique.cl/services/`)**:
+   - Incorporar en `#servicios` de `public/index.html`:
+     1. **Tarjetas informativas de Cobertura y Beneficios**: Emisión de Boleta de Honorarios Electrónica, Reembolso en Isapres y Valores Preferenciales Fonasa.
+     2. **Guía descriptiva de Áreas y Prestaciones** (Psicología Clínica y Laboral, Evaluaciones e Informes, Coaching y Desarrollo Personal, Talleres de Teatro y Expresión Escénica, Yoga y Bienestar Corporal, Capacitaciones para Empresas y Colegios) antes del buscador/listado de aranceles.
+     3. Hacer que toda la tarjeta `.service-card` en `public/js/services.js` sea interactiva y muestre el cargo/especialidad del profesional junto con un acceso directo a reservar.
+3. **Comunidad (`#calendario`) y Artículos**:
+   - Corregir `updateActivitiesVisibility()` en `public/js/activities.js` para que la sección Comunidad **nunca se oculte** cuando existan artículos publicados (o mostrar un estado vacío amigable en el calendario si no hay eventos ese mes, manteniendo visible la zona de Noticias y Artículos).
+   - Permitir en `#pane-community-articles` que el **administrador** publique artículos directamente (`status = 'published'`) sin tener que auto-aprobarse, y pueda eliminar artículos publicados.
+4. **Contacto completo en todas las vistas y Admin**:
+   - Añadir `#contact-address-row` y `#contact-instagram-row` al footer de `public/acceso.html`.
+   - Añadir el campo editable **"Instagram URL"** en `#pane-admin-content` de `public/acceso.html` y guardarlo desde `saveContentCustomizations()`.
 
-**Archivos principales:** `public/css/variables.css`, `public/css/layout.css`, `public/css/components.css`, `public/css/services.css`, `public/css/booking.css`, `public/css/dashboard.css`, `public/css/community.css`; HTML de `public/index.html`, `public/nosotros.html`, `public/acceso.html`, `public/pago-exito.html` y `public/pago-cancelado.html`.
+### Fase 5: Corrección Completa de Edición de Salas y Edición de Agendas/Servicios
+1. **Edición de Salas (`PUT /api/rooms/:id`)**:
+   - Corregir `server/server.js` para que al editar una sala se actualicen sus bloques horarios en `room_schedules` (reemplazando los horarios de los días activos de esa sala con el nuevo rango o los intervalos configurados) en lugar de abortar cuando `multiBlockDays` es `true`.
+   - Agregar soporte opcional de enlace de videollamada (`meeting_link TEXT DEFAULT ''` en tabla `rooms` de `schema.sql`) para salas `Virtual` (Zoom/Meet), indispensable para el correo automático de confirmación online.
+   - Mejorar la UX en `public/js/dashboard.js`: al pulsar editar sala, cambiar el texto del botón a `"Guardar Cambios de Sala"` y mostrar un botón `"Cancelar"`.
+2. **Edición de Horarios Recurrentes en Servicios Existentes**:
+   - Habilitar la carga de la agenda actual del servicio en el formulario al pulsar "Editar Servicio" y permitir actualizar sus días (ej. Lunes y Jueves) y múltiples intervalos horarios (ej. `09:00–13:00` y `19:00–22:00`) mediante `PUT /api/agendas/:id`, regenerando los `spots` disponibles y preservando intactos los `spots` con reservas pagadas.
 
-### 2. Navegación y contenido público
+### Fase 6: Correos Transaccionales, Confirmación Khipu y Entregabilidad (`image9.png`)
+1. **Módulo de Correo Transaccional en Backend**:
+   - Integrar `nodemailer` en `server/` configurado mediante variables de entorno (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `CENTER_NOTIFICATION_EMAIL`), usando `contacto@centropsicarte.cl` como remitente autenticado (`From`) para evitar el filtro de spam que afecta a las casillas personales.
+2. **Disparo Idempotente al Confirmar Reserva**:
+   - Agregar columna `confirmation_email_sent INTEGER DEFAULT 0` en la tabla `bookings` de `database/schema.sql`.
+   - Cuando `reconcileBookingPayment()` en `server/server.js` confirme el pago con Khipu (`GET /v3/payments/{id}` con `status === 'done'`) —o cuando se cree una reserva de costo `$0` / por administrador—, enviar correo HTML con diseño de marca PsicArte **al paciente** y **al centro/prestador**:
+     - **Si es Online (`Virtual`)**: Profesional, servicio, fecha, hora y **link de atención online** (`room.meeting_link`).
+     - **Si es Presencial (`Física`)**: Profesional, servicio, fecha, hora y **dirección física** (`Oficina Virtual Las Bellotas 199, Providencia, RM`).
+3. **Guía Operativa DNS (Anti-Spam) y Foto de Perfil del Correo**:
+   - Entregar guía paso a paso para configurar registros **SPF, DKIM y DMARC** en el DNS de `centropsicarte.cl` (causa raíz por la que `vmaldonado@` e `ipasten@` caen en Spam de Gmail) y cómo configurar la foto de perfil del remitente (Google Workspace / Cuenta de Google asociada a `contacto@centropsicarte.cl` + Gravatar).
 
-1. Diferenciar claramente Inicio, Servicios, Comunidad y Agendar hora:
-   - Inicio presenta la identidad y una selección reciente de noticias/artículos.
-   - Servicios describe prestaciones, modalidad, aranceles y cómo se entrega la boleta; incluir el texto sobre reembolsos Isapre y valores preferenciales Fonasa solo después de validar la redacción y condiciones.
-   - Comunidad conserva las actividades y añade un índice de noticias/artículos.
-   - Agendar hora lleva directamente al flujo de reserva existente.
-2. Presentar los perfiles y roles indicados: Ivan Pasten (actor, coach, capacitador), Valentina Maldonado (psicóloga clínica y laboral; Registro SIS 710236) y Macarena Zamora (coordinadora de eventos). Confirmar autorización para publicar el registro SIS de Valentina y su número.
-3. Agregar el Instagram `@centropsicarte` y la dirección “Oficina Virtual Las Bellotas 199, Providencia, RM” a contacto. Guardar enlaces externos administrables usando la configuración existente, no codificarlos en HTML/JavaScript.
-4. Hacer que las tarjetas de prestadores en Servicios y Aranceles conduzcan a una acción coherente (perfil, servicios filtrados o reserva), definida antes de implementarla.
+---
 
-**Archivos principales:** `public/index.html`, `public/nosotros.html`, `public/js/app.js`, `public/js/services.js`, `public/js/activities.js`, `public/css/layout.css`, `public/css/services.css`, `public/css/community.css` y la configuración correspondiente.
+## 4. Preguntas Aclaratorias y Opciones de Resolución (`R16`)
 
-### 3. Noticias y artículos
+Antes de ejecutar las modificaciones de código y base de datos, selecciona tu preferencia para las siguientes decisiones abiertas:
 
-1. Definir los estados editoriales (por ejemplo, borrador, pendiente de revisión, publicado y archivado) y quién puede crear, revisar, publicar, editar y retirar contenido.
-2. Revisar autenticación y roles actuales antes de agregar permisos; habilitar una experiencia de creación accesible desde el área autenticada si se aprueba.
-3. Extender `database/schema.sql` y los datos de despliegue únicamente tras decidir el modelo de artículos y la estrategia de migración/back-up.
-4. Implementar endpoints de lectura pública solo para contenido publicado y endpoints autenticados para edición; validar y limitar el contenido recibido.
-5. Añadir tarjetas de artículos en Inicio y una página/listado de Comunidad, con diseño móvil, estados vacíos y etiquetas de fecha/categoría según lo aprobado.
+### Pregunta 1: Especialidades de Profesionales y Registro SIS de Valentina
+En el documento se pide mostrar:
+- *Iván Pastén: actor, coach, capacitador*
+- *Valentina Maldonado: psicóloga clínica y laboral (Registro SIS 710236)*
+- *Macarena Zamora: coordinadora eventos*
 
-**Archivos principales:** `database/schema.sql`, `database/valores_iniciales*.sql` si se necesitan datos editoriales iniciales, `server/server.js`, `public/index.html`, `public/acceso.html`, `public/js/activities.js` o un módulo frontend acorde al patrón existente, y `public/css/community.css`.
+- **Opción 1A (Recomendada)**: Publicar exactamente los tres cargos solicitados en el `.docx` (incluyendo `(Registro SIS 710236)` para Valentina y corrigiendo el apellido a `Macarena Zamora`) y agregar el campo `specialty` editable en el Panel de Administración.
+  - *Pros*: Cumple 100% con el documento del cliente y otorga respaldo clínico verificable.
+  - *Contras*: Ninguno si Valentina ya autorizó incluir su número SIS en el documento.
+- **Opción 1B**: Publicar los cargos sin el número SIS (`Psicóloga clínica y laboral`) hasta que el administrador lo agregue manualmente desde el panel.
+  - *Pros*: Más conservador con el dato del registro.
+  - *Contras*: No refleja de inmediato el texto literal pedido en el `.docx`.
 
-### 4. Correcciones de agenda y navegación
+### Pregunta 2: Enlace de Atención para Sesiones Online en el Correo de Confirmación
+El documento indica: *"El mail de confirmación debería contener el link de la atención, en caso de ser online"*. Actualmente las salas virtuales (`Sala Virtual Zoom`) no tienen un campo de URL guardado en la base de datos.
 
-1. Reproducir la edición de salas y rastrear el formulario, petición API, validación y persistencia antes de corregirla.
-2. Revisar la creación de agendas recurrentes en el panel para admitir más de un día por semana y varios intervalos horarios por día, incluido el ejemplo lunes/jueves 09:00–13:00 y 19:00–22:00.
-3. Mantener validación de solapamientos, zona horaria, disponibilidad de sala/prestador y compatibilidad con agendas y reservas existentes.
-4. Seguir el enlace/acción de las tarjetas de prestador y asegurar que no queden elementos clicables sin respuesta.
-5. Reproducir el fallo del logo en Nosotros, al final del scroll y en la página de pago efectuado; validar recursos, rutas relativas, estilos sticky/responsive y variantes claro/oscuro.
+- **Opción 2A (Recomendada)**: Agregar un campo `meeting_link` (URL de Zoom/Meet) en la tabla `rooms` (editable desde **Panel de Control → Salas**). Cuando la reserva sea en sala Virtual, el correo incluirá automáticamente ese link.
+  - *Pros*: Totalmente automatizado al pagar con Khipu y configurable sin tocar código.
+  - *Contras*: Requiere regenerar `database.sqlite` al actualizar `schema.sql` (`R13`).
+- **Opción 2B**: Definir el link de videollamada por Prestador (en `provider_profiles`) en lugar de por Sala Virtual.
+  - *Pros*: Útil si cada profesional usa su propia sala personal de Zoom/Meet.
+  - *Contras*: Menos flexible si el centro usa una cuenta corporativa única por sala virtual.
+- **Opción 2C**: Permitir ambos (link en la Sala Virtual por defecto, con posibilidad de override en el perfil del Prestador).
+  - *Pros*: Cubre ambos escenarios operativos sin fricción.
+  - *Contras*: Un campo adicional en el formulario de usuario prestador.
 
-**Archivos principales:** `public/js/dashboard.js`, `public/js/services.js`, `public/js/booking.js`, `public/js/app.js`, `server/server.js`, `database/schema.sql`, páginas HTML y módulos CSS identificados durante la reproducción.
+### Pregunta 3: Proveedor de Correo para Confirmaciones Automáticas
+Observamos que `contacto@centropsicarte.cl` no cae en spam, mientras que `vmaldonado@` e `ipasten@` sí.
 
-### 5. Correos y entregabilidad
+- **Opción 3A (Recomendada)**: Implementar el envío en el servidor usando **Nodemailer (SMTP estándar)** configurado por variables en `.env` para enviar desde `contacto@centropsicarte.cl` (con `Reply-To` al correo del prestador y copia a `contacto@centropsicarte.cl` y al prestador).
+  - *Pros*: Aprovecha la buena reputación actual de `contacto@centropsicarte.cl`, no requiere contratar un servicio externo adicional y funciona con cPanel/Google Workspace/Zoho/Microsoft 365.
+  - *Contras*: Requiere colocar el host, puerto y clave SMTP de `contacto@centropsicarte.cl` en el archivo `.env` del servidor.
+- **Opción 3B**: Integrar un proveedor API transaccional (como Resend o Brevo) además de soporte SMTP.
+  - *Pros*: Estadísticas de apertura y rebotes en panel externo.
+  - *Contras*: Requiere crear cuenta externa y configurar nuevos registros DNS antes de funcionar.
 
-1. Identificar el proveedor que envía desde `contacto@centropsicarte.cl`, comprobar autenticación del dominio (SPF, DKIM y DMARC) y alinear el remitente con la identidad del dominio.
-2. Seleccionar o confirmar un proveedor de correo transaccional e integrar credenciales mediante variables de entorno/secretos de despliegue, nunca en el repositorio.
-3. Disparar confirmaciones solo cuando el backend verifique un pago conciliado y la reserva quede confirmada. La redirección de retorno de Khipu por sí sola no confirma un pago.
-4. Hacer idempotente el envío frente a notificaciones repetidas y fallos/reintentos. Registrar el resultado del envío y permitir reintentos controlados sin duplicar confirmaciones.
-5. Enviar al comprador y al centro un correo con día, hora y prestador; incluir enlace de atención para sesiones online y dirección para sesiones presenciales.
-6. Configurar la imagen de perfil del remitente desde el proveedor de correo. Si se requiere que el logo se muestre de forma consistente en clientes compatibles, evaluar BIMI después de validar requisitos y autenticación DNS.
-7. Probar recepción, spam, enlaces y contenido en `vmaldonado@centropsicarte.cl`, `ipasten@centropsicarte.cl`, `contacto@centropsicarte.cl` y el correo del comprador, en coordinación con el administrador de correo.
+### Pregunta 4: Regeneración de Base de Datos Local (`R13`)
+Para agregar `specialty` en `provider_profiles`, `meeting_link` en `rooms` y `confirmation_email_sent` en `bookings`, la regla `R13` prohíbe usar `ALTER TABLE` y exige modificar `database/schema.sql` y regenerar `database.sqlite` desde las semillas SQL.
 
-**Archivos principales:** `server/server.js`, `database/schema.sql` solo si hace falta estado de envío, configuración de despliegue y documentación operativa del dominio. La implementación debe seguir la referencia Khipu ya revisada y el flujo de notificaciones existente.
-
-### 6. Verificación y puesta en producción
-
-- Verificar contraste WCAG AA como mínimo: `#D8A048` y `#B88028` no son texto accesible sobre `#FEFDF9`; usarlos como fondos/decoración con texto `#001B40`, o como acentos no textuales. Revisar también estados hover/focus.
-- Validar todas las páginas en tema claro y oscuro, y en móvil (<576px), móvil/tablet (768px) y escritorio (992px+).
-- Probar permisos de artículos, contenido público no publicado, edición persistente de salas, recurrencias de varios días/intervalos, tarjetas de prestadores, logo en todas las rutas y estados de reserva/pago.
-- Probar notificaciones Khipu repetidas y tardías, y comprobar que la reserva y el correo no se duplican ni se confirman por el retorno del navegador.
-- Ejecutar validadores y pruebas existentes para cada conjunto de cambios; hacer una prueba de extremo a extremo en entorno de prueba antes del despliegue.
-- Preparar respaldo de base de datos y plan de reversión antes de cambiar el esquema o publicar el CMS.
-
-## Orden y dependencias
-
-1. Resolver activos, decisiones de producto y proveedor de correo.
-2. Implementar tokens/logos y navegación/contenido público.
-3. Definir permisos y modelo de artículos antes de desarrollar el CMS.
-4. Corregir salas y recurrencias revisando la compatibilidad con datos actuales.
-5. Implementar notificaciones después de acordar proveedor y validar el estado de pago confirmado en servidor.
-6. Hacer QA integral y despliegue gradual con respaldo.
-
-## Preguntas abiertas
-
-1. **Permisos para artículos — resuelto: opción B.**
-   - A. Solo administradores/publicadores crean y publican: flujo más simple y control editorial alto, pero menos participación.
-   - B. Usuarios autenticados envían borradores para revisión: permite aportes con moderación y menor riesgo de publicación inadecuada; requiere estados y herramientas de revisión. **Recomendación:** B.
-   - C. Usuarios autenticados publican directamente: menor fricción, pero mayor riesgo de abuso y exigencia de moderación posterior.
-2. **Tema oscuro — resuelto: opción A.**
-   - A. Mantenerlo y adaptar los nuevos acentos con contraste comprobado: conserva la funcionalidad actual, requiere QA de ambas paletas. **Recomendación:** A.
-   - B. Eliminar el tema oscuro: simplifica estilos, pero cambia una función existente.
-3. **Asignación de los logos — resuelto: opción A.**
-   - A. Usar el logotipo horizontal del brief en la cabecera y el emblema circular en la presentación principal: sigue la secuencia del documento y separa el identificador compacto del logo original. **Recomendación:** A.
-   - B. Usar el emblema circular en la cabecera y conservar el horizontal solo en la portada: prioriza el símbolo en navegación, pero cambia el uso sugerido por la secuencia del brief.
-4. **Datos de prestadores.**
-   - A. Publicar los roles descritos y el registro SIS tras confirmación escrita: máxima transparencia, requiere consentimiento expreso para el identificador.
-   - B. Publicar solo nombre y especialidad, omitiendo el número SIS: menor exposición de datos personales, menos detalle verificable.
-5. **Texto de aranceles y cobertura.**
-   - A. Usar una redacción aprobada por PsicArte que especifique condiciones de reembolso y atención Fonasa: evita promesas ambiguas, requiere validación interna.
-   - B. Limitarse a indicar que se entrega boleta y que se consulte a la aseguradora: menor riesgo de afirmar cobertura, pero comunica menos la oferta.
-6. **Proveedor de correo y remitente.**
-   - A. Mantener el proveedor que actualmente entrega `contacto@centropsicarte.cl` y configurarlo para correo transaccional: menos cambios operativos si soporta API/SMTP confiable.
-   - B. Adoptar un servicio transaccional dedicado: mejor trazabilidad y automatización, requiere alta/configuración DNS y credenciales de despliegue.
-7. **Imagen de perfil del correo.**
-   - A. Configurar avatar del remitente desde el proveedor: rápido, pero la visualización depende del cliente/proveedor receptor.
-   - B. Evaluar BIMI con logo y DNS autenticado: mayor control en clientes compatibles, con requisitos adicionales y sin garantía universal.
-8. **Horarios recurrentes — resuelto: opción A.**
-   - A. Permitir múltiples intervalos para cada día seleccionado: representa directamente el ejemplo, requiere revisar reglas de colisión.
-   - B. Crear una regla recurrente independiente por día e intervalo: modelo más explícito y flexible, pero puede ser más complejo de administrar.
-9. **Instagram y datos de contacto — resuelto: opción A.**
-   - A. Administrarlos desde la configuración existente: editable sin desplegar código, exige revisar los formularios/permisos actuales.
-   - B. Mantenerlos como contenido fijo del sitio: implementación rápida, pero cada actualización requiere un despliegue.
+- **Opción 4A (Recomendada)**: Modificar `schema.sql`, `valores_iniciales.sql` y `valores_iniciales_dev.sql`, y regenerar `database.sqlite` limpio con todos los datos actualizados.
+  - *Pros*: Cumple estrictamente con `R11`, `R12` y `R13`.
+  - *Contras*: Si agregaste pruebas manuales locales en `database.sqlite` no volcadas a los `.sql`, se reemplazarán por la semilla actualizada.
+- **Opción 4B**: Exportar primero cualquier dato manual que tengas actualmente en `database.sqlite` hacia `valores_iniciales_dev.sql` antes de regenerar `database.sqlite`.
+  - *Pros*: Cumple `R13` sin perder ningún dato de prueba local.
+  - *Contras*: Añade un paso previo de volcado antes de recrear la base.

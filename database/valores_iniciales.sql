@@ -14,7 +14,9 @@ VALUES ('heroTitle', 'Centro Integral PsicArte'),
     ),
     (
         'presentationFull',
-        'PsicArte es un centro integral orientado al bienestar emocional, el desarrollo personal, la expresión creativa y la formación de personas, familias, comunidades educativas y equipos de trabajo. Integra psicología, talleres, capacitaciones, yoga, teatro y artes escénicas, articulando distintas herramientas para acompañar procesos terapéuticos, educativos, corporales y expresivos.\n\nDesde nuestras distintas áreas de trabajo, abordamos temáticas vinculadas a salud mental, ansiedad, autoestima, desregulación emocional, habilidades sociales, comunicación efectiva, convivencia escolar, autocuidado, manejo de conflictos, bienestar laboral, riesgos psicosociales, expresión escénica, creatividad y desarrollo humano. Nuestro trabajo se sostiene en una mirada ética, respetuosa y humana, donde la psicología y el arte se encuentran como caminos complementarios para comprender, expresar, resignificar y transformar la experiencia personal y colectiva.'
+        'PsicArte es un centro integral orientado al bienestar emocional, el desarrollo personal, la expresión creativa y la formación de personas, familias, comunidades educativas y equipos de trabajo. Integra psicología, talleres, capacitaciones, yoga, teatro y artes escénicas, articulando distintas herramientas para acompañar procesos terapéuticos, educativos, corporales y expresivos.
+
+Desde nuestras distintas áreas de trabajo, abordamos temáticas vinculadas a salud mental, ansiedad, autoestima, desregulación emocional, habilidades sociales, comunicación efectiva, convivencia escolar, autocuidado, manejo de conflictos, bienestar laboral, riesgos psicosociales, expresión escénica, creatividad y desarrollo humano. Nuestro trabajo se sostiene en una mirada ética, respetuosa y humana, donde la psicología y el arte se encuentran como caminos complementarios para comprender, expresar, resignificar y transformar la experiencia personal y colectiva.'
     ),
     (
         'mission',
@@ -32,17 +34,298 @@ VALUES ('heroTitle', 'Centro Integral PsicArte'),
     ('contactPhone', '+56961676706'),
     ('contactAddress', 'Oficina Virtual Las Bellotas 199, Providencia, RM');
 
--- 2. Seed Users (Solo Administrador Inicial)
+-- 2. Seed Rooms & Schedules
+INSERT
+    OR REPLACE INTO rooms (id, name, type, meeting_link)
+VALUES ('room-1', 'Sala Física Principal', 'Física', ''),
+    ('room-2', 'Sala Virtual Zoom', 'Virtual', 'https://meet.google.com/psicarte-sala-virtual');
+
+INSERT
+    OR REPLACE INTO room_schedules (id, room_id, day_of_week, start_time, end_time)
+VALUES ('rs-1-1', 'room-1', 1, '08:30', '12:00'),
+    ('rs-1-2', 'room-1', 1, '13:00', '17:00'),
+    ('rs-1-3', 'room-1', 2, '08:30', '12:00'),
+    ('rs-1-4', 'room-1', 2, '13:00', '17:00'),
+    ('rs-1-5', 'room-1', 3, '08:30', '12:00'),
+    ('rs-1-6', 'room-1', 3, '13:00', '17:00'),
+    ('rs-1-7', 'room-1', 4, '08:30', '12:00'),
+    ('rs-1-8', 'room-1', 4, '13:00', '17:00'),
+    ('rs-1-9', 'room-1', 5, '08:30', '12:00'),
+    ('rs-1-10', 'room-1', 5, '13:00', '17:00'),
+    ('rs-2-1', 'room-2', 1, '08:30', '20:00'),
+    ('rs-2-2', 'room-2', 2, '08:30', '20:00'),
+    ('rs-2-3', 'room-2', 3, '08:30', '20:00'),
+    ('rs-2-4', 'room-2', 4, '08:30', '20:00'),
+    ('rs-2-5', 'room-2', 5, '08:30', '20:00'),
+    ('rs-2-6', 'room-2', 6, '08:30', '20:00');
+
+-- 2b. Seed Users (Administrador Inicial y Equipo Profesional)
 INSERT
     OR REPLACE INTO users (id, email, password, name, role, rut, phone)
 VALUES (
         'usr-admin',
         'admin@centropsicarte.cl',
-        '.zG1AbbQ4kLrRI18ALKhhgjyRpbf3UbS',
+        '$2b$10$j6vfcBbEJBlu1IgYC3Plm.zG1AbbQ4kLrRI18ALKhhgjyRpbf3UbS',
         'Administrador General',
         'administrador',
         '',
         ''
+    ),
+    (
+        'prov-ivan',
+        'ivan@centropsicarte.cl',
+        '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa',
+        'Iván Pastén Fuentes',
+        'prestador',
+        '',
+        ''
+    ),
+    (
+        'prov-valentina',
+        'valentina@centropsicarte.cl',
+        '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa',
+        'Valentina Maldonado Terroba',
+        'prestador',
+        '',
+        ''
+    ),
+    (
+        'prov-macarena',
+        'macarena@centropsicarte.cl',
+        '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa',
+        'Macarena Zamora',
+        'prestador',
+        '',
+        ''
+    );
+
+-- 2c. Seed Provider Profiles
+INSERT
+    OR REPLACE INTO provider_profiles (userId, specialty, blocks, bio)
+VALUES (
+        'prov-ivan',
+        'Actor, coach, capacitador',
+        '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}',
+        'Actor teatral y audiovisual, profesor de teatro, dramaturgo e instructor de yoga, con formación universitaria en actuación y puesta en escena. Mi trabajo integra el arte, la expresión corporal, la comunicación y el bienestar, articulando herramientas escénicas, pedagógicas y socioemocionales para acompañar procesos creativos, educativos y personales.'
+    ),
+    (
+        'prov-valentina',
+        'Psicóloga clínica y laboral (Registro SIS 710236)',
+        '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}',
+        'Psicóloga clínica titulada de la Universidad Andrés Bello, graduada Cum Laude, con formación en enfoques psicoanalítico, sistémico-narrativo y centrado en soluciones. Cuento con experiencia en atención presencial y online a niños, niñas, adolescentes y adultos, acompañando procesos terapéuticos desde una mirada integral.'
+    ),
+    (
+        'prov-macarena',
+        'Coordinadora eventos',
+        '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}',
+        'Coordinación de ventas de obras y artes escénicas para empresas, centros educativos o particulares. Reuniones informativas de proyectos teatrales y artísticos en PsicArte.'
+    );
+
+-- 2d. Seed Services & Service-Rooms
+INSERT
+    OR REPLACE INTO services (
+        id,
+        providerId,
+        name,
+        price,
+        duration,
+        type,
+        allowReschedule,
+        maxReschedules
+    )
+VALUES (
+        'ivan-s1',
+        'prov-ivan',
+        'Coaching de Vida, Personal y Profesional Online',
+        20990,
+        50,
+        'Virtual',
+        1,
+        1
+    ),
+    (
+        'ivan-s2',
+        'prov-ivan',
+        'Talleres: Teatro, expresión corporal, etc.',
+        20990,
+        120,
+        'Física',
+        0,
+        1
+    ),
+    (
+        'ivan-s3',
+        'prov-ivan',
+        'Pack 4 Sesiones de Yoga Presencial',
+        25990,
+        50,
+        'Física',
+        1,
+        1
+    ),
+    (
+        'ivan-s4',
+        'prov-ivan',
+        'Capacitaciones individuales: Habilidades blandas',
+        20990,
+        50,
+        'Virtual',
+        1,
+        1
+    ),
+    (
+        'ivan-s5',
+        'prov-ivan',
+        'Capacitaciones grupales: Habilidades blandas',
+        60990,
+        90,
+        'Física',
+        1,
+        1
+    ),
+    (
+        'ivan-s6',
+        'prov-ivan',
+        'Reunión informativa de capacitaciones',
+        0,
+        45,
+        'Virtual',
+        1,
+        1
+    ),
+    (
+        'val-s1',
+        'prov-valentina',
+        'Psicoterapia Online Preferencial',
+        20990,
+        50,
+        'Virtual',
+        1,
+        3
+    ),
+    (
+        'val-s2',
+        'prov-valentina',
+        'Psicoterapia Online Habilidades Parentales',
+        25990,
+        50,
+        'Virtual',
+        1,
+        1
+    ),
+    (
+        'val-s3',
+        'prov-valentina',
+        'Terapia de Parejas Online',
+        30990,
+        50,
+        'Virtual',
+        1,
+        1
+    ),
+    (
+        'val-s4',
+        'prov-valentina',
+        'Terapia Online Flores de Bach',
+        20990,
+        45,
+        'Virtual',
+        1,
+        1
+    ),
+    (
+        'val-s5',
+        'prov-valentina',
+        'Evaluación Psicológica Online (Relatores/OS-10)',
+        60990,
+        50,
+        'Virtual',
+        1,
+        1
+    ),
+    (
+        'val-s6',
+        'prov-valentina',
+        'Informes y Certificados',
+        20990,
+        5,
+        'Virtual',
+        1,
+        1
+    ),
+    (
+        'maca-s1',
+        'prov-macarena',
+        'Reunión informativa: Venta de obras y artes escénicas',
+        0,
+        45,
+        'Virtual',
+        1,
+        1
+    );
+
+INSERT
+    OR REPLACE INTO service_rooms (id, service_id, room_id)
+VALUES ('sr-1', 'ivan-s1', 'room-2'),
+    ('sr-2', 'ivan-s2', 'room-1'),
+    ('sr-3', 'ivan-s3', 'room-1'),
+    ('sr-4', 'ivan-s4', 'room-2'),
+    ('sr-5', 'ivan-s5', 'room-1'),
+    ('sr-6', 'ivan-s6', 'room-2'),
+    ('sr-7', 'val-s1', 'room-2'),
+    ('sr-8', 'val-s2', 'room-2'),
+    ('sr-9', 'val-s3', 'room-2'),
+    ('sr-10', 'val-s4', 'room-2'),
+    ('sr-11', 'val-s5', 'room-2'),
+    ('sr-12', 'val-s6', 'room-2'),
+    ('sr-13', 'maca-s1', 'room-2');
+
+-- 2e. Seed Agendas
+INSERT OR REPLACE INTO agendas (
+    id, provider_id, service_id, room_id, type, recurrence_rule, start_time, end_time, start_date, end_date, status
+) VALUES
+    ('agenda-ivan-s1', 'prov-ivan', 'ivan-s1', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,3],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-ivan-s2', 'prov-ivan', 'ivan-s2', 'room-1', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-ivan-s3', 'prov-ivan', 'ivan-s3', 'room-1', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[3],"dtstart":"2026-01-01"}', '14:00', '17:00', '2026-01-01', NULL, 'published'),
+    ('agenda-ivan-s4', 'prov-ivan', 'ivan-s4', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2,4],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
+    ('agenda-ivan-s5', 'prov-ivan', 'ivan-s5', 'room-1', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[4],"dtstart":"2026-01-01"}', '09:00', '12:00', '2026-01-01', NULL, 'published'),
+    ('agenda-ivan-s6', 'prov-ivan', 'ivan-s6', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[5],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s1', 'prov-valentina', 'val-s1', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,3,5],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s2', 'prov-valentina', 'val-s2', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2,4],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s3', 'prov-valentina', 'val-s3', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,3],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s4', 'prov-valentina', 'val-s4', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2,4],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s5', 'prov-valentina', 'val-s5', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[5],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
+    ('agenda-val-s6', 'prov-valentina', 'val-s6', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[6],"dtstart":"2026-01-01"}', '10:00', '13:00', '2026-01-01', NULL, 'published'),
+    ('agenda-maca-s1', 'prov-macarena', 'maca-s1', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,2,3,4,5],"dtstart":"2026-01-01"}', '15:00', '18:00', '2026-01-01', NULL, 'published');
+
+-- 2f. Seed Community Articles Iniciales
+INSERT
+    OR REPLACE INTO articles (id, author_id, title, summary, body, status, created_at, updated_at, published_at)
+VALUES (
+        'art-1',
+        'prov-valentina',
+        'Salud Mental y Expresión Creativa: Un puente hacia el bienestar',
+        'Cómo la integración de la psicoterapia y las herramientas expresivas fortalece los procesos de autoconocimiento y regulación emocional.',
+        'En Centro Integral PsicArte comprendemos que cada proceso humano requiere distintas formas de expresión y elaboración.
+
+Integrar el espacio psicoterapéutico con herramientas corporales y escénicas permite abordar la ansiedad, el estrés laboral y los desafíos vinculares desde una perspectiva ética, cercana y respetuosa del ritmo de cada persona.',
+        'published',
+        datetime('now', '-5 days'),
+        datetime('now', '-5 days'),
+        datetime('now', '-5 days')
+    ),
+    (
+        'art-2',
+        'prov-ivan',
+        'El Cuerpo y la Voz en la Comunicación Efectiva',
+        'Herramientas de las artes escénicas aplicadas al desarrollo de habilidades blandas, liderazgo y convivencia en equipos de trabajo.',
+        'La comunicación efectiva no ocurre únicamente desde la palabra hablada: involucra la presencia corporal, la escucha activa y el reconocimiento del otro.
+
+A través del entrenamiento escénico y el coaching, acompañamos a personas, comunidades educativas y organizaciones a fortalecer sus habilidades socioemocionales y expresivas.',
+        'published',
+        datetime('now', '-2 days'),
+        datetime('now', '-2 days'),
+        datetime('now', '-2 days')
     );
 
 -- 3. Seed Configurations

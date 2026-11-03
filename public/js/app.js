@@ -54,10 +54,19 @@ addService = async function (e) {
         const existingService = state.providers
             .find(provider => provider.id === provId)?.services
             .find(service => service.id === editingServiceId);
-        const serviceType = existingService?.type ||
-            (roomId ? (state.rooms.find(r => r.id === roomId)?.type || 'Presencial') : 'Virtual');
+        const serviceType = roomId
+            ? (state.rooms.find(r => r.id === roomId)?.type || existingService?.type || 'Presencial')
+            : (existingService?.type || 'Virtual');
         const allowReschedule = document.getElementById("adm-serv-allow-reschedule").checked;
         const maxReschedules = Number(document.getElementById("adm-serv-max-reschedules").value) || 1;
+
+        let agendaConfig;
+        try {
+            agendaConfig = collectServiceAgendaConfig();
+        } catch (error) {
+            showToast(error.message, "error");
+            return;
+        }
 
         try {
             const res = await fetch('/api/services', {
@@ -66,12 +75,13 @@ addService = async function (e) {
                 body: JSON.stringify({
                     id: editingServiceId, providerId: provId, name, price, duration,
                     type: serviceType, roomId,
-                    allowReschedule, maxReschedules
+                    allowReschedule, maxReschedules,
+                    agendaConfig
                 })
             });
             const result = await res.json();
             if (res.ok) {
-                showToast(result.message || "Servicio actualizado correctamente.", "success");
+                showToast(result.message || "Servicio y horarios actualizados correctamente.", "success");
                 editingServiceId = null;
                 document.getElementById("admin-service-form").reset();
                 setServiceScheduleEditable(true);
@@ -90,7 +100,7 @@ addService = async function (e) {
             } else {
                 showToast(result.error || "No se pudo actualizar el servicio.", "error");
             }
-        } catch (err) {
+        } catch {
             showToast("Error al actualizar servicio.", "error");
         }
         return;

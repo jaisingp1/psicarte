@@ -111,7 +111,7 @@
     <footer>
         <div class="footer-container">
             <div class="footer-info">
-                <img id="footer-logo" src="images/logo_light.png" alt="PsicArte Logo">
+                <img id="footer-logo" src="images/logo_dark.png" alt="PsicArte Logo">
                 <p>Centro Integral PsicArte está orientado al acompañamiento terapéutico, el desarrollo de capacidades
                     artísticas y corporales, y la promoción del autocuidado y la salud mental.</p>
             </div>
@@ -209,7 +209,8 @@
                     document.getElementById("presentation-text-short").innerText = content.presentationShort;
                 }
                 if (content.presentationFull) {
-                    document.getElementById("presentation-text-full").innerHTML = content.presentationFull.replace(/\n/g, "<br>");
+                    const normalizedFull = content.presentationFull.replace(/\\n/g, "\n");
+                    document.getElementById("presentation-text-full").innerHTML = normalizedFull.replace(/\n/g, "<br>");
                 }
                 if (content.mission) {
                     document.getElementById("mission-text").innerText = content.mission;
@@ -260,7 +261,7 @@
                                 <div class="provider-avatar">${initials}</div>
                                 <div class="provider-meta">
                                     <h3>${p.name}</h3>
-                                    <span>${p.role}</span>
+                                    <span>${p.specialty || p.role}</span>
                                 </div>
                             </div>
                             <p class="provider-desc" id="${descId}">${bio}</p>

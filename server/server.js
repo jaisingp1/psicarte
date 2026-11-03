@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('./database');
 const { SpotGenerator, timeToMinutes, minutesToTime } = require('./spot-generator');
+const { sendBookingConfirmationEmail } = require('./mailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -252,6 +253,9 @@ function reconcileBookingPayment(bookingId, doneCallback) {
                     if (errUp) {
                         return doneCallback ? doneCallback(errUp) : null;
                     }
+                    if (finalStatus === 'Paid') {
+                        sendBookingConfirmationEmail(db, bookingId);
+                    }
                     if (finalStatus === 'Paid' && booking.spot_id) {
                         db.run("UPDATE spots SET status = 'booked', booking_id = ? WHERE id = ?", [bookingId, booking.spot_id], (errSpot) => {
                             if (errSpot) console.error('Failed to update spot status:', errSpot.message);
@@ -316,14 +320,18 @@ app.post('/api/auth/recover', (req, res) => {
 // SECTION 4: USER ENDPOINTS (Admin CRUD) - PROTECTED
 // =====================================================
 app.get('/api/users', authenticateToken, (req, res) => {
-    db.all("SELECT id, email, name, role, rut, phone, created_at FROM users", (err, rows) => {
+    db.all(`
+        SELECT u.id, u.email, u.name, u.role, u.rut, u.phone, u.created_at, p.specialty, p.bio
+        FROM users u
+        LEFT JOIN provider_profiles p ON u.id = p.userId
+    `, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
 app.post('/api/users', authenticateToken, (req, res) => {
-    const { email, password, name, role, rut, phone } = req.body;
+    const { email, password, name, role, rut, phone, specialty, bio } = req.body;
     if (!email || !password || !name || !role) {
         return res.status(400).json({ error: 'Faltan campos requeridos.' });
     }
@@ -341,8 +349,8 @@ app.post('/api/users', authenticateToken, (req, res) => {
                         4: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"],
                         5: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"]
                     });
-                    db.run("INSERT INTO provider_profiles (userId, blocks, bio) VALUES (?, ?, ?)",
-                        [id, defaultBlocks, ''], (err3) => {
+                    db.run("INSERT INTO provider_profiles (userId, specialty, blocks, bio) VALUES (?, ?, ?, ?)",
+                        [id, specialty || '', defaultBlocks, bio || ''], (err3) => {
                             if (err3) return res.status(500).json({ error: err3.message });
                             res.json({ success: true, id });
                         }
@@ -356,7 +364,7 @@ app.post('/api/users', authenticateToken, (req, res) => {
 });
 
 app.put('/api/users/:id', authenticateToken, (req, res) => {
-    const { email, name, role, password, rut, phone } = req.body;
+    const { email, name, role, password, rut, phone, specialty, bio } = req.body;
     const { id } = req.params;
     if (!email || !name || !role) {
         return res.status(400).json({ error: 'Faltan campos requeridos.' });
@@ -372,7 +380,24 @@ app.put('/api/users/:id', authenticateToken, (req, res) => {
 
         db.run(query, params, function (err2) {
             if (err2) return res.status(500).json({ error: err2.message });
-            res.json({ success: true });
+            if (role === 'prestador' && (specialty !== undefined || bio !== undefined)) {
+                db.get("SELECT userId, specialty, blocks, bio FROM provider_profiles WHERE userId = ?", [id], (errProf, existingProf) => {
+                    if (errProf) return res.status(500).json({ error: errProf.message });
+                    const nextSpecialty = specialty !== undefined ? specialty : (existingProf?.specialty || '');
+                    const nextBio = bio !== undefined ? bio : (existingProf?.bio || '');
+                    const nextBlocks = existingProf?.blocks || '{}';
+                    db.run(
+                        "INSERT OR REPLACE INTO provider_profiles (userId, specialty, blocks, bio) VALUES (?, ?, ?, ?)",
+                        [id, nextSpecialty, nextBlocks, nextBio],
+                        (errSaveProf) => {
+                            if (errSaveProf) return res.status(500).json({ error: errSaveProf.message });
+                            res.json({ success: true });
+                        }
+                    );
+                });
+            } else {
+                res.json({ success: true });
+            }
         });
     };
 
@@ -482,13 +507,20 @@ app.post('/api/articles', authenticateToken, (req, res) => {
     }
 
     const id = crypto.randomUUID();
+    const isAdmin = req.user.role === 'administrador';
+    const initialStatus = isAdmin ? 'published' : 'pending_review';
+    const query = isAdmin
+        ? `INSERT INTO articles (id, author_id, title, summary, body, status, published_at)
+           VALUES (?, ?, ?, ?, ?, 'published', CURRENT_TIMESTAMP)`
+        : `INSERT INTO articles (id, author_id, title, summary, body, status)
+           VALUES (?, ?, ?, ?, ?, 'pending_review')`;
+
     db.run(
-        `INSERT INTO articles (id, author_id, title, summary, body)
-         VALUES (?, ?, ?, ?, ?)`,
+        query,
         [id, req.user.id, title, summary, body],
         function (err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ success: true, id, status: 'pending_review' });
+            res.status(201).json({ success: true, id, status: initialStatus });
         }
     );
 });
@@ -542,24 +574,33 @@ app.get('/api/rooms', (req, res) => {
                 if (startTimes.length > 0) openTime = startTimes[0];
                 if (endTimes.length > 0) closeTime = endTimes[endTimes.length - 1];
             }
-            return { id: r.id, name: r.name, type: r.type, openTime, closeTime, schedules: parsedSchedules };
+            return {
+                id: r.id,
+                name: r.name,
+                type: r.type,
+                meeting_link: r.meeting_link || '',
+                openTime,
+                closeTime,
+                schedules: parsedSchedules
+            };
         });
         res.json(result);
     });
 });
 
 app.post('/api/rooms', authenticateToken, (req, res) => {
-    const { id, name, type, openTime, closeTime } = req.body;
+    const { id, name, type, openTime, closeTime, meeting_link } = req.body;
     if (!id || !name) {
         return res.status(400).json({ error: 'Faltan campos requeridos: id, name.' });
     }
     const start = openTime || '08:30';
     const end = closeTime || '18:30';
+    const meetingLinkVal = typeof meeting_link === 'string' ? meeting_link.trim() : '';
 
     db.serialize(() => {
-        db.run(`INSERT INTO rooms (id, name, type) VALUES (?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type`,
-            [id, name, type || 'consultorio'],
+        db.run(`INSERT INTO rooms (id, name, type, meeting_link) VALUES (?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, meeting_link = excluded.meeting_link`,
+            [id, name, type || 'consultorio', meetingLinkVal],
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
 
@@ -586,49 +627,37 @@ app.post('/api/rooms', authenticateToken, (req, res) => {
 });
 
 app.put('/api/rooms/:id', authenticateToken, (req, res) => {
-    const { name, type, openTime, closeTime } = req.body;
+    const { name, type, openTime, closeTime, meeting_link } = req.body;
     if (!name || !type || !openTime || !closeTime || openTime >= closeTime) {
         return res.status(400).json({ error: 'Revise el nombre, tipo y rango horario de la sala.' });
     }
+    const meetingLinkVal = typeof meeting_link === 'string' ? meeting_link.trim() : '';
 
-    db.run('UPDATE rooms SET name = ?, type = ? WHERE id = ?', [name, type, req.params.id], function (err) {
+    db.run('UPDATE rooms SET name = ?, type = ?, meeting_link = ? WHERE id = ?', [name, type, meetingLinkVal, req.params.id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
         if (this.changes === 0) return res.status(404).json({ error: 'Sala no encontrada.' });
 
         db.all(
-            'SELECT id, day_of_week FROM room_schedules WHERE room_id = ? ORDER BY day_of_week, start_time',
+            'SELECT DISTINCT day_of_week FROM room_schedules WHERE room_id = ? ORDER BY day_of_week',
             [req.params.id],
-            (scheduleErr, schedules) => {
+            (scheduleErr, dayRows) => {
                 if (scheduleErr) return res.status(500).json({ error: scheduleErr.message });
 
-                const schedulesPerDay = new Map();
-                for (const schedule of schedules || []) {
-                    schedulesPerDay.set(
-                        schedule.day_of_week,
-                        [...(schedulesPerDay.get(schedule.day_of_week) || []), schedule]
-                    );
-                }
-
-                const multiBlockDays = [...schedulesPerDay.values()].some(daySchedules => daySchedules.length > 1);
-                const pending = [];
-                for (const daySchedules of schedulesPerDay.values()) {
-                    if (daySchedules.length === 1) pending.push(daySchedules[0].id);
-                }
-
-                if (multiBlockDays || pending.length === 0) {
-                    return res.json({
-                        success: true,
-                        scheduleUpdated: false,
-                        message: 'Sala actualizada; los horarios existentes se conservaron porque incluyen varios bloques por día.'
-                    });
-                }
+                const daysToConfigure = (dayRows && dayRows.length > 0)
+                    ? dayRows.map(r => r.day_of_week)
+                    : (type === 'Virtual' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5]);
 
                 db.serialize(() => {
-                    const stmt = db.prepare('UPDATE room_schedules SET start_time = ?, end_time = ? WHERE id = ?');
-                    pending.forEach(id => stmt.run(openTime, closeTime, id));
-                    stmt.finalize(updateErr => {
-                        if (updateErr) return res.status(500).json({ error: updateErr.message });
-                        res.json({ success: true, scheduleUpdated: true });
+                    db.run('DELETE FROM room_schedules WHERE room_id = ?', [req.params.id], (delErr) => {
+                        if (delErr) return res.status(500).json({ error: delErr.message });
+                        const stmt = db.prepare('INSERT INTO room_schedules (id, room_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)');
+                        daysToConfigure.forEach(day => {
+                            stmt.run([`rs-${req.params.id}-${day}`, req.params.id, day, openTime, closeTime]);
+                        });
+                        stmt.finalize(updateErr => {
+                            if (updateErr) return res.status(500).json({ error: updateErr.message });
+                            res.json({ success: true, scheduleUpdated: true, message: 'Sala y horario de funcionamiento actualizados correctamente.' });
+                        });
                     });
                 });
             }
@@ -749,7 +778,7 @@ app.delete('/api/room-schedules/:id', authenticateToken, (req, res) => {
 // =====================================================
 app.get('/api/providers', (req, res) => {
     db.all(`
-        SELECT u.id, u.name, u.email, u.role, p.blocks, p.bio
+        SELECT u.id, u.name, u.email, u.role, p.specialty, p.blocks, p.bio
         FROM users u
         JOIN provider_profiles p ON u.id = p.userId
         WHERE u.role = 'prestador'
@@ -805,10 +834,11 @@ app.get('/api/providers', (req, res) => {
                         id: p.id,
                         name: p.name,
                         role: p.role,
+                        specialty: p.specialty || p.role,
                         email: p.email,
                         blocks: blocksParsed,
                         bio: p.bio || '',
-                        services: pServices
+                        services: pServices.map(s => ({ ...s, roomId: s.roomIds?.[0] || '' }))
                     };
                 });
                 res.json(nested);
@@ -833,7 +863,7 @@ app.delete('/api/providers/:id', authenticateToken, (req, res) => {
 // SECTION 9: SERVICES ENDPOINTS
 // =====================================================
 app.post('/api/services', authenticateToken, (req, res) => {
-    const { id, providerId, name, price, duration, type, allowReschedule, maxReschedules } = req.body;
+    const { id, providerId, name, price, duration, type, allowReschedule, maxReschedules, agendaConfig } = req.body;
 
     if (!id || !providerId || !name || !duration) {
         return res.status(400).json({ error: 'Faltan campos requeridos: id, providerId, name, duration.' });
@@ -855,7 +885,64 @@ app.post('/api/services', authenticateToken, (req, res) => {
         [id, providerId, name, price || 0, duration, type || 'sesion', allowRescheduleVal, maxReschedulesVal],
         function (err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, id });
+
+            if (!agendaConfig || !Array.isArray(agendaConfig.roomIds) || agendaConfig.roomIds.length === 0) {
+                return res.json({ success: true, id });
+            }
+
+            let normalizedRecurrenceRule = null;
+            if (agendaConfig.recurrence === 'weekly') {
+                const normalized = normalizeAgendaRecurrenceRule(agendaConfig.recurrenceRule);
+                if (normalized.error) {
+                    return res.status(400).json({ error: normalized.error });
+                }
+                normalizedRecurrenceRule = normalized.value;
+            }
+
+            const targetRoomId = agendaConfig.roomIds[0];
+            db.serialize(() => {
+                db.run('DELETE FROM service_rooms WHERE service_id = ?', [id]);
+                db.run('INSERT OR IGNORE INTO service_rooms (id, service_id, room_id) VALUES (?, ?, ?)', [crypto.randomUUID(), id, targetRoomId]);
+                db.run("DELETE FROM spots WHERE service_id = ? AND status = 'available'", [id]);
+                db.run('DELETE FROM agendas WHERE service_id = ?', [id], (delAgErr) => {
+                    if (delAgErr) return res.status(500).json({ error: delAgErr.message });
+
+                    const newAgendaId = crypto.randomUUID();
+                    const agendaType = agendaConfig.recurrence === 'weekly' ? 'recurrent' : 'punctual';
+                    db.run(
+                        `INSERT INTO agendas (id, provider_id, service_id, room_id, type, recurrence_rule, specific_date, start_time, end_time, start_date, end_date, status)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published')`,
+                        [
+                            newAgendaId,
+                            providerId,
+                            id,
+                            targetRoomId,
+                            agendaType,
+                            normalizedRecurrenceRule,
+                            agendaConfig.specificDate || null,
+                            agendaConfig.startTime,
+                            agendaConfig.endTime,
+                            agendaConfig.startDate || null,
+                            agendaConfig.endDate || null
+                        ],
+                        (insAgErr) => {
+                            if (insAgErr) return res.status(500).json({ error: insAgErr.message });
+                            db.get('SELECT * FROM agendas WHERE id = ?', [newAgendaId], (getAgErr, agendaRow) => {
+                                if (getAgErr || !agendaRow) return res.status(500).json({ error: getAgErr?.message || 'Error leyendo agenda actualizada.' });
+                                const generator = new SpotGenerator(db);
+                                generator.generate(agendaRow, (genResult) => {
+                                    res.json({
+                                        success: true,
+                                        id,
+                                        spotsGenerated: genResult.spotsGenerated || 0,
+                                        message: `Servicio y horarios actualizados (${genResult.spotsGenerated || 0} bloques disponibles generados).`
+                                    });
+                                });
+                            });
+                        }
+                    );
+                });
+            });
         }
     );
 });
@@ -1047,6 +1134,10 @@ app.post('/api/bookings', (req, res) => {
                                 });
                             }
 
+                            if (initialStatus === 'Paid') {
+                                sendBookingConfirmationEmail(db, bookingId);
+                            }
+
                             res.json({ success: true, id: bookingId });
                         }
                     );
@@ -1139,6 +1230,9 @@ app.delete('/api/holidays/:id', authenticateToken, (req, res) => {
 // SECTION 12: AGENDAS ENDPOINTS (all require auth)
 // =====================================================
 app.get('/api/agendas', authenticateToken, (req, res) => {
+    const { service_id } = req.query;
+    const whereClause = service_id ? 'WHERE a.service_id = ?' : '';
+    const params = service_id ? [service_id] : [];
     db.all(`
         SELECT a.*,
             u.name as provider_name,
@@ -1151,8 +1245,9 @@ app.get('/api/agendas', authenticateToken, (req, res) => {
         JOIN users u ON a.provider_id = u.id
         JOIN services s ON a.service_id = s.id
         JOIN rooms r ON a.room_id = r.id
+        ${whereClause}
         ORDER BY a.created_at DESC
-    `, (err, rows) => {
+    `, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows || []);
     });

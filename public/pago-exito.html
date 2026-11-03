@@ -124,7 +124,7 @@
                         No te preocupes: tu dinero está resguardado. Por favor contáctanos para reasignar tu sesión al horario de tu preferencia o gestionar tu devolución inmediata.
                     </p>
                     <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
-                        <a href="https://wa.me/56952182998" target="_blank" rel="noopener" class="btn-primary" style="padding: 12px 24px; text-decoration: none; background: #25D366; border-color: #25D366; color: white;">
+                        <a id="whatsapp-support-link" href="#" target="_blank" rel="noopener noreferrer" class="btn-whatsapp" hidden>
                             <i class="fa-brands fa-whatsapp" style="margin-right: 8px;"></i>Contactar por WhatsApp
                         </a>
                         <a href="index.html" class="btn-secondary" style="padding: 12px 24px; text-decoration: none;">
@@ -154,7 +154,7 @@
     <footer>
         <div class="footer-container">
             <div class="footer-info">
-                <img id="footer-logo" src="images/logo_light.png" alt="PsicArte Logo">
+                <img id="footer-logo" src="images/logo_dark.png" alt="PsicArte Logo">
                 <p>Centro Integral PsicArte está orientado al acompañamiento terapéutico, el desarrollo de capacidades
                     artísticas y corporales, y la promoción del autocuidado y la salud mental.</p>
             </div>
@@ -185,40 +185,8 @@
         </div>
     </footer>
 
+    <script src="js/theme.js"></script>
     <script>
-        // Theme management
-        function initTheme() {
-            const savedTheme = localStorage.getItem("psicarte_theme") || "light";
-            document.documentElement.setAttribute("data-theme", savedTheme);
-            updateThemeUI(savedTheme);
-        }
-
-        function toggleTheme() {
-            const currentTheme = document.documentElement.getAttribute("data-theme");
-            const newTheme = currentTheme === "dark" ? "light" : "dark";
-            document.documentElement.setAttribute("data-theme", newTheme);
-            localStorage.setItem("psicarte_theme", newTheme);
-            updateThemeUI(newTheme);
-        }
-
-        function updateThemeUI(theme) {
-            const themeBtn = document.getElementById("theme-toggle");
-            const logoImg = document.getElementById("nav-logo");
-            const footerLogo = document.getElementById("footer-logo");
-
-            if (theme === "dark") {
-                themeBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
-                logoImg.src = "images/logo_dark.png";
-                if (footerLogo) footerLogo.src = "images/logo_dark.png";
-            } else {
-                themeBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
-                logoImg.src = "images/logo_light.png";
-                if (footerLogo) footerLogo.src = "images/logo_light.png";
-            }
-        }
-
-        document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
-
         // Dynamic footer year
         const yearEl = document.getElementById("footer-year");
         if (yearEl) yearEl.textContent = new Date().getFullYear();
@@ -276,7 +244,7 @@
                             return;
                         }
                     }
-                } catch (e) {
+                } catch {
                     // Retrying
                 }
                 await new Promise(r => setTimeout(r, intervalMs));
@@ -286,6 +254,7 @@
         }
 
         initTheme();
+        document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
         verifyPayment();
     </script>
     <script src="js/public-contact.js"></script>

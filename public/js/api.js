@@ -86,6 +86,7 @@ function renderContent() {
     const servicesSubtitle = document.getElementById("services-section-subtitle");
     if (servicesTitle && state.content.servicesTitle) servicesTitle.innerText = state.content.servicesTitle;
     if (servicesSubtitle && state.content.servicesSubtitle) servicesSubtitle.innerText = state.content.servicesSubtitle;
+    if (typeof renderServicesOverviewSection === 'function') renderServicesOverviewSection();
     
     // These elements live on nosotros.html; guard against null on index.html
     const presShort = document.getElementById("presentation-text-short");

@@ -240,12 +240,12 @@ const DEFAULT_SERVICE_AREAS = [
 ];
 
 function getServiceAreasData() {
-    if (state.content && state.content.service_areas) {
+    if (state.content && state.content.service_areas !== undefined && state.content.service_areas !== null) {
         try {
             const parsed = typeof state.content.service_areas === 'string'
                 ? JSON.parse(state.content.service_areas)
                 : state.content.service_areas;
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            if (Array.isArray(parsed)) return parsed;
         } catch (e) {
             console.error('Error parsing service_areas:', e);
         }

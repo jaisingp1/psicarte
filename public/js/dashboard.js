@@ -1196,27 +1196,29 @@ function openServiceAreaModal(areaId = null) {
         const areas = typeof getServiceAreasData === 'function' ? getServiceAreasData() : [];
         const area = areas.find(a => a.id === areaId);
         if (area) {
-            titleEl.textContent = "Editar Tarjeta de Prestación";
-            idInput.value = area.id;
-            titleInput.value = area.title;
-            iconInput.value = area.icon || "fa-brain";
-            descInput.value = area.description;
+            if (titleEl) titleEl.textContent = "Editar Tarjeta de Prestación";
+            if (idInput) idInput.value = area.id;
+            if (titleInput) titleInput.value = area.title;
+            if (iconInput) iconInput.value = area.icon || "fa-brain";
+            if (descInput) descInput.value = area.description;
         }
     } else {
-        titleEl.textContent = "Nueva Tarjeta de Prestación";
-        idInput.value = "";
-        titleInput.value = "";
-        iconInput.value = "fa-brain";
-        descInput.value = "";
+        if (titleEl) titleEl.textContent = "Nueva Tarjeta de Prestación";
+        if (idInput) idInput.value = "";
+        if (titleInput) titleInput.value = "";
+        if (iconInput) iconInput.value = "fa-brain";
+        if (descInput) descInput.value = "";
     }
 
     updateAreaIconPreview();
-    modal.style.display = "flex";
+    modal.classList.add("active");
 }
 
 function closeServiceAreaModal() {
     const modal = document.getElementById("service-area-modal");
-    if (modal) modal.style.display = "none";
+    if (modal) {
+        modal.classList.remove("active");
+    }
 }
 
 function updateAreaIconPreview() {
@@ -1266,6 +1268,7 @@ async function saveServiceArea(e) {
         });
 
         if (res.ok) {
+            if (!state.content) state.content = {};
             state.content.service_areas = jsonVal;
             closeServiceAreaModal();
             renderAdminServiceAreasList();
@@ -1294,6 +1297,7 @@ async function deleteServiceArea(areaId) {
         });
 
         if (res.ok) {
+            if (!state.content) state.content = {};
             state.content.service_areas = jsonVal;
             renderAdminServiceAreasList();
             if (typeof renderServicesOverviewSection === 'function') {

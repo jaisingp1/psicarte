@@ -231,7 +231,12 @@ app.post('/api/auth/login', (req, res) => {
         return res.status(400).json({ error: 'Faltan credenciales.' });
     }
 
-    db.get("SELECT id, email, password, name, role FROM users WHERE email = ?", [email], (err, user) => {
+    const cleanEmail = String(email).trim().toLowerCase();
+    const lookupEmail = (cleanEmail === 'admin' || cleanEmail === 'admin@psicarte.cl')
+        ? 'admin@centropsicarte.cl'
+        : cleanEmail;
+
+    db.get("SELECT id, email, password, name, role FROM users WHERE LOWER(email) = LOWER(?)", [lookupEmail], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
 
         if (user) {

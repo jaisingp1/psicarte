@@ -1156,6 +1156,10 @@ function renderAdminServiceAreasList() {
         return;
     }
 
+    const esc = typeof escapeHtml === 'function'
+        ? escapeHtml
+        : (str => (str == null ? '' : String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;')));
+
     tbody.innerHTML = areas.map((area) => {
         const iconClass = area.icon || 'fa-brain';
         return `
@@ -1165,8 +1169,8 @@ function renderAdminServiceAreasList() {
                         <i class="fa-solid ${iconClass}"></i>
                     </span>
                 </td>
-                <td><strong>${escapeHtml(area.title)}</strong></td>
-                <td style="color: var(--text-secondary); font-size: 0.9rem;">${escapeHtml(area.description)}</td>
+                <td><strong>${esc(area.title)}</strong></td>
+                <td style="color: var(--text-secondary); font-size: 0.9rem;">${esc(area.description)}</td>
                 <td>
                     <div style="display: flex; gap: 6px;">
                         <button type="button" class="btn-secondary" style="padding: 5px 8px; font-size: 0.85rem;" onclick="openServiceAreaModal('${area.id}')" title="Editar"><i class="fa-solid fa-pencil"></i></button>

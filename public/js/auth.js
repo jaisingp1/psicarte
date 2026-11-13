@@ -103,22 +103,28 @@ async function processLogin() {
         return;
     }
     
+    let res, data;
     try {
-        const res = await fetch('/api/auth/login', {
+        res = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: pass })
+            body: JSON.stringify({ email: email.trim(), password: pass })
         });
-        const data = await res.json();
+        data = await res.json();
+    } catch (e) {
+        showToast("Error al conectar con el servidor.", "error");
+        return;
+    }
+    
+    if (res.ok) {
+        state.currentUser = data;
+        sessionStorage.setItem("psicarte_user", JSON.stringify(data));
+        if (data.token) {
+            setToken(data.token);
+        }
+        showToast(`¡Bienvenido/a, ${data.name}!`, "success");
         
-        if (res.ok) {
-            state.currentUser = data;
-            sessionStorage.setItem("psicarte_user", JSON.stringify(data));
-            if (data.token) {
-                setToken(data.token);
-            }
-            showToast(`¡Bienvenido/a, ${data.name}!`, "success");
-            
+        try {
             // Redirect to acceso.html or update UI if already there
             const isAccesoPage = window.location.pathname.includes('acceso.html');
             if (isAccesoPage) {
@@ -127,11 +133,12 @@ async function processLogin() {
             } else {
                 window.location.href = 'acceso.html';
             }
-        } else {
-            showToast(data.error || "Acceso incorrecto", "error");
+        } catch (uiErr) {
+            console.error("Error al actualizar la vista tras login:", uiErr);
+            window.location.href = 'acceso.html';
         }
-    } catch (e) {
-        showToast("Error al conectar con el servidor.", "error");
+    } else {
+        showToast(data.error || "Acceso incorrecto", "error");
     }
 }
 

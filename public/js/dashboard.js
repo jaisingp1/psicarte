@@ -1101,7 +1101,9 @@ async function saveContentCustomizations(e) {
         objectives: document.getElementById("custom-objectives").value,
         contactEmail: document.getElementById("custom-contact-email").value,
         contactPhone: document.getElementById("custom-contact-phone").value,
-        contactAddress: document.getElementById("custom-contact-address").value
+        contactAddress: document.getElementById("custom-contact-address").value,
+        servicesTitle: document.getElementById("custom-services-title")?.value || "Servicios y Aranceles",
+        servicesSubtitle: document.getElementById("custom-services-subtitle")?.value || ""
     };
     const instagramInput = document.getElementById("custom-instagram-url");
     const instagramUrl = instagramInput ? instagramInput.value.trim() : "";

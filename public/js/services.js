@@ -50,12 +50,22 @@ function renderServicesSection() {
     }
 
     // Render service cards
+    const prevBtn = document.getElementById("services-carousel-prev");
+    const nextBtn = document.getElementById("services-carousel-next");
+    const dotsContainer = document.getElementById("services-carousel-dots");
+
     if (services.length === 0) {
+        if (prevBtn) prevBtn.style.display = 'none';
+        if (nextBtn) nextBtn.style.display = 'none';
+        if (dotsContainer) dotsContainer.style.display = 'none';
         gridContainer.innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 40px;">No se encontraron servicios con los filtros aplicados.</p>';
         return;
     }
 
     if (servicesView === 'list') {
+        if (prevBtn) prevBtn.style.display = 'none';
+        if (nextBtn) nextBtn.style.display = 'none';
+        if (dotsContainer) dotsContainer.style.display = 'none';
         gridContainer.className = 'services-list-view';
         gridContainer.innerHTML = '';
         services.forEach(s => {
@@ -83,7 +93,21 @@ function renderServicesSection() {
     } else {
         gridContainer.className = 'services-grid';
         gridContainer.innerHTML = '';
-        services.forEach(s => {
+
+        const totalServices = services.length;
+        const totalPages = Math.ceil(totalServices / SERVICES_PER_PAGE);
+
+        if (servicesCarouselPage >= totalPages) {
+            servicesCarouselPage = Math.max(0, totalPages - 1);
+        }
+        if (servicesCarouselPage < 0) {
+            servicesCarouselPage = 0;
+        }
+
+        const startIndex = servicesCarouselPage * SERVICES_PER_PAGE;
+        const visibleServices = services.slice(startIndex, startIndex + SERVICES_PER_PAGE);
+
+        visibleServices.forEach(s => {
             const typeLabel = s.type === 'Virtual' ? 'Online' : 'Presencial';
             const typeIcon = s.type === 'Virtual' ? 'fa-wifi' : 'fa-building';
             gridContainer.innerHTML += `
@@ -106,11 +130,49 @@ function renderServicesSection() {
                 </div>
             `;
         });
+
+        // Controles de carrusel (flechas y puntos si hay más de 4 servicios)
+        if (totalServices > SERVICES_PER_PAGE) {
+            if (prevBtn) {
+                prevBtn.style.display = 'inline-flex';
+                prevBtn.disabled = (servicesCarouselPage === 0);
+                prevBtn.setAttribute('aria-disabled', String(servicesCarouselPage === 0));
+            }
+            if (nextBtn) {
+                nextBtn.style.display = 'inline-flex';
+                nextBtn.disabled = (servicesCarouselPage >= totalPages - 1);
+                nextBtn.setAttribute('aria-disabled', String(servicesCarouselPage >= totalPages - 1));
+            }
+            if (dotsContainer) {
+                dotsContainer.style.display = 'flex';
+                let dotsHtml = '';
+                for (let i = 0; i < totalPages; i++) {
+                    const isCur = (i === servicesCarouselPage);
+                    dotsHtml += `<button type="button" class="carousel-dot${isCur ? ' active' : ''}" onclick="goToServicesCarouselPage(${i})" aria-label="Página ${i + 1} de servicios" ${isCur ? 'aria-current="true"' : ''}></button>`;
+                }
+                dotsContainer.innerHTML = dotsHtml;
+            }
+        } else {
+            if (prevBtn) prevBtn.style.display = 'none';
+            if (nextBtn) nextBtn.style.display = 'none';
+            if (dotsContainer) dotsContainer.style.display = 'none';
+        }
     }
+}
+
+function changeServicesCarouselPage(delta) {
+    servicesCarouselPage += delta;
+    renderServicesSection();
+}
+
+function goToServicesCarouselPage(pageIndex) {
+    servicesCarouselPage = pageIndex;
+    renderServicesSection();
 }
 
 function selectServiceProvider(providerId) {
     selectedServicesProviderId = providerId;
+    servicesCarouselPage = 0;
     renderServicesSection();
 }
 
@@ -129,6 +191,7 @@ function bookServiceFromCard(providerId, serviceId) {
 
 function setServiceTypeFilter(type) {
     selectedServiceType = type;
+    servicesCarouselPage = 0;
     document.querySelectorAll('#service-type-filters .filter-pill').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-type') === type);
     });

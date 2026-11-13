@@ -130,8 +130,8 @@
 
         <!-- Services Section (Dynamic) -->
         <section id="servicios" class="info-section">
-            <h2 class="section-title">Servicios y Aranceles</h2>
-            <p style="text-align: center; margin-top: -30px; margin-bottom: 32px; color: var(--text-secondary);">
+            <h2 class="section-title" id="services-section-title">Servicios y Aranceles</h2>
+            <p id="services-section-subtitle" style="text-align: center; margin-top: -30px; margin-bottom: 32px; color: var(--text-secondary);">
                 Conoce nuestras áreas de acompañamiento integral, modalidades de atención y opciones de cobertura y reembolso.
             </p>
 
@@ -211,9 +211,18 @@
                     </div>
                 </div>
             </div>
-            <div class="services-grid" id="dynamic-services-container">
-                <!-- Rendered dynamically by JS -->
+            <div class="services-carousel-wrapper">
+                <button type="button" class="services-carousel-arrow prev-arrow" id="services-carousel-prev" onclick="changeServicesCarouselPage(-1)" aria-label="Ver servicios anteriores" style="display: none;">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <div class="services-grid" id="dynamic-services-container">
+                    <!-- Rendered dynamically by JS -->
+                </div>
+                <button type="button" class="services-carousel-arrow next-arrow" id="services-carousel-next" onclick="changeServicesCarouselPage(1)" aria-label="Ver más servicios" style="display: none;">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
             </div>
+            <div class="services-carousel-dots" id="services-carousel-dots" style="display: none;"></div>
         </section>
 
         <!-- Booking Widget Section -->

@@ -32,7 +32,9 @@ Desde nuestras distintas áreas de trabajo, abordamos temáticas vinculadas a sa
     ),
     ('contactEmail', 'contacto@centropsicarte.cl'),
     ('contactPhone', '+56961676706'),
-    ('contactAddress', 'Oficina Virtual Las Bellotas 199, Providencia, RM');
+    ('contactAddress', 'Oficina Virtual Las Bellotas 199, Providencia, RM'),
+    ('servicesTitle', 'Servicios y Aranceles'),
+    ('servicesSubtitle', 'Conoce nuestras áreas de acompañamiento integral, modalidades de atención y opciones de cobertura y reembolso.');
 
 -- 2. Seed Rooms & Schedules
 INSERT

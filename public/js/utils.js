@@ -102,6 +102,7 @@ function setupEventListeners() {
     if (servicesSearchInput) {
         servicesSearchInput.addEventListener("input", (e) => {
             servicesSearchQuery = e.target.value;
+            servicesCarouselPage = 0;
             renderServicesSection();
         });
     }

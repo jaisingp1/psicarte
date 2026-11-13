@@ -1950,7 +1950,7 @@ app.post('/api/khipu/create-payment', (req, res) => {
             );
         } catch (error) {
             console.error('Error creating Khipu payment:', error.message || error);
-            res.status(502).json({ error: 'Error al comunicarse con la pasarela de pagos Khipu.' });
+            res.status(502).json({ error: 'Error al comunicarse con la pasarela de pagos Khipu: ' + (error.message || 'Error de conexión.') });
         }
     });
 });

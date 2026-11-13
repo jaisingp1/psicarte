@@ -81,9 +81,8 @@ function updateThemeUI(theme) {
         ? '<i class="fa-solid fa-sun"></i>'
         : '<i class="fa-solid fa-moon"></i>';
 
-    if (logoImg) logoImg.src = theme === "dark"
-        ? "images/logo_dark.png"
-        : "images/logo_light.png";
+    // Mantener los mismos colores del logo tanto en modo claro como en modo oscuro
+    if (logoImg) logoImg.src = "images/logo_light.png";
     if (accentLogo) accentLogo.src = "images/logo-original.webp";
     if (footerLogo) footerLogo.src = "images/logo_dark.png";
 }

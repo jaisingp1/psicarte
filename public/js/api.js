@@ -81,6 +81,11 @@ function renderContent() {
     const heroSubtitle = document.getElementById("hero-subtitle");
     if (heroTitle) heroTitle.innerText = state.content.heroTitle;
     if (heroSubtitle) heroSubtitle.innerText = state.content.heroSubtitle;
+
+    const servicesTitle = document.getElementById("services-section-title");
+    const servicesSubtitle = document.getElementById("services-section-subtitle");
+    if (servicesTitle && state.content.servicesTitle) servicesTitle.innerText = state.content.servicesTitle;
+    if (servicesSubtitle && state.content.servicesSubtitle) servicesSubtitle.innerText = state.content.servicesSubtitle;
     
     // These elements live on nosotros.html; guard against null on index.html
     const presShort = document.getElementById("presentation-text-short");
@@ -121,6 +126,11 @@ function renderContent() {
     if (customContactPhone) customContactPhone.value = state.content.contactPhone || '';
     if (customContactAddress) customContactAddress.value = state.content.contactAddress || '';
     if (customInstagramUrl) customInstagramUrl.value = state.config?.instagram_url || '';
+
+    const customServicesTitle = document.getElementById("custom-services-title");
+    const customServicesSubtitle = document.getElementById("custom-services-subtitle");
+    if (customServicesTitle) customServicesTitle.value = state.content.servicesTitle || 'Servicios y Aranceles';
+    if (customServicesSubtitle) customServicesSubtitle.value = state.content.servicesSubtitle || '';
     
     const contactEmailEl = document.getElementById("contact-email");
     const contactPhoneEl = document.getElementById("contact-phone");

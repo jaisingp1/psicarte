@@ -81,10 +81,10 @@ function updateThemeUI(theme) {
         ? '<i class="fa-solid fa-sun"></i>'
         : '<i class="fa-solid fa-moon"></i>';
 
-    // Mantener los mismos colores del logo tanto en modo claro como en modo oscuro
+    // Mantener siempre el logo limpio y de alta fidelidad con su fondo definido
     if (logoImg) logoImg.src = "images/logo_light.png";
     if (accentLogo) accentLogo.src = "images/logo-original.webp";
-    if (footerLogo) footerLogo.src = "images/logo_dark.png";
+    if (footerLogo) footerLogo.src = "images/logo_light.png";
 }
 
 function renderFooterYear() {

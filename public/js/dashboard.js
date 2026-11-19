@@ -105,6 +105,9 @@ function switchDashboardPane(paneId, btn) {
     } else if (paneId === 'admin-theme') {
         initAdminThemeManager();
     }
+    if (paneId === 'admin-content') {
+        renderAdminServiceAreasList();
+    }
 }
 
 function renderDashboardPanes() {
@@ -219,6 +222,9 @@ function renderDashboardPanes() {
         renderAdminAlerts();
         renderRoomsList();
         renderRoomExceptionsList();
+        if (typeof renderAdminServiceAreasList === 'function') {
+            renderAdminServiceAreasList();
+        }
 
         // Populate dropdowns with providers
         const provSelects = [
@@ -1513,7 +1519,9 @@ async function saveContentCustomizations(e) {
         objectives: document.getElementById("custom-objectives").value,
         contactEmail: document.getElementById("custom-contact-email").value,
         contactPhone: document.getElementById("custom-contact-phone").value,
-        contactAddress: document.getElementById("custom-contact-address").value
+        contactAddress: document.getElementById("custom-contact-address").value,
+        servicesTitle: document.getElementById("custom-services-title")?.value || "Servicios y Aranceles",
+        servicesSubtitle: document.getElementById("custom-services-subtitle")?.value || ""
     };
     const instagramInput = document.getElementById("custom-instagram-url");
     const instagramUrl = instagramInput ? instagramInput.value.trim() : "";
@@ -1546,6 +1554,175 @@ async function saveContentCustomizations(e) {
         }
     } catch (e) {
         showToast("Error al guardar contenidos.", "error");
+    }
+}
+
+// ----------------------------------------------------
+// ADMIN SERVICE AREAS (Tarjetas de Servicios y Aranceles)
+// ----------------------------------------------------
+function renderAdminServiceAreasList() {
+    const tbody = document.getElementById("admin-service-areas-tbody");
+    if (!tbody) return;
+
+    const areas = typeof getServiceAreasData === 'function' ? getServiceAreasData() : [];
+    if (areas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 20px;">No hay tarjetas registradas.</td></tr>';
+        return;
+    }
+
+    const esc = typeof escapeHtml === 'function'
+        ? escapeHtml
+        : (str => (str == null ? '' : String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;')));
+
+    tbody.innerHTML = areas.map((area) => {
+        const iconClass = area.icon || 'fa-brain';
+        return `
+            <tr>
+                <td style="text-align: center;">
+                    <span style="display: inline-flex; width: 36px; height: 36px; border-radius: 50%; background: var(--bg-secondary); align-items: center; justify-content: center; color: var(--color-accent); font-size: 1.1rem; border: 1px solid var(--color-border);">
+                        <i class="fa-solid ${iconClass}"></i>
+                    </span>
+                </td>
+                <td><strong>${esc(area.title)}</strong></td>
+                <td style="color: var(--text-secondary); font-size: 0.9rem;">${esc(area.description)}</td>
+                <td>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" class="btn-secondary" style="padding: 5px 8px; font-size: 0.85rem;" onclick="openServiceAreaModal('${area.id}')" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+                        <button type="button" class="btn-secondary" style="padding: 5px 8px; font-size: 0.85rem;" onclick="deleteServiceArea('${area.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function openServiceAreaModal(areaId = null) {
+    const modal = document.getElementById("service-area-modal");
+    if (!modal) return;
+
+    const titleEl = document.getElementById("service-area-modal-title");
+    const idInput = document.getElementById("area-id");
+    const titleInput = document.getElementById("area-title");
+    const iconInput = document.getElementById("area-icon");
+    const descInput = document.getElementById("area-desc");
+
+    if (areaId) {
+        const areas = typeof getServiceAreasData === 'function' ? getServiceAreasData() : [];
+        const area = areas.find(a => a.id === areaId);
+        if (area) {
+            if (titleEl) titleEl.textContent = "Editar Tarjeta de Prestación";
+            if (idInput) idInput.value = area.id;
+            if (titleInput) titleInput.value = area.title;
+            if (iconInput) iconInput.value = area.icon || "fa-brain";
+            if (descInput) descInput.value = area.description;
+        }
+    } else {
+        if (titleEl) titleEl.textContent = "Nueva Tarjeta de Prestación";
+        if (idInput) idInput.value = "";
+        if (titleInput) titleInput.value = "";
+        if (iconInput) iconInput.value = "fa-brain";
+        if (descInput) descInput.value = "";
+    }
+
+    updateAreaIconPreview();
+    modal.classList.add("active");
+}
+
+function closeServiceAreaModal() {
+    const modal = document.getElementById("service-area-modal");
+    if (modal) {
+        modal.classList.remove("active");
+    }
+}
+
+function updateAreaIconPreview() {
+    const iconInput = document.getElementById("area-icon");
+    const preview = document.getElementById("area-icon-preview");
+    if (!iconInput || !preview) return;
+    const val = iconInput.value.trim() || 'fa-brain';
+    preview.innerHTML = `<i class="fa-solid ${val}"></i>`;
+}
+
+async function saveServiceArea(e) {
+    e.preventDefault();
+    const idInput = document.getElementById("area-id");
+    const titleInput = document.getElementById("area-title");
+    const iconInput = document.getElementById("area-icon");
+    const descInput = document.getElementById("area-desc");
+
+    const id = idInput.value.trim();
+    const title = titleInput.value.trim();
+    const icon = iconInput.value.trim() || "fa-brain";
+    const description = descInput.value.trim();
+
+    if (!title || !description) {
+        showToast("Por favor completa el título y la descripción.", "error");
+        return;
+    }
+
+    let areas = [...(typeof getServiceAreasData === 'function' ? getServiceAreasData() : [])];
+    if (id) {
+        const idx = areas.findIndex(a => a.id === id);
+        if (idx !== -1) {
+            areas[idx] = { ...areas[idx], title, icon, description };
+        } else {
+            areas.push({ id, title, icon, description });
+        }
+    } else {
+        const newId = 'sa-' + Date.now();
+        areas.push({ id: newId, title, icon, description });
+    }
+
+    try {
+        const jsonVal = JSON.stringify(areas);
+        const res = await fetch('/api/content', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ service_areas: jsonVal })
+        });
+
+        if (res.ok) {
+            if (!state.content) state.content = {};
+            state.content.service_areas = jsonVal;
+            closeServiceAreaModal();
+            renderAdminServiceAreasList();
+            if (typeof renderServicesOverviewSection === 'function') {
+                renderServicesOverviewSection();
+            }
+            showToast("Tarjeta de prestación guardada con éxito.", "success");
+        } else {
+            showToast("Error al guardar la tarjeta en el servidor.", "error");
+        }
+    } catch (err) {
+        showToast("Error de conexión al guardar la tarjeta.", "error");
+    }
+}
+
+async function deleteServiceArea(areaId) {
+    if (!confirm("¿Seguro que deseas eliminar esta tarjeta de prestación?")) return;
+
+    let areas = (typeof getServiceAreasData === 'function' ? getServiceAreasData() : []).filter(a => a.id !== areaId);
+    try {
+        const jsonVal = JSON.stringify(areas);
+        const res = await fetch('/api/content', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ service_areas: jsonVal })
+        });
+
+        if (res.ok) {
+            if (!state.content) state.content = {};
+            state.content.service_areas = jsonVal;
+            renderAdminServiceAreasList();
+            if (typeof renderServicesOverviewSection === 'function') {
+                renderServicesOverviewSection();
+            }
+            showToast("Tarjeta eliminada con éxito.", "info");
+        } else {
+            showToast("Error al eliminar la tarjeta.", "error");
+        }
+    } catch (err) {
+        showToast("Error de conexión.", "error");
     }
 }
 

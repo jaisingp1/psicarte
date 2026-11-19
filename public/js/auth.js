@@ -103,33 +103,39 @@ async function processLogin() {
         return;
     }
     
+    let res, data;
     try {
-        const res = await fetch('/api/auth/login', {
+        res = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: pass })
+            body: JSON.stringify({ email: email.trim(), password: pass })
         });
-        const data = await res.json();
+        data = await res.json();
+    } catch (e) {
+        showToast("Error al conectar con el servidor.", "error");
+        return;
+    }
+    
+    if (res.ok) {
+        const user = data.user || {
+            id: data.id,
+            name: data.name,
+            email: data.email,
+            role: data.role
+        };
+        state.currentUser = user;
+        sessionStorage.setItem("psicarte_user", JSON.stringify(user));
+        if (data.token) {
+            setToken(data.token);
+        }
+        showToast(`¡Bienvenido/a, ${user.name || 'usuario'}!`, "success");
         
-        if (res.ok) {
-            const user = data.user || {
-                id: data.id,
-                name: data.name,
-                email: data.email,
-                role: data.role
-            };
-            state.currentUser = user;
-            sessionStorage.setItem("psicarte_user", JSON.stringify(user));
-            if (data.token) {
-                setToken(data.token);
-            }
-            showToast(`¡Bienvenido/a, ${user.name || 'usuario'}!`, "success");
-            
-            // Cargar datos completos para el rol autenticado
-            if (typeof loadAllData === 'function') {
-                await loadAllData();
-            }
+        // Cargar datos completos para el rol autenticado
+        if (typeof loadAllData === 'function') {
+            await loadAllData();
+        }
 
+        try {
             // Redirect to acceso.html or update UI if already there
             const isAccesoPage = window.location.pathname.includes('acceso.html');
             if (isAccesoPage) {
@@ -138,12 +144,12 @@ async function processLogin() {
             } else {
                 window.location.href = 'acceso.html';
             }
-        } else {
-            showToast(data.error || "Acceso incorrecto", "error");
+        } catch (uiErr) {
+            console.error("Error al actualizar la vista tras login:", uiErr);
+            window.location.href = 'acceso.html';
         }
-    } catch (e) {
-        console.error("Error en processLogin:", e);
-        showToast("Error al conectar con el servidor.", "error");
+    } else {
+        showToast(data.error || "Acceso incorrecto", "error");
     }
 }
 

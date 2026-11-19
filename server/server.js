@@ -195,7 +195,12 @@ app.post('/api/auth/login', (req, res) => {
         return res.status(400).json({ error: 'Email y contraseña requeridos.' });
     }
 
-    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
+    const cleanEmail = String(email).trim().toLowerCase();
+    const lookupEmail = (cleanEmail === 'admin' || cleanEmail === 'admin@psicarte.cl')
+        ? 'admin@centropsicarte.cl'
+        : cleanEmail;
+
+    db.get('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [lookupEmail], async (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) {
             return res.status(401).json({ error: 'Credenciales inválidas.' });
@@ -1721,7 +1726,7 @@ app.post('/api/khipu/create-payment', (req, res) => {
             );
         } catch (error) {
             console.error('Error creating Khipu payment:', error.message || error);
-            res.status(502).json({ error: 'Error al comunicarse con la pasarela de pagos Khipu.' });
+            res.status(502).json({ error: 'Error al comunicarse con la pasarela de pagos Khipu: ' + (error.message || 'Error de conexión.') });
         }
     });
 });

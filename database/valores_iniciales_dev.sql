@@ -36,7 +36,10 @@ Desde nuestras distintas áreas de trabajo, abordamos temáticas vinculadas a sa
     (
         'contactAddress',
         'Oficina Virtual Las Bellotas 199, Providencia, RM'
-    );
+    ),
+    ('servicesTitle', 'Servicios y Aranceles'),
+    ('servicesSubtitle', 'Conoce nuestras áreas de acompañamiento integral, modalidades de atención y opciones de cobertura y reembolso.'),
+    ('service_areas', '[{"id":"sa-1","icon":"fa-brain","title":"Psicología Clínica y Laboral","description":"Psicoterapia individual, de parejas, habilidades parentales, evaluaciones psicológicas (relatores/OS-10), certificados e informes clínicos con enfoque ético e integral."},{"id":"sa-2","icon":"fa-compass","title":"Coaching Personal y Profesional","description":"Acompañamiento orientado a metas personales y laborales, fortalecimiento del liderazgo, toma de decisiones, gestión del cambio y proyección vocacional."},{"id":"sa-3","icon":"fa-people-group","title":"Capacitaciones y Habilidades Blandas","description":"Formación individual y grupal en comunicación efectiva, manejo de conflictos, convivencia escolar, bienestar organizacional y prevención de riesgos psicosociales."},{"id":"sa-4","icon":"fa-masks-theater","title":"Talleres, Yoga y Artes Escénicas","description":"Espacios prácticos de teatro, expresión corporal, yoga presencial y venta de obras o intervenciones escénicas para colegios, empresas y comunidades."}]');
 -- 2. Seed Users
 -- Administrador y Prestadores
 INSERT

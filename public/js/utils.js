@@ -1,3 +1,14 @@
+// HTML Escaping Utility
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // Toast Notifications System
 function showToast(message, type = "success") {
     const container = document.getElementById("toast-container");
@@ -102,6 +113,7 @@ function setupEventListeners() {
     if (servicesSearchInput) {
         servicesSearchInput.addEventListener("input", (e) => {
             servicesSearchQuery = e.target.value;
+            servicesCarouselPage = 0;
             renderServicesSection();
         });
     }

@@ -66,6 +66,10 @@ let selectedServicesProviderId = null;
 let servicesSearchQuery = '';
 let selectedServiceType = 'all';
 let servicesView = 'cards';
+let servicesCarouselPage = 0;
+const SERVICES_PER_PAGE = 4;
+let overviewCarouselPage = 0;
+const OVERVIEW_PER_PAGE = 4;
 
 // Calendar Variables
 const now = new Date();

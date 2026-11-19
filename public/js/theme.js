@@ -81,11 +81,10 @@ function updateThemeUI(theme) {
         ? '<i class="fa-solid fa-sun"></i>'
         : '<i class="fa-solid fa-moon"></i>';
 
-    if (logoImg) logoImg.src = theme === "dark"
-        ? "images/logo_dark.png"
-        : "images/logo_light.png";
+    // Mantener siempre el logo limpio y de alta fidelidad con su fondo definido
+    if (logoImg) logoImg.src = "images/logo_light.png";
     if (accentLogo) accentLogo.src = "images/logo-original.webp";
-    if (footerLogo) footerLogo.src = "images/logo_dark.png";
+    if (footerLogo) footerLogo.src = "images/logo_light.png";
 }
 
 function renderFooterYear() {

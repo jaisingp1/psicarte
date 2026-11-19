@@ -134,39 +134,43 @@
 
         <!-- Services Section (Dynamic) -->
         <section id="servicios" class="info-section">
-            <h2 class="section-title">Servicios y Aranceles</h2>
-            <p style="text-align: center; margin-top: -30px; margin-bottom: 32px; color: var(--text-secondary);">
-                Conoce nuestras áreas de acompañamiento integral, modalidades de atención y opciones de cobertura y
-                reembolso.
+            <h2 class="section-title" id="services-section-title">Servicios y Aranceles</h2>
+            <p id="services-section-subtitle" style="text-align: center; margin-top: -30px; margin-bottom: 32px; color: var(--text-secondary);">
+                Conoce nuestras áreas de acompañamiento integral, modalidades de atención y opciones de cobertura y reembolso.
             </p>
 
-            <!-- Definición de Prestaciones -->
-            <div class="services-overview-grid">
-                <div class="service-area-card">
-                    <div class="service-area-icon"><i class="fa-solid fa-brain"></i></div>
-                    <h3>Psicología Clínica y Laboral</h3>
-                    <p>Psicoterapia individual, de parejas, habilidades parentales, evaluaciones psicológicas
-                        (relatores/OS-10), certificados e informes clínicos con enfoque ético e integral.</p>
+            <!-- Definición de Prestaciones (Dinámico con Carrusel) -->
+            <div class="services-overview-carousel-wrapper">
+                <button type="button" class="services-carousel-arrow prev-arrow" id="overview-carousel-prev" onclick="changeOverviewCarouselPage(-1)" aria-label="Ver áreas anteriores" style="display: none;">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <div class="services-overview-grid" id="dynamic-services-overview-container">
+                    <div class="service-area-card">
+                        <div class="service-area-icon"><i class="fa-solid fa-brain"></i></div>
+                        <h3>Psicología Clínica y Laboral</h3>
+                        <p>Psicoterapia individual, de parejas, habilidades parentales, evaluaciones psicológicas (relatores/OS-10), certificados e informes clínicos con enfoque ético e integral.</p>
+                    </div>
+                    <div class="service-area-card">
+                        <div class="service-area-icon"><i class="fa-solid fa-compass"></i></div>
+                        <h3>Coaching Personal y Profesional</h3>
+                        <p>Acompañamiento orientado a metas personales y laborales, fortalecimiento del liderazgo, toma de decisiones, gestión del cambio y proyección vocacional.</p>
+                    </div>
+                    <div class="service-area-card">
+                        <div class="service-area-icon"><i class="fa-solid fa-people-group"></i></div>
+                        <h3>Capacitaciones y Habilidades Blandas</h3>
+                        <p>Formación individual y grupal en comunicación efectiva, manejo de conflictos, convivencia escolar, bienestar organizacional y prevención de riesgos psicosociales.</p>
+                    </div>
+                    <div class="service-area-card">
+                        <div class="service-area-icon"><i class="fa-solid fa-masks-theater"></i></div>
+                        <h3>Talleres, Yoga y Artes Escénicas</h3>
+                        <p>Espacios prácticos de teatro, expresión corporal, yoga presencial y venta de obras o intervenciones escénicas para colegios, empresas y comunidades.</p>
+                    </div>
                 </div>
-                <div class="service-area-card">
-                    <div class="service-area-icon"><i class="fa-solid fa-compass"></i></div>
-                    <h3>Coaching Personal y Profesional</h3>
-                    <p>Acompañamiento orientado a metas personales y laborales, fortalecimiento del liderazgo, toma de
-                        decisiones, gestión del cambio y proyección vocacional.</p>
-                </div>
-                <div class="service-area-card">
-                    <div class="service-area-icon"><i class="fa-solid fa-people-group"></i></div>
-                    <h3>Capacitaciones y Habilidades Blandas</h3>
-                    <p>Formación individual y grupal en comunicación efectiva, manejo de conflictos, convivencia
-                        escolar, bienestar organizacional y prevención de riesgos psicosociales.</p>
-                </div>
-                <div class="service-area-card">
-                    <div class="service-area-icon"><i class="fa-solid fa-masks-theater"></i></div>
-                    <h3>Talleres, Yoga y Artes Escénicas</h3>
-                    <p>Espacios prácticos de teatro, expresión corporal, yoga presencial y venta de obras o
-                        intervenciones escénicas para colegios, empresas y comunidades.</p>
-                </div>
+                <button type="button" class="services-carousel-arrow next-arrow" id="overview-carousel-next" onclick="changeOverviewCarouselPage(1)" aria-label="Ver más áreas" style="display: none;">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
             </div>
+            <div class="services-carousel-dots" id="overview-carousel-dots" style="display: none; margin-top: -10px; margin-bottom: 30px;"></div>
 
             <!-- Cobertura: Boleta de Honorarios, Isapre y Fonasa -->
             <div class="coverage-grid">
@@ -224,9 +228,18 @@
                     </div>
                 </div>
             </div>
-            <div class="services-grid" id="dynamic-services-container">
-                <!-- Rendered dynamically by JS -->
+            <div class="services-carousel-wrapper">
+                <button type="button" class="services-carousel-arrow prev-arrow" id="services-carousel-prev" onclick="changeServicesCarouselPage(-1)" aria-label="Ver servicios anteriores" style="display: none;">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <div class="services-grid" id="dynamic-services-container">
+                    <!-- Rendered dynamically by JS -->
+                </div>
+                <button type="button" class="services-carousel-arrow next-arrow" id="services-carousel-next" onclick="changeServicesCarouselPage(1)" aria-label="Ver más servicios" style="display: none;">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
             </div>
+            <div class="services-carousel-dots" id="services-carousel-dots" style="display: none;"></div>
         </section>
 
         <!-- Booking Widget Section -->
@@ -527,7 +540,7 @@
     <footer>
         <div class="footer-container">
             <div class="footer-info">
-                <img id="footer-logo" src="images/logo_dark.png" alt="PsicArte Logo">
+                <img id="footer-logo" src="images/logo_light.png" alt="PsicArte Logo">
                 <p>Centro Integral PsicArte está orientado al acompañamiento terapéutico, el desarrollo de capacidades
                     artísticas y corporales, y la promoción del autocuidado y la salud mental.</p>
             </div>

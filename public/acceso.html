@@ -759,8 +759,49 @@
                                 <input type="url" id="custom-instagram-url" class="form-control"
                                     placeholder="https://www.instagram.com/tu_cuenta/">
                             </div>
+
+                            <h4 style="margin-top: 30px; margin-bottom: 12px; border-top: 1px solid var(--color-border); padding-top: 20px;">
+                                <i class="fa-solid fa-hand-holding-dollar"></i> Sección Servicios y Aranceles
+                            </h4>
+                            <div class="form-group">
+                                <label for="custom-services-title">Título de la Sección Servicios y Aranceles:</label>
+                                <input type="text" id="custom-services-title" class="form-control" placeholder="Servicios y Aranceles">
+                            </div>
+                            <div class="form-group">
+                                <label for="custom-services-subtitle">Subtítulo / Descripción de la Sección:</label>
+                                <textarea id="custom-services-subtitle" class="form-control edit-content-textarea"
+                                    placeholder="Conoce nuestras áreas de acompañamiento integral, modalidades de atención y opciones de cobertura y reembolso."></textarea>
+                            </div>
+
                             <button type="submit" class="btn-primary">Publicar Cambios</button>
                         </form>
+
+                        <!-- Card Manager for Áreas de Prestación / Servicios y Aranceles -->
+                        <div class="card" style="margin-top: 30px; box-shadow: none; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 24px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                                <div>
+                                    <h4 style="margin: 0;"><i class="fa-solid fa-shapes"></i> Tarjetas de Prestaciones (Áreas de Acompañamiento)</h4>
+                                    <small style="color: var(--text-secondary);">Estas son las tarjetas que se muestran en la sección "Servicios y Aranceles" (con carrusel si hay más de 4).</small>
+                                </div>
+                                <button type="button" class="btn-primary" onclick="openServiceAreaModal()"><i class="fa-solid fa-plus"></i> Nueva Tarjeta</button>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="admin-table" style="width: 100%;">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 60px;">Icono</th>
+                                            <th style="width: 220px;">Título</th>
+                                            <th>Descripción</th>
+                                            <th style="width: 100px;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-service-areas-tbody">
+                                        <!-- Rendered dynamically by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="pane-admin-bookings" class="dashboard-pane">
@@ -1238,7 +1279,7 @@
     <footer>
         <div class="footer-container">
             <div class="footer-info">
-                <img id="footer-logo" src="images/logo_dark.png" alt="PsicArte Logo">
+                <img id="footer-logo" src="images/logo_light.png" alt="PsicArte Logo">
                 <p>Centro Integral PsicArte está orientado al acompañamiento terapéutico, el desarrollo de capacidades
                     artísticas y corporales, y la promoción del autocuidado y la salud mental.</p>
             </div>
@@ -1528,6 +1569,53 @@
                 <button type="button" class="btn-secondary" onclick="closeMasterServiceModal()">Cancelar</button>
                 <button type="button" class="btn-primary" onclick="submitMasterService()">Guardar Servicio</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal para Añadir / Editar Tarjeta de Prestación -->
+    <div id="service-area-modal" class="modal-overlay" onclick="if (event.target === this) closeServiceAreaModal();">
+        <div class="modal-container" style="max-width: 550px;">
+            <div class="modal-header">
+                <h3 id="service-area-modal-title">Editar Tarjeta de Prestación</h3>
+                <button type="button" class="modal-close" onclick="closeServiceAreaModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="service-area-form" onsubmit="saveServiceArea(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="area-id">
+                    <div class="form-group">
+                        <label for="area-title">Título del Área / Prestación:</label>
+                        <input type="text" id="area-title" class="form-control" required placeholder="Ej: Psicología Clínica y Laboral">
+                    </div>
+                    <div class="form-group">
+                        <label for="area-icon">Icono:</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <span id="area-icon-preview" style="width: 42px; height: 42px; border-radius: 50%; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; font-size: 1.25rem; color: var(--color-accent); border: 1px solid var(--color-border); flex-shrink: 0;"><i class="fa-solid fa-brain"></i></span>
+                            <input type="text" id="area-icon" class="form-control" required placeholder="fa-brain" oninput="updateAreaIconPreview()">
+                            <select class="form-control" style="width: 170px;" onchange="document.getElementById('area-icon').value=this.value; updateAreaIconPreview();">
+                                <option value="">(Sugerencias)</option>
+                                <option value="fa-brain">fa-brain (Mente / Psicología)</option>
+                                <option value="fa-compass">fa-compass (Coaching)</option>
+                                <option value="fa-people-group">fa-people-group (Grupos)</option>
+                                <option value="fa-masks-theater">fa-masks-theater (Artes)</option>
+                                <option value="fa-spa">fa-spa (Yoga / Zen)</option>
+                                <option value="fa-heart-pulse">fa-heart-pulse (Salud)</option>
+                                <option value="fa-hands-holding-child">fa-hands-holding-child (Familia)</option>
+                                <option value="fa-book-open">fa-book-open (Educación)</option>
+                                <option value="fa-scale-balanced">fa-scale-balanced (Peritajes)</option>
+                                <option value="fa-comments">fa-comments (Comunicación)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="area-desc">Descripción:</label>
+                        <textarea id="area-desc" class="form-control edit-content-textarea" rows="4" required placeholder="Describe las atenciones y actividades de esta área..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn-secondary" onclick="closeServiceAreaModal()">Cancelar</button>
+                    <button type="submit" class="btn-primary">Guardar Tarjeta</button>
+                </div>
+            </form>
         </div>
     </div>
 

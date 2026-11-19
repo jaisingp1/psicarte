@@ -52,19 +52,21 @@ function renderSidebarMenu() {
     } else if (state.currentUser.role === "prestador") {
         menuList.innerHTML = `
             <li><button class="sidebar-btn active" onclick="switchDashboardPane('provider-schedule', this)"><i class="fa-solid fa-clipboard-list"></i> Mi Agenda</button></li>
-            <li><button class="sidebar-btn" onclick="switchDashboardPane('provider-blocks', this)"><i class="fa-solid fa-calendar-minus"></i> Bloqueos</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('provider-blocks', this)"><i class="fa-solid fa-umbrella-beach"></i> Mis Vacaciones</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('provider-meet', this)"><i class="fa-solid fa-video"></i> Conexión Google Meet</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('community-articles', this)"><i class="fa-solid fa-newspaper"></i> Noticias y artículos</button></li>
         `;
     } else if (state.currentUser.role === "administrador") {
         menuList.innerHTML = `
             <li><button class="sidebar-btn active" onclick="switchDashboardPane('admin-my-bookings', this)"><i class="fa-solid fa-calendar-check"></i> Mis Reservas</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-my-profile', this)"><i class="fa-solid fa-user-gear"></i> Mis Datos</button></li>
-            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-rooms', this)"><i class="fa-solid fa-building"></i> Salas</button></li>
-            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-room-schedule', this)"><i class="fa-solid fa-calendar-days"></i> Agenda de Salas</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-rooms', this)"><i class="fa-solid fa-building"></i> Salas y Franjas</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-room-schedule', this)"><i class="fa-solid fa-calendar-days"></i> Agenda de Salas (5m)</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-providers', this)"><i class="fa-solid fa-user-doctor"></i> Servicios</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-bookings', this)"><i class="fa-solid fa-calendar-days"></i> Reservas Globales</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-users', this)"><i class="fa-solid fa-user-shield"></i> Gestión de Usuarios</button></li>
-            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-blocks', this)"><i class="fa-solid fa-calendar-minus"></i> Bloqueos Horarios</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-blocks', this)"><i class="fa-solid fa-umbrella-beach"></i> Vacaciones</button></li>
+            <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-google-meet', this)"><i class="fa-solid fa-video"></i> Google Meet</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-popups', this)"><i class="fa-solid fa-bullhorn"></i> Alertas y Pop-ups</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-calendar', this)"><i class="fa-solid fa-calendar-week"></i> Calendario Comun.</button></li>
             <li><button class="sidebar-btn" onclick="switchDashboardPane('admin-content', this)"><i class="fa-solid fa-file-pen"></i> Personalizar Textos</button></li>
@@ -81,12 +83,26 @@ function switchDashboardPane(paneId, btn) {
     btn.classList.add("active");
 
     document.querySelectorAll(".dashboard-pane").forEach(p => p.classList.remove("active"));
-    document.getElementById(`pane-${paneId}`).classList.add("active");
+    const targetPane = document.getElementById(`pane-${paneId}`);
+    if (targetPane) targetPane.classList.add("active");
 
     if (paneId === 'admin-room-schedule') {
         setTimeout(() => renderRoomSchedule(), 100);
-    }
-    if (paneId === 'admin-theme') {
+    } else if (paneId === 'admin-rooms') {
+        renderRoomsList();
+        renderRoomExceptionsList();
+    } else if (paneId === 'admin-providers') {
+        renderMasterServicesTable();
+        renderProvidersServicesTable();
+    } else if (paneId === 'admin-blocks') {
+        renderAdminVacations();
+    } else if (paneId === 'admin-google-meet') {
+        renderGoogleAccountsTable();
+    } else if (paneId === 'provider-blocks') {
+        renderProviderVacations();
+    } else if (paneId === 'provider-meet') {
+        renderProviderGoogleAccounts();
+    } else if (paneId === 'admin-theme') {
         initAdminThemeManager();
     }
 }
@@ -99,7 +115,7 @@ function renderDashboardPanes() {
         const bookingsList = document.getElementById("client-bookings-list");
         if (!bookingsList) return;
 
-        const clientBookings = state.bookings.filter(b => b.clientEmail === state.currentUser.email);
+        const clientBookings = state.bookings.filter(b => b.clientEmail === state.currentUser.email || b.clientId === state.currentUser.id);
 
         if (clientBookings.length === 0) {
             bookingsList.innerHTML = '<p style="color: var(--text-secondary);">No tienes agendamientos registrados.</p>';
@@ -118,7 +134,7 @@ function renderDashboardPanes() {
 
                         // Find the service for this booking
                         const provider = state.providers.find(p => p.id === bk.providerId);
-                        const service = provider?.services.find(s => s.id === bk.serviceId);
+                        const service = provider?.services.find(s => s.id === bk.serviceId) || (state.services || []).find(s => s.id === bk.serviceId);
 
                         // Check if reschedule is allowed for this service
                         const serviceAllowsReschedule = service ? service.allowReschedule !== 0 : true;
@@ -133,13 +149,21 @@ function renderDashboardPanes() {
                     cancelBtn = '<span class="badge badge-cancelled">Cancelado</span>';
                 }
 
+                let meetHtml = "";
+                if (bk.meet_link) {
+                    meetHtml = `<p style="margin-top: 8px;"><a href="${bk.meet_link}" target="_blank" rel="noopener noreferrer" class="btn-primary" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; font-size: 0.85rem; text-decoration: none;"><i class="fa-solid fa-video"></i> Unirse a Google Meet</a></p>`;
+                } else if (bk.meet_status === 'pending') {
+                    meetHtml = `<p style="margin-top: 8px;"><span class="badge badge-warning" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem;"><i class="fa-solid fa-clock"></i> Link de Google Meet pendiente</span></p>`;
+                }
+
                 bookingsList.innerHTML += `
                     <div class="booking-list-item">
                         <div class="booking-list-info">
                             <h4>${bk.serviceName}</h4>
-                            <p><i class="fa-solid fa-user-doctor"></i> Profesional: ${state.providers.find(p => p.id === bk.providerId)?.name || 'Especialista'}</p>
-                            <p><i class="fa-solid fa-calendar"></i> Fecha y Hora: ${bk.date} @ ${bk.timeSlot}</p>
+                            <p><i class="fa-solid fa-user-doctor"></i> Profesional: ${state.providers.find(p => p.id === bk.providerId)?.name || bk.providerName || 'Especialista'}</p>
+                            <p><i class="fa-solid fa-calendar"></i> Fecha y Hora: ${bk.date} @ ${bk.startTime ? `${bk.startTime} - ${bk.endTime}` : bk.timeSlot}</p>
                             <p><i class="fa-solid fa-door-open"></i> Sala: ${bk.roomName}</p>
+                            ${meetHtml}
                         </div>
                         <div class="booking-list-status">
                             ${isCancelled ? '' : isPaidBadge}
@@ -154,120 +178,89 @@ function renderDashboardPanes() {
 
     if (role === "prestador") {
         const tbody = document.getElementById("provider-bookings-table");
-        if (!tbody) return;
+        if (tbody) {
+            const provBookings = state.bookings.filter(b => b.providerId === state.currentUser.id);
 
-        const provBookings = state.bookings.filter(b => b.providerId === state.currentUser.id);
-
-        if (provBookings.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">No tienes reservas en tu agenda.</td></tr>';
-        } else {
-            tbody.innerHTML = "";
-            provBookings.forEach(bk => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td><strong>${bk.date}</strong><br>${bk.timeSlot}</td>
-                        <td>${bk.clientName}<br><small>${bk.clientPhone}</small></td>
-                        <td>${bk.serviceName}</td>
-                        <td>${bk.roomName}</td>
-                        <td>
-                            <span class="badge ${bk.status === 'Paid' ? 'badge-paid' : bk.status === 'Cancelled' ? 'badge-cancelled' : bk.status === 'Pending_Payment' ? 'badge-warning' : 'badge-pending'}">
-                                ${bk.status === 'Paid' ? 'Pagado' : bk.status === 'Cancelled' ? 'Cancelado' : bk.status === 'Pending_Payment' ? 'Procesando Pago' : 'Pendiente'}
-                            </span>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        const blockList = document.getElementById("provider-blocks-list");
-        if (blockList) {
-            const blocks = state.sicknessBlocks.filter(b => b.providerId === state.currentUser.id);
-
-            if (blocks.length === 0) {
-                blockList.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">No tienes bloqueos de agenda.</td></tr>';
+            if (provBookings.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary);">No tienes reservas en tu agenda.</td></tr>';
             } else {
-                blockList.innerHTML = "";
-                blocks.forEach(b => {
-                    blockList.innerHTML += `
+                tbody.innerHTML = "";
+                provBookings.forEach(bk => {
+                    let meetCell = "-";
+                    if (bk.meet_link) {
+                        meetCell = `<a href="${bk.meet_link}" target="_blank" class="btn-primary" style="padding: 4px 8px; font-size: 0.8rem; text-decoration: none;" title="Abrir Google Meet"><i class="fa-solid fa-video"></i></a> <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="promptEditMeetLink('${bk.id}', '${bk.meet_link}')" title="Editar enlace"><i class="fa-solid fa-pencil"></i></button>`;
+                    } else if (bk.meet_status === 'pending') {
+                        meetCell = `<span class="badge badge-warning" style="font-size: 0.75rem;">Pendiente</span> <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="retryMeetGeneration('${bk.id}')" title="Reintentar"><i class="fa-solid fa-rotate-right"></i></button> <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="promptEditMeetLink('${bk.id}', '')" title="Ingresar enlace"><i class="fa-solid fa-link"></i></button>`;
+                    }
+
+                    tbody.innerHTML += `
                         <tr>
-                            <td>${b.date}</td>
-                            <td>${b.timeSlot === 'all' ? 'Todo el día' : b.timeSlot}</td>
-                            <td>${b.reason}</td>
-                            <td><button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteBlock('${b.id}')"><i class="fa-solid fa-trash"></i></button></td>
+                            <td><strong>${bk.date}</strong><br>${bk.startTime ? `${bk.startTime} - ${bk.endTime}` : bk.timeSlot}</td>
+                            <td>${bk.clientName}<br><small>${bk.clientPhone || bk.clientEmail || ''}</small></td>
+                            <td>${bk.serviceName}</td>
+                            <td>${bk.roomName}</td>
+                            <td>
+                                <span class="badge ${bk.status === 'Paid' ? 'badge-paid' : bk.status === 'Cancelled' ? 'badge-cancelled' : bk.status === 'Pending_Payment' ? 'badge-warning' : 'badge-pending'}">
+                                    ${bk.status === 'Paid' ? 'Pagado' : bk.status === 'Cancelled' ? 'Cancelado' : bk.status === 'Pending_Payment' ? 'Procesando Pago' : 'Pendiente'}
+                                </span>
+                            </td>
+                            <td>${meetCell}</td>
                         </tr>
                     `;
                 });
             }
         }
+
+        renderProviderVacations();
+        renderProviderGoogleAccounts();
     }
 
     if (role === "administrador") {
-        const roomsList = document.getElementById("admin-rooms-list");
-        if (roomsList) {
-            roomsList.innerHTML = "";
-            state.rooms.forEach(r => {
-                const linkBadge = r.type === 'Virtual' && r.meeting_link
-                    ? `<br><small style="color: var(--text-secondary);"><i class="fa-solid fa-video"></i> <a href="${r.meeting_link}" target="_blank" rel="noopener noreferrer">${r.meeting_link}</a></small>`
-                    : '';
-                roomsList.innerHTML += `
-                    <tr>
-                        <td><strong>${r.name}</strong>${linkBadge}</td>
-                        <td>${r.type}</td>
-                        <td>${r.openTime} a ${r.closeTime}</td>
-                        <td class="action-btns">
-                            <button class="btn-secondary" style="padding: 6px 10px;" onclick="editRoom('${r.id}')"><i class="fa-solid fa-pencil"></i></button>
-                            <button class="btn-secondary" style="padding: 6px 10px;" onclick="deleteRoom('${r.id}')"><i class="fa-solid fa-trash"></i></button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
+        renderAdminAlerts();
+        renderRoomsList();
+        renderRoomExceptionsList();
 
-        const provServicesList = document.getElementById("admin-providers-services-list");
-        if (!provServicesList) {
-            const dropdowns = [
-                document.getElementById("adm-serv-provider"),
-                document.getElementById("adm-block-provider")
-            ];
-            dropdowns.forEach(dd => { if (dd) dd.innerHTML = ""; });
-            state.providers.forEach(p => {
-                dropdowns.forEach(dd => {
-                    if (dd) dd.innerHTML += `<option value="${p.id}">${p.name}</option>`;
-                });
-            });
-
-            // Also populate room select for services
-            populateRoomSelects();
-        }
-
-        renderProvidersServicesTable();
-
-        // Ensure room select is populated for service form
-        const servRoomSelect = document.getElementById("adm-serv-room");
-        if (servRoomSelect && servRoomSelect.options.length <= 1) {
-            populateRoomSelects();
-        }
-
-        const adminBlocksList = document.getElementById("admin-blocks-list");
-        if (adminBlocksList) {
-            if (state.sicknessBlocks.length === 0) {
-                adminBlocksList.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">No hay bloqueos registrados.</td></tr>';
-            } else {
-                adminBlocksList.innerHTML = "";
-                state.sicknessBlocks.forEach(sb => {
-                    const provName = state.providers.find(p => p.id === sb.providerId)?.name || 'Prestador';
-                    adminBlocksList.innerHTML += `
-                        <tr>
-                            <td><strong>${provName}</strong></td>
-                            <td>${sb.date}</td>
-                            <td>${sb.timeSlot === 'all' ? 'Todo el día' : sb.timeSlot}</td>
-                            <td>${sb.reason}</td>
-                            <td><button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteBlock('${sb.id}')"><i class="fa-solid fa-trash"></i></button></td>
-                        </tr>
-                    `;
-                });
+        // Populate dropdowns with providers
+        const provSelects = [
+            document.getElementById("adm-serv-provider"),
+            document.getElementById("adm-vac-provider"),
+            document.getElementById("meet-oauth-provider"),
+            document.getElementById("exc-provider-id")
+        ];
+        provSelects.forEach(sel => {
+            if (sel) {
+                const prevVal = sel.value;
+                sel.innerHTML = state.providers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+                if (prevVal) sel.value = prevVal;
             }
+        });
+
+        // Populate room selects
+        const roomSelects = [
+            document.getElementById("exc-room-id"),
+            document.getElementById("meet-oauth-room")
+        ];
+        roomSelects.forEach(sel => {
+            if (sel) {
+                const prevVal = sel.value;
+                sel.innerHTML = state.rooms.map(r => `<option value="${r.id}">${r.name} (${r.type})</option>`).join('');
+                if (prevVal) sel.value = prevVal;
+            }
+        });
+
+        // Populate master service select
+        const servMasterSelect = document.getElementById("adm-serv-master-select");
+        if (servMasterSelect) {
+            const prevVal = servMasterSelect.value;
+            servMasterSelect.innerHTML = (state.services || []).map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+            if (prevVal) servMasterSelect.value = prevVal;
         }
+
+        populateRoomSelects();
+        renderMasterServicesTable();
+        renderProvidersServicesTable();
+        renderAdminVacations();
+        renderGoogleAccountsTable();
 
         const adminActivitiesTable = document.getElementById("admin-activities-table");
         if (adminActivitiesTable) {
@@ -330,14 +323,20 @@ function renderDashboardPanes() {
 async function cancelBooking(id) {
     if (confirm("¿Está seguro de que desea cancelar esta reserva? Las reservas confirmadas no tienen devolución, pero el cupo será liberado.")) {
         try {
-            const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/bookings/${id}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
             if (res.ok) {
                 showToast("Reserva cancelada con éxito.", "success");
                 await loadAllData();
                 renderDashboardPanes();
                 updateSlotsView();
+            } else {
+                const err = await res.json();
+                showToast(err.error || "Error al cancelar reserva.", "error");
             }
-        } catch (e) {
+        } catch {
             showToast("Error de conexión.", "error");
         }
     }
@@ -351,10 +350,10 @@ async function saveClientProfile(e) {
     const phone = document.getElementById("profile-phone").value;
 
     try {
-        const res = await fetch('/api/clients', {
-            method: 'POST',
+        const res = await fetch(`/api/users/${state.currentUser.id}`, {
+            method: 'PUT',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ email: state.currentUser.email, name, rut, phone })
+            body: JSON.stringify({ name, rut, phone })
         });
 
         if (res.ok) {
@@ -363,114 +362,353 @@ async function saveClientProfile(e) {
             showToast("Perfil actualizado correctamente.", "success");
             await loadAllData();
             updateAuthUI();
+        } else {
+            const err = await res.json();
+            showToast(err.error || "No fue posible actualizar el perfil.", "error");
         }
-    } catch (e) {
+    } catch {
         showToast("Error de conexión.", "error");
     }
 }
 
-// Sickness blocks actions
-async function addProviderBlock(e) {
+// Provider & Admin Vacations actions
+async function saveProviderVacation(e) {
     e.preventDefault();
-    const date = document.getElementById("block-date").value;
-    const time = document.getElementById("block-time").value;
-    const reason = document.getElementById("block-reason").value;
-
-    const newBlock = {
-        id: "sb-" + Date.now(),
-        providerId: state.currentUser.id,
-        date: date,
-        timeSlot: time,
-        reason: reason
-    };
+    const startDate = document.getElementById("prov-vac-start-date").value;
+    const endDate = document.getElementById("prov-vac-end-date").value;
+    const startTime = document.getElementById("prov-vac-start-time").value || null;
+    const endTime = document.getElementById("prov-vac-end-time").value || null;
+    const reason = document.getElementById("prov-vac-reason").value;
 
     try {
-        const res = await fetch('/api/blocks', {
+        const res = await fetch('/api/vacations', {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify(newBlock)
+            body: JSON.stringify({
+                provider_id: state.currentUser.id,
+                start_date: startDate,
+                end_date: endDate,
+                start_time: startTime,
+                end_time: endTime,
+                reason
+            })
         });
+        const data = await res.json();
         if (res.ok) {
-            showToast("Bloqueo registrado con éxito. Las horas ya no estarán disponibles.", "success");
-            document.getElementById("provider-block-form").reset();
+            showToast("Vacaciones registradas con éxito.", "success");
+            document.getElementById("provider-vacation-form").reset();
             await loadAllData();
-            renderDashboardPanes();
-            updateSlotsView();
+            renderProviderVacations();
+        } else {
+            showToast(data.error || "Error al registrar vacaciones.", "error");
         }
-    } catch (e) {
-        showToast("Error al guardar bloqueo.", "error");
+    } catch {
+        showToast("Error de conexión al guardar vacaciones.", "error");
     }
 }
 
-async function addAdminBlock(e) {
+async function saveAdminVacation(e) {
     e.preventDefault();
-    const provId = document.getElementById("adm-block-provider").value;
-    const date = document.getElementById("adm-block-date").value;
-    const time = document.getElementById("adm-block-time").value;
-    const reason = document.getElementById("adm-block-reason").value;
-
-    const newBlock = {
-        id: "sb-" + Date.now(),
-        providerId: provId,
-        date: date,
-        timeSlot: time,
-        reason: reason
-    };
+    const provId = document.getElementById("adm-vac-provider").value;
+    const startDate = document.getElementById("adm-vac-start-date").value;
+    const endDate = document.getElementById("adm-vac-end-date").value;
+    const startTime = document.getElementById("adm-vac-start-time").value || null;
+    const endTime = document.getElementById("adm-vac-end-time").value || null;
+    const reason = document.getElementById("adm-vac-reason").value;
 
     try {
-        const res = await fetch('/api/blocks', {
+        const res = await fetch('/api/vacations', {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify(newBlock)
+            body: JSON.stringify({
+                provider_id: provId,
+                start_date: startDate,
+                end_date: endDate,
+                start_time: startTime,
+                end_time: endTime,
+                reason
+            })
         });
+        const data = await res.json();
         if (res.ok) {
-            showToast("Bloqueo administrativo guardado con éxito.", "success");
-            document.getElementById("admin-block-form").reset();
+            showToast("Vacaciones guardadas con éxito.", "success");
+            document.getElementById("admin-vacation-form").reset();
             await loadAllData();
-            renderDashboardPanes();
-            updateSlotsView();
+            renderAdminVacations();
+        } else {
+            showToast(data.error || "Error al registrar vacaciones.", "error");
         }
-    } catch (e) {
-        showToast("Error al registrar bloqueo.", "error");
+    } catch {
+        showToast("Error de conexión al registrar vacaciones.", "error");
     }
 }
 
-async function deleteBlock(id) {
+async function deleteVacation(id) {
+    if (!confirm("¿Estás seguro de eliminar este registro de vacaciones?")) return;
     try {
-        const res = await fetch(`/api/blocks/${id}`, {
+        const res = await fetch(`/api/vacations/${id}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
         if (res.ok) {
-            showToast("Bloqueo eliminado.", "success");
+            showToast("Registro de vacaciones eliminado.", "success");
             await loadAllData();
-            renderDashboardPanes();
-            updateSlotsView();
+            if (state.currentUser.role === 'administrador') {
+                renderAdminVacations();
+            } else {
+                renderProviderVacations();
+            }
+        } else {
+            showToast("Error al eliminar vacaciones.", "error");
         }
-    } catch (e) {
-        showToast("Error al eliminar.", "error");
+    } catch {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+async function renderAdminVacations() {
+    const listEl = document.getElementById("admin-vacations-list");
+    if (!listEl) return;
+    try {
+        const res = await fetch('/api/vacations', { headers: getAuthHeaders() });
+        if (!res.ok) return;
+        const vacations = await res.json();
+        if (vacations.length === 0) {
+            listEl.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 15px;">No hay vacaciones registradas.</td></tr>';
+            return;
+        }
+        listEl.innerHTML = vacations.map(v => {
+            const timeStr = v.start_time ? `${v.start_time} - ${v.end_time || ''}` : 'Todo el día';
+            return `
+                <tr>
+                    <td><strong>${v.provider_name || 'Prestador'}</strong></td>
+                    <td>${v.start_date}</td>
+                    <td>${v.end_date}</td>
+                    <td>${timeStr}</td>
+                    <td>${v.reason}</td>
+                    <td>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteVacation('${v.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error("Error al cargar vacaciones:", err);
+    }
+}
+
+async function renderProviderVacations() {
+    const listEl = document.getElementById("provider-vacations-list");
+    if (!listEl) return;
+    try {
+        const res = await fetch('/api/vacations', { headers: getAuthHeaders() });
+        if (!res.ok) return;
+        const allVacations = await res.json();
+        const myVacations = allVacations.filter(v => v.provider_id === state.currentUser.id);
+        if (myVacations.length === 0) {
+            listEl.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 15px;">No tienes vacaciones registradas.</td></tr>';
+            return;
+        }
+        listEl.innerHTML = myVacations.map(v => {
+            const timeStr = v.start_time ? `${v.start_time} - ${v.end_time || ''}` : 'Todo el día';
+            return `
+                <tr>
+                    <td>${v.start_date}</td>
+                    <td>${v.end_date}</td>
+                    <td>${timeStr}</td>
+                    <td>${v.reason}</td>
+                    <td>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteVacation('${v.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error("Error al cargar vacaciones del prestador:", err);
     }
 }
 
 // Room Management actions
 let editingRoomId = null;
 
+function toggleRoomTypeFields() {
+    const type = document.getElementById("room-type")?.value;
+    const meetGroup = document.getElementById("room-meet-group");
+    const capGroup = document.getElementById("room-capacity-group");
+    if (type === "Virtual") {
+        if (meetGroup) meetGroup.style.display = "block";
+        if (capGroup) capGroup.style.display = "none";
+    } else {
+        if (meetGroup) meetGroup.style.display = "none";
+        if (capGroup) capGroup.style.display = "block";
+    }
+}
+
+function toggleRoomServicesSelect() {
+    const allowAll = document.getElementById("room-allow-all-services")?.checked;
+    const container = document.getElementById("room-services-container");
+    if (!container) return;
+    if (allowAll) {
+        container.style.display = "none";
+    } else {
+        container.style.display = "block";
+        const checks = document.getElementById("room-services-checkboxes");
+        if (checks) {
+            checks.innerHTML = (state.services || []).map(s => `
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
+                    <input type="checkbox" class="room-service-check" value="${s.id}"> ${s.name}
+                </label>
+            `).join('');
+        }
+    }
+}
+
+function addRoomShiftRow(shiftData = null) {
+    const builder = document.getElementById("room-shifts-builder");
+    if (!builder) return;
+
+    const shiftDiv = document.createElement("div");
+    shiftDiv.className = "room-shift-item card";
+    shiftDiv.style.boxShadow = "none";
+    shiftDiv.style.border = "1px solid var(--color-border)";
+    shiftDiv.style.padding = "14px";
+    shiftDiv.style.background = "var(--bg-card)";
+
+    const days = [
+        { id: 1, name: "Lunes" },
+        { id: 2, name: "Martes" },
+        { id: 3, name: "Miércoles" },
+        { id: 4, name: "Jueves" },
+        { id: 5, name: "Viernes" },
+        { id: 6, name: "Sábado" },
+        { id: 7, name: "Domingo" }
+    ];
+
+    const dayOptions = days.map(d => `<option value="${d.id}" ${shiftData?.day_of_week == d.id ? 'selected' : ''}>${d.name}</option>`).join('');
+    const providerOptions = state.providers.map(p => `<option value="${p.id}" ${shiftData?.provider_id == p.id ? 'selected' : ''}>${p.name}</option>`).join('');
+
+    shiftDiv.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <strong style="color: var(--text-primary); font-size: 0.95rem;"><i class="fa-solid fa-clock" style="color: var(--color-accent); margin-right: 6px;"></i> Franja Horaria</strong>
+            <button type="button" class="btn-secondary" style="padding: 3px 8px; font-size: 0.8rem; color: var(--color-error);" onclick="this.closest('.room-shift-item').remove()" title="Eliminar franja"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Día de la Semana:</label>
+                <select class="form-control shift-day">${dayOptions}</select>
+            </div>
+            <div class="form-group">
+                <label>Prestador Asignado:</label>
+                <select class="form-control shift-provider">${providerOptions}</select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Hora Inicio:</label>
+                <input type="time" class="form-control shift-start" value="${shiftData?.start_time || '09:00'}" required>
+            </div>
+            <div class="form-group">
+                <label>Hora Término:</label>
+                <input type="time" class="form-control shift-end" value="${shiftData?.end_time || '18:00'}" required>
+            </div>
+        </div>
+        <div style="margin-top: 10px; border-top: 1px dashed var(--color-border); padding-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Descansos dentro de la franja (ej: almuerzo)</span>
+                <button type="button" class="btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="addShiftBreakRow(this)"><i class="fa-solid fa-plus"></i> Descanso</button>
+            </div>
+            <div class="shift-breaks-container" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+    `;
+
+    builder.appendChild(shiftDiv);
+
+    if (shiftData?.breaks && Array.isArray(shiftData.breaks)) {
+        const breaksContainer = shiftDiv.querySelector('.shift-breaks-container');
+        shiftData.breaks.forEach(b => {
+            addShiftBreakRow(breaksContainer, b);
+        });
+    }
+}
+
+function addShiftBreakRow(btnOrContainer, breakData = null) {
+    const container = btnOrContainer.classList && btnOrContainer.classList.contains('shift-breaks-container')
+        ? btnOrContainer
+        : btnOrContainer.closest('.room-shift-item').querySelector('.shift-breaks-container');
+    if (!container) return;
+
+    const row = document.createElement("div");
+    row.className = "shift-break-row";
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "8px";
+
+    row.innerHTML = `
+        <span style="font-size: 0.8rem; color: var(--text-secondary);">De</span>
+        <input type="time" class="form-control break-start" style="padding: 4px 8px; font-size: 0.85rem; width: auto;" value="${breakData?.start_time || '13:00'}" required>
+        <span style="font-size: 0.8rem; color: var(--text-secondary);">a</span>
+        <input type="time" class="form-control break-end" style="padding: 4px 8px; font-size: 0.85rem; width: auto;" value="${breakData?.end_time || '14:00'}" required>
+        <button type="button" class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="this.closest('.shift-break-row').remove()" title="Eliminar descanso"><i class="fa-solid fa-xmark"></i></button>
+    `;
+    container.appendChild(row);
+}
+
 async function saveRoom(e) {
     e.preventDefault();
-    const name = document.getElementById("room-name").value;
+    const name = document.getElementById("room-name").value.trim();
     const type = document.getElementById("room-type").value;
-    const open = document.getElementById("room-open").value;
-    const close = document.getElementById("room-close").value;
-    const meetingLinkEl = document.getElementById("room-meeting-link");
-    const meetingLink = meetingLinkEl ? meetingLinkEl.value.trim() : "";
+    const capacity = parseInt(document.getElementById("room-capacity")?.value || '1', 10);
+    const meetEnabled = document.getElementById("room-meet-enabled")?.checked ? 1 : 0;
+    const minAdvance = parseInt(document.getElementById("room-min-advance")?.value || '0', 10);
+    const maxAdvance = parseInt(document.getElementById("room-max-advance")?.value || '60', 10);
+    const allowAllServices = document.getElementById("room-allow-all-services")?.checked ? 1 : 0;
+
+    let serviceIds = [];
+    if (!allowAllServices) {
+        document.querySelectorAll(".room-service-check:checked").forEach(cb => {
+            serviceIds.push(cb.value);
+        });
+    }
+
+    // Gather shifts from builder
+    const shifts = [];
+    document.querySelectorAll(".room-shift-item").forEach(item => {
+        const dayOfWeek = parseInt(item.querySelector(".shift-day")?.value || '1', 10);
+        const providerId = item.querySelector(".shift-provider")?.value;
+        const startTime = item.querySelector(".shift-start")?.value;
+        const endTime = item.querySelector(".shift-end")?.value;
+
+        const breaks = [];
+        item.querySelectorAll(".shift-break-row").forEach(brow => {
+            const bStart = brow.querySelector(".break-start")?.value;
+            const bEnd = brow.querySelector(".break-end")?.value;
+            if (bStart && bEnd) {
+                breaks.push({ start_time: bStart, end_time: bEnd });
+            }
+        });
+
+        if (providerId && startTime && endTime) {
+            shifts.push({
+                day_of_week: dayOfWeek,
+                provider_id: providerId,
+                start_time: startTime,
+                end_time: endTime,
+                breaks
+            });
+        }
+    });
 
     const roomPayload = {
         id: editingRoomId || crypto.randomUUID(),
         name,
         type,
-        openTime: open,
-        closeTime: close,
-        meeting_link: meetingLink
+        capacity,
+        meet_enabled: meetEnabled,
+        min_advance_min: minAdvance,
+        max_advance_days: maxAdvance,
+        allow_all_services: allowAllServices,
+        service_ids: serviceIds,
+        shifts
     };
 
     try {
@@ -481,50 +719,253 @@ async function saveRoom(e) {
         });
         const result = await res.json();
         if (res.ok) {
-            showToast(result.message || (editingRoomId ? "Sala editada con éxito." : "Sala creada correctamente."), result.scheduleUpdated === false ? "info" : "success");
-            editingRoomId = null;
-            document.getElementById("admin-room-form").reset();
+            showToast(editingRoomId ? "Sala actualizada con éxito." : "Sala creada correctamente.", "success");
+            cancelEditRoom();
             await loadAllData();
             renderDashboardPanes();
             updateSlotsView();
         } else {
             showToast(result.error || "No fue posible guardar la sala.", "error");
         }
-    } catch (e) {
+    } catch {
         showToast("Error al guardar sala.", "error");
     }
 }
 
+function cancelEditRoom() {
+    editingRoomId = null;
+    const form = document.getElementById("admin-room-form");
+    if (form) form.reset();
+    const builder = document.getElementById("room-shifts-builder");
+    if (builder) builder.innerHTML = "";
+    const cancelBtn = document.getElementById("btn-cancel-room");
+    if (cancelBtn) cancelBtn.style.display = "none";
+    const saveBtn = document.getElementById("btn-save-room");
+    if (saveBtn) saveBtn.innerText = "Añadir / Guardar Sala";
+    toggleRoomTypeFields();
+    toggleRoomServicesSelect();
+}
+
 function editRoom(id) {
     const room = state.rooms.find(r => r.id === id);
-    if (room) {
-        document.getElementById("room-name").value = room.name;
-        document.getElementById("room-type").value = room.type;
-        document.getElementById("room-open").value = room.openTime;
-        document.getElementById("room-close").value = room.closeTime;
-        const meetingLinkEl = document.getElementById("room-meeting-link");
-        if (meetingLinkEl) meetingLinkEl.value = room.meeting_link || "";
-        editingRoomId = id;
-        document.getElementById("pane-admin-rooms").scrollIntoView({ behavior: 'smooth' });
+    if (!room) return;
+
+    editingRoomId = id;
+    document.getElementById("room-name").value = room.name || "";
+    document.getElementById("room-type").value = room.type || "Física";
+    if (document.getElementById("room-capacity")) {
+        document.getElementById("room-capacity").value = room.capacity || 1;
     }
+    if (document.getElementById("room-meet-enabled")) {
+        document.getElementById("room-meet-enabled").checked = room.meet_enabled === 1;
+    }
+    if (document.getElementById("room-min-advance")) {
+        document.getElementById("room-min-advance").value = room.min_advance_min || 0;
+    }
+    if (document.getElementById("room-max-advance")) {
+        document.getElementById("room-max-advance").value = room.max_advance_days || 60;
+    }
+    if (document.getElementById("room-allow-all-services")) {
+        document.getElementById("room-allow-all-services").checked = room.allow_all_services !== 0;
+    }
+
+    toggleRoomTypeFields();
+    toggleRoomServicesSelect();
+
+    if (room.allow_all_services === 0 && Array.isArray(room.service_ids)) {
+        document.querySelectorAll(".room-service-check").forEach(cb => {
+            cb.checked = room.service_ids.includes(cb.value);
+        });
+    }
+
+    const builder = document.getElementById("room-shifts-builder");
+    if (builder) {
+        builder.innerHTML = "";
+        if (Array.isArray(room.shifts) && room.shifts.length > 0) {
+            room.shifts.forEach(s => addRoomShiftRow(s));
+        }
+    }
+
+    const cancelBtn = document.getElementById("btn-cancel-room");
+    if (cancelBtn) cancelBtn.style.display = "inline-block";
+    const saveBtn = document.getElementById("btn-save-room");
+    if (saveBtn) saveBtn.innerText = "Guardar Cambios de Sala";
+
+    const pane = document.getElementById("pane-admin-rooms");
+    if (pane) pane.scrollIntoView({ behavior: 'smooth' });
 }
 
 async function deleteRoom(id) {
-    if (confirm("¿Estás seguro de eliminar esta sala?")) {
-        try {
-            const res = await fetch(`/api/rooms/${id}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders()
-            });
-            if (res.ok) {
-                showToast("Sala eliminada.", "success");
-                await loadAllData();
-                renderDashboardPanes();
-            }
-        } catch (e) {
-            showToast("Error de conexión.", "error");
+    if (!confirm("¿Estás seguro de eliminar esta sala? Se eliminarán sus franjas y configuraciones asociadas.")) return;
+    try {
+        const res = await fetch(`/api/rooms/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        if (res.ok) {
+            showToast("Sala eliminada.", "success");
+            await loadAllData();
+            renderDashboardPanes();
+        } else {
+            const data = await res.json();
+            showToast(data.error || "Error al eliminar sala.", "error");
         }
+    } catch {
+        showToast("Error de conexión.", "error");
     }
+}
+
+function renderRoomsList() {
+    const listEl = document.getElementById("admin-rooms-list");
+    if (!listEl) return;
+    if (state.rooms.length === 0) {
+        listEl.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 15px;">No hay salas creadas.</td></tr>';
+        return;
+    }
+
+    listEl.innerHTML = state.rooms.map(r => {
+        const typeBadge = r.type === 'Virtual'
+            ? `<span class="badge" style="background: var(--color-online); color: var(--color-online-text);">Virtual</span>`
+            : `<span class="badge" style="background: var(--color-in-person); color: var(--color-in-person-text);">Física</span>`;
+        const capInfo = r.type === 'Virtual'
+            ? (r.meet_enabled ? '<span style="color: var(--color-success);"><i class="fa-solid fa-video"></i> Google Meet Activo</span>' : 'Google Meet Inactivo')
+            : `Capacidad: ${r.capacity || 1} (Cupo efectivo: 1)`;
+        const shiftCount = Array.isArray(r.shifts) ? r.shifts.length : 0;
+        const advanceInfo = `${r.min_advance_min || 0}m mín / ${r.max_advance_days || 60}d máx`;
+
+        return `
+            <tr>
+                <td><strong>${r.name}</strong></td>
+                <td>${typeBadge}</td>
+                <td>${capInfo}</td>
+                <td>${shiftCount} franjas semanales</td>
+                <td><small>${advanceInfo}</small></td>
+                <td class="action-btns">
+                    <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editRoom('${r.id}')" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+                    <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteRoom('${r.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Room Exceptions Management
+function toggleExceptionFields() {
+    const type = document.getElementById("exc-type")?.value;
+    const shiftFields = document.getElementById("exc-shift-fields");
+    if (!shiftFields) return;
+    if (type === "close_day") {
+        shiftFields.style.display = "none";
+    } else {
+        shiftFields.style.display = "flex";
+    }
+}
+
+async function saveRoomException(e) {
+    e.preventDefault();
+    const roomId = document.getElementById("exc-room-id")?.value;
+    const date = document.getElementById("exc-date")?.value;
+    const type = document.getElementById("exc-type")?.value;
+    const providerId = document.getElementById("exc-provider-id")?.value || null;
+    const startTime = document.getElementById("exc-start-time")?.value || null;
+    const endTime = document.getElementById("exc-end-time")?.value || null;
+    const reason = document.getElementById("exc-reason")?.value;
+
+    if (!roomId || !date || !type) {
+        showToast("Completa los campos obligatorios.", "error");
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/rooms/${roomId}/exceptions`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                exception_date: date,
+                exception_type: type,
+                provider_id: providerId,
+                start_time: startTime,
+                end_time: endTime,
+                reason
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast("Excepción registrada correctamente.", "success");
+            document.getElementById("admin-room-exception-form").reset();
+            toggleExceptionFields();
+            await loadAllData();
+            renderRoomExceptionsList();
+        } else {
+            showToast(data.error || "Error al registrar excepción.", "error");
+        }
+    } catch {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+async function deleteRoomException(id) {
+    if (!confirm("¿Estás seguro de eliminar esta excepción?")) return;
+    try {
+        const res = await fetch(`/api/room-exceptions/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        if (res.ok) {
+            showToast("Excepción eliminada.", "success");
+            await loadAllData();
+            renderRoomExceptionsList();
+        } else {
+            showToast("Error al eliminar excepción.", "error");
+        }
+    } catch {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+async function renderRoomExceptionsList() {
+    const listEl = document.getElementById("admin-room-exceptions-list");
+    if (!listEl) return;
+
+    let allExceptions = [];
+    state.rooms.forEach(r => {
+        if (Array.isArray(r.exceptions)) {
+            r.exceptions.forEach(exc => {
+                allExceptions.push({ ...exc, room_name: r.name });
+            });
+        }
+    });
+
+    if (allExceptions.length === 0) {
+        listEl.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 15px;">No hay excepciones activas registradas.</td></tr>';
+        return;
+    }
+
+    const typeLabels = {
+        'close_day': 'Cerrar día',
+        'delete_shift': 'Eliminar franja',
+        'modify_shift': 'Modificar franja',
+        'add_shift': 'Franja extraordinaria'
+    };
+
+    listEl.innerHTML = allExceptions.map(exc => {
+        const typeLabel = typeLabels[exc.exception_type] || exc.exception_type;
+        const provName = exc.provider_name || state.providers.find(p => p.id === exc.provider_id)?.name || '-';
+        const detail = exc.start_time ? `${exc.start_time} - ${exc.end_time || ''} (${provName})` : '-';
+
+        return `
+            <tr>
+                <td><strong>${exc.room_name}</strong></td>
+                <td>${exc.exception_date}</td>
+                <td><span class="badge badge-warning">${typeLabel}</span></td>
+                <td>${detail}</td>
+                <td>${exc.reason || '-'}</td>
+                <td>
+                    <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteRoomException('${exc.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 // Providers & Services Admin
@@ -631,9 +1072,8 @@ function renderProvidersServicesTable() {
                 : `<span style="color: var(--color-success);">Sí (máx. ${r.maxReschedules})</span>`;
             const actions = r.serviceId
                 ? `<div class="action-btns">
-                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editService('${r.providerId}', '${r.serviceId}')" title="Editar"><i class="fa-solid fa-pencil"></i></button>
-                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="generateServiceSpots('${r.serviceId}')" title="Generar Spots"><i class="fa-solid fa-calendar-plus"></i></button>
-                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteService('${r.providerId}', '${r.serviceId}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editProviderService('${r.providerId}', '${r.serviceId}', ${r.duration}, ${r.price})" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteProviderService('${r.serviceId}', '${r.providerId}')" title="Eliminar Asignación"><i class="fa-solid fa-trash"></i></button>
                     </div>`
                 : '<span style="color: var(--text-secondary); font-size: 0.85rem;">Sin servicios</span>';
             return `<tr>
@@ -739,259 +1179,231 @@ function exportProvidersServicesExcel() {
     showToast(`Exportadas ${rows.length} filas.`, "success");
 }
 
-function collectServiceAgendaConfig() {
-    const recurrence = document.querySelector('input[name="adm-serv-recurrence"]:checked').value;
-    const selectedRoomId = document.getElementById("adm-serv-room").value;
-    const roomIds = selectedRoomId ? [selectedRoomId] : [];
-    if (!roomIds.length) throw new Error('Configura al menos una sala antes de crear la agenda.');
+// Master Services Catalog actions
+function openMasterServiceModal(serviceId = null) {
+    const modal = document.getElementById("master-service-modal");
+    if (!modal) return;
+    const titleEl = document.getElementById("master-service-modal-title");
+    const idInput = document.getElementById("master-service-id");
+    const nameInput = document.getElementById("master-service-name");
+    const descInput = document.getElementById("master-service-desc");
+    const minAdvInput = document.getElementById("master-service-min-advance");
+    const maxAdvInput = document.getElementById("master-service-max-advance");
+    const allowResched = document.getElementById("master-service-allow-reschedule");
+    const maxResched = document.getElementById("master-service-max-reschedules");
 
-    if (recurrence === 'single') {
-        const specificDate = document.getElementById("adm-serv-single-date").value;
-        const startTime = document.getElementById("adm-serv-single-start").value;
-        const endTime = document.getElementById("adm-serv-single-end").value;
-        if (!specificDate || !startTime || !endTime || startTime >= endTime) {
-            throw new Error('Indica una fecha y un rango horario válido para el servicio.');
+    if (serviceId) {
+        const s = (state.services || []).find(x => x.id === serviceId);
+        if (s) {
+            if (titleEl) titleEl.innerText = "Editar Servicio del Catálogo";
+            if (idInput) idInput.value = s.id;
+            if (nameInput) nameInput.value = s.name || "";
+            if (descInput) descInput.value = s.description || "";
+            if (minAdvInput) minAdvInput.value = s.min_advance_min || 0;
+            if (maxAdvInput) maxAdvInput.value = s.max_advance_days || 60;
+            if (allowResched) allowResched.checked = s.allowReschedule !== 0;
+            if (maxResched) maxResched.value = s.maxReschedules || 1;
         }
-        return { recurrence, roomIds, specificDate, startTime, endTime };
+    } else {
+        if (titleEl) titleEl.innerText = "Nuevo Servicio en Catálogo";
+        if (idInput) idInput.value = "";
+        if (nameInput) nameInput.value = "";
+        if (descInput) descInput.value = "";
+        if (minAdvInput) minAdvInput.value = 0;
+        if (maxAdvInput) maxAdvInput.value = 60;
+        if (allowResched) allowResched.checked = true;
+        if (maxResched) maxResched.value = 1;
     }
-
-    const days = [...document.querySelectorAll('.agenda-weekday-check:checked')]
-        .map(input => Number(input.value));
-    const startDate = document.getElementById("adm-serv-recurrence-start-date").value;
-    const endDate = document.getElementById("adm-serv-recurrence-end-date").value || null;
-    if (!days.length || !startDate || (endDate && endDate < startDate)) {
-        throw new Error('Selecciona al menos un día y un rango de fechas válido para la recurrencia.');
-    }
-
-    const timeRanges = {};
-    for (const day of days) {
-        const container = document.querySelector(`.agenda-time-ranges[data-day="${day}"]`);
-        const ranges = [...container.querySelectorAll('.agenda-time-range')].map(row => ({
-            start: row.querySelector('.agenda-range-start').value,
-            end: row.querySelector('.agenda-range-end').value
-        })).sort((a, b) => a.start.localeCompare(b.start));
-        if (!ranges.length || ranges.some(range => !range.start || !range.end || range.start >= range.end)) {
-            throw new Error('Revisa los intervalos horarios de cada día seleccionado.');
-        }
-        for (let index = 1; index < ranges.length; index += 1) {
-            if (ranges[index].start < ranges[index - 1].end) {
-                throw new Error('Los intervalos de un mismo día no pueden superponerse.');
-            }
-        }
-        timeRanges[String(day)] = ranges;
-    }
-
-    const starts = Object.values(timeRanges).flat().map(range => range.start).sort();
-    const ends = Object.values(timeRanges).flat().map(range => range.end).sort();
-    return {
-        recurrence,
-        roomIds,
-        startDate,
-        endDate,
-        startTime: starts[0],
-        endTime: ends[ends.length - 1],
-        recurrenceRule: JSON.stringify({
-            freq: 'WEEKLY',
-            interval: 1,
-            byweekday: days,
-            dtstart: startDate,
-            time_ranges: timeRanges
-        })
-    };
+    modal.classList.add("active");
 }
 
-async function createServiceAgendas(serviceId, providerId, agendaConfig) {
-    let spotsGenerated = 0;
-    for (const roomId of agendaConfig.roomIds) {
-        const associationResponse = await fetch(`/api/services/${serviceId}/rooms`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ room_id: roomId })
-        });
-        const associationResult = await associationResponse.json();
-        if (!associationResponse.ok) {
-            throw new Error(associationResult.error || 'No se pudo asociar la sala al servicio.');
-        }
-
-        const agendaPayload = {
-            provider_id: providerId,
-            service_id: serviceId,
-            room_id: roomId,
-            type: agendaConfig.recurrence === 'weekly' ? 'recurrent' : 'punctual',
-            recurrence_rule: agendaConfig.recurrenceRule || null,
-            specific_date: agendaConfig.specificDate || null,
-            start_time: agendaConfig.startTime,
-            end_time: agendaConfig.endTime,
-            start_date: agendaConfig.startDate || null,
-            end_date: agendaConfig.endDate || null
-        };
-        const agendaResponse = await fetch('/api/agendas', {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(agendaPayload)
-        });
-        const agendaResult = await agendaResponse.json();
-        if (!agendaResponse.ok) {
-            throw new Error(agendaResult.error || 'No se pudo crear la agenda.');
-        }
-        if (agendaResult.errors?.length) throw new Error(agendaResult.errors.join(' '));
-
-        const publishResponse = await fetch(`/api/agendas/${agendaResult.id}/publish`, {
-            method: 'POST',
-            headers: getAuthHeaders()
-        });
-        const publishResult = await publishResponse.json();
-        if (!publishResponse.ok) {
-            throw new Error(publishResult.error || 'La agenda se creó, pero no se pudo publicar.');
-        }
-        spotsGenerated += publishResult.spotsGenerated || 0;
-    }
-    return spotsGenerated;
+function closeMasterServiceModal() {
+    const modal = document.getElementById("master-service-modal");
+    if (modal) modal.classList.remove("active");
 }
 
-function resetAgendaTimeRanges() {
-    document.querySelectorAll('.agenda-time-ranges').forEach(container => {
-        const rows = [...container.querySelectorAll('.agenda-time-range')];
-        rows.slice(1).forEach(row => row.remove());
-    });
-}
+async function submitMasterService() {
+    const id = document.getElementById("master-service-id")?.value;
+    const name = document.getElementById("master-service-name")?.value.trim();
+    const description = document.getElementById("master-service-desc")?.value.trim();
+    const minAdvance = parseInt(document.getElementById("master-service-min-advance")?.value || '0', 10);
+    const maxAdvance = parseInt(document.getElementById("master-service-max-advance")?.value || '60', 10);
+    const allowReschedule = document.getElementById("master-service-allow-reschedule")?.checked ? 1 : 0;
+    const maxReschedules = parseInt(document.getElementById("master-service-max-reschedules")?.value || '1', 10);
 
-function addAgendaTimeRange(day) {
-    const container = document.querySelector(`.agenda-time-ranges[data-day="${day}"]`);
-    if (!container) return;
-    const row = document.createElement('div');
-    row.className = 'agenda-time-range';
-    row.innerHTML = `
-        <label>Desde <input type="time" class="agenda-range-start" value="14:00"></label>
-        <label>Hasta <input type="time" class="agenda-range-end" value="18:00"></label>
-        <button type="button" class="btn-secondary agenda-remove-range">Quitar</button>
-    `;
-    row.querySelector('.agenda-remove-range').addEventListener('click', () => row.remove());
-    container.appendChild(row);
-}
-
-function setServiceScheduleEditable(isEditable) {
-    const roomSelect = document.getElementById('adm-serv-room');
-    if (roomSelect) {
-        roomSelect.disabled = !isEditable;
-        roomSelect.required = isEditable;
-    }
-    document.querySelectorAll(
-        'input[name="adm-serv-recurrence"], #single-date-config input, #recurrence-config input, #recurrence-config button'
-    ).forEach(input => { input.disabled = !isEditable; });
-    const note = document.getElementById('service-schedule-locked-note');
-    if (note) note.hidden = isEditable;
-}
-
-async function addService(e) {
-    e.preventDefault();
-    const provId = document.getElementById("adm-serv-provider").value;
-    const name = document.getElementById("adm-serv-name").value;
-    const price = Number(document.getElementById("adm-serv-price").value);
-    const duration = Number(document.getElementById("adm-serv-duration").value);
-    const roomId = document.getElementById("adm-serv-room").value || null;
-    const serviceType = roomId ? (state.rooms.find(r => r.id === roomId)?.type || 'Presencial') : 'Virtual';
-    const allowReschedule = document.getElementById("adm-serv-allow-reschedule").checked;
-    const maxReschedules = Number(document.getElementById("adm-serv-max-reschedules").value) || 1;
-    let agendaConfig;
-    try {
-        agendaConfig = collectServiceAgendaConfig();
-    } catch (error) {
-        showToast(error.message, "error");
+    if (!name) {
+        showToast("El nombre del servicio es obligatorio.", "error");
         return;
     }
-    const serviceId = crypto.randomUUID();
+
+    const payload = {
+        name,
+        description,
+        min_advance_min: minAdvance,
+        max_advance_days: maxAdvance,
+        allowReschedule,
+        maxReschedules
+    };
 
     try {
-        const res = await fetch('/api/services', {
-            method: 'POST',
+        const url = id ? `/api/services/${id}` : '/api/services';
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+            method,
             headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id: serviceId, providerId: provId, name, price, duration,
-                type: serviceType,
-                allowReschedule, maxReschedules
-            })
+            body: JSON.stringify(payload)
         });
-        const result = await res.json();
-        if (!res.ok) throw new Error(result.error || "No se pudo guardar el servicio.");
-        const spotsGenerated = await createServiceAgendas(serviceId, provId, agendaConfig);
-        showToast(`Servicio y agenda publicados. Horarios disponibles generados: ${spotsGenerated}.`, "success");
-        document.getElementById("admin-service-form").reset();
-        setServiceScheduleEditable(true);
-        resetAgendaTimeRanges();
-        document.getElementById("adm-serv-allow-reschedule").checked = true;
-        document.getElementById("adm-serv-max-reschedules").value = "1";
-        document.getElementById("adm-serv-max-reschedules-container").style.display = "block";
-        document.getElementById("recurrence-config").style.display = "none";
-        document.getElementById("single-date-config").style.display = "block";
-        await loadAllData();
-        renderDashboardPanes();
-        renderServicesSection();
-    } catch (e) {
-        showToast(`El servicio puede haberse guardado, pero la agenda no se completó: ${e.message}`, "error");
-    }
-}
-
-async function deleteService(provId, servId) {
-    try {
-        const res = await fetch(`/api/services/${servId}`, {
-            method: 'DELETE',
-            headers: getAuthHeaders()
-        });
+        const data = await res.json();
         if (res.ok) {
-            showToast("Servicio eliminado.", "success");
+            showToast(id ? "Servicio actualizado." : "Servicio creado en el catálogo.", "success");
+            closeMasterServiceModal();
             await loadAllData();
             renderDashboardPanes();
             renderServicesSection();
-        }
-    } catch (e) {
-        showToast("Error al eliminar.", "error");
-    }
-}
-
-// Generate spots for a specific service
-async function generateServiceSpots(serviceId) {
-    try {
-        showToast("Generando spots...", "info");
-        const res = await fetch(`/api/services/${serviceId}/generate-spots`, {
-            method: 'POST',
-            headers: getAuthHeaders()
-        });
-        const result = await res.json();
-
-        if (res.ok) {
-            const message = `Agendas procesadas: ${result.agendasProcessed}. Horarios generados: ${result.spotsGenerated}. Conflictos: ${result.conflicts}.`;
-            showToast(result.errors?.length ? `${message} ${result.errors.join(' ')}` : message, result.errors?.length ? "info" : "success");
-            await loadAllData();
-            renderDashboardPanes();
         } else {
-            showToast(result.error || "Error al generar spots.", "error");
+            showToast(data.error || "Error al guardar servicio.", "error");
         }
-    } catch (e) {
+    } catch {
         showToast("Error de conexión.", "error");
     }
 }
 
-// Generate spots for ALL services
-async function generateAllSpots() {
+async function deleteMasterService(id) {
+    if (!confirm("¿Estás seguro de eliminar este servicio del catálogo? Se desvinculará de todos los prestadores.")) return;
     try {
-        showToast("Generando spots para todos los servicios...", "info");
-        const res = await fetch('/api/services/generate-all-spots', {
-            method: 'POST',
+        const res = await fetch(`/api/services/${id}`, {
+            method: 'DELETE',
             headers: getAuthHeaders()
         });
-        const result = await res.json();
-
         if (res.ok) {
-            const message = `Agendas procesadas: ${result.agendasProcessed}. Horarios generados: ${result.spotsGenerated}. Conflictos: ${result.conflicts}.`;
-            showToast(result.errors?.length ? `${message} ${result.errors.join(' ')}` : message, result.errors?.length ? "info" : "success");
+            showToast("Servicio eliminado del catálogo.", "success");
             await loadAllData();
             renderDashboardPanes();
-            renderRoomSchedule();
+            renderServicesSection();
         } else {
-            showToast(result.error || "Error al generar spots.", "error");
+            const data = await res.json();
+            showToast(data.error || "Error al eliminar servicio.", "error");
         }
-    } catch (e) {
+    } catch {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+function renderMasterServicesTable() {
+    const listEl = document.getElementById("admin-master-services-list");
+    if (!listEl) return;
+    const services = state.services || [];
+    if (services.length === 0) {
+        listEl.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 15px;">No hay servicios en el catálogo.</td></tr>';
+        return;
+    }
+
+    listEl.innerHTML = services.map(s => {
+        const reschedInfo = s.allowReschedule !== 0 ? `<span style="color: var(--color-success);">Sí (máx. ${s.maxReschedules || 1})</span>` : '<span style="color: var(--color-error);">No</span>';
+        const advInfo = `${s.min_advance_min || 0}m mín / ${s.max_advance_days || 60}d máx`;
+        return `
+            <tr>
+                <td><strong>${s.name}</strong></td>
+                <td><small style="color: var(--text-secondary);">${s.description || '-'}</small></td>
+                <td><small>${advInfo}</small></td>
+                <td>${reschedInfo}</td>
+                <td>
+                    <div class="action-btns">
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="openMasterServiceModal('${s.id}')" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteMasterService('${s.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Provider-Service Assignment actions
+async function saveProviderService(e) {
+    e.preventDefault();
+    const providerId = document.getElementById("adm-serv-provider")?.value;
+    const serviceId = document.getElementById("adm-serv-master-select")?.value;
+    const duration = parseInt(document.getElementById("adm-serv-duration")?.value || '50', 10);
+    const price = parseInt(document.getElementById("adm-serv-price")?.value || '0', 10);
+
+    if (!providerId || !serviceId) {
+        showToast("Selecciona el prestador y el servicio.", "error");
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/services/${serviceId}/providers`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                provider_id: providerId,
+                duration,
+                price
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast("Asignación de servicio guardada con éxito.", "success");
+            cancelEditProviderService();
+            await loadAllData();
+            renderDashboardPanes();
+            renderServicesSection();
+        } else {
+            showToast(data.error || "Error al asignar servicio.", "error");
+        }
+    } catch {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+function editProviderService(provId, servId, dur, price) {
+    const provSelect = document.getElementById("adm-serv-provider");
+    const servSelect = document.getElementById("adm-serv-master-select");
+    const durInput = document.getElementById("adm-serv-duration");
+    const priceInput = document.getElementById("adm-serv-price");
+    const title = document.getElementById("provider-service-form-title");
+    const cancelBtn = document.getElementById("btn-cancel-provider-service");
+    const saveBtn = document.getElementById("btn-save-provider-service");
+
+    if (provSelect) provSelect.value = provId;
+    if (servSelect) servSelect.value = servId;
+    if (durInput) durInput.value = dur;
+    if (priceInput) priceInput.value = price;
+    if (title) title.innerText = "Editar Asignación de Servicio";
+    if (cancelBtn) cancelBtn.style.display = "inline-block";
+    if (saveBtn) saveBtn.innerText = "Guardar Cambios";
+
+    const form = document.getElementById("admin-service-form");
+    if (form) form.scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelEditProviderService() {
+    const form = document.getElementById("admin-service-form");
+    if (form) form.reset();
+    const title = document.getElementById("provider-service-form-title");
+    const cancelBtn = document.getElementById("btn-cancel-provider-service");
+    const saveBtn = document.getElementById("btn-save-provider-service");
+    if (title) title.innerText = "Asignar Servicio a Prestador";
+    if (cancelBtn) cancelBtn.style.display = "none";
+    if (saveBtn) saveBtn.innerText = "Guardar Asignación";
+}
+
+async function deleteProviderService(serviceId, providerId) {
+    if (!confirm("¿Estás seguro de quitar este servicio de este prestador?")) return;
+    try {
+        const res = await fetch(`/api/services/${serviceId}/providers/${providerId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        if (res.ok) {
+            showToast("Asignación de servicio eliminada.", "success");
+            await loadAllData();
+            renderDashboardPanes();
+            renderServicesSection();
+        } else {
+            showToast("Error al eliminar asignación.", "error");
+        }
+    } catch {
         showToast("Error de conexión.", "error");
     }
 }
@@ -1196,7 +1608,7 @@ function renderAdminBookings() {
     const pageRows = filtered.slice(start, start + ADMIN_BOOKINGS_PER_PAGE);
 
     if (pageRows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);">No hay reservas registradas.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-secondary);">No hay reservas registradas.</td></tr>';
     } else {
         tbody.innerHTML = "";
         pageRows.forEach(bk => {
@@ -1206,18 +1618,26 @@ function renderAdminBookings() {
                 ? '<span class="badge badge-cancelled">Cancelada</span>'
                 : bk.status === 'Paid' ? '<span class="badge badge-paid">Pagada</span>' : (bk.status === 'Pending_Payment' ? '<span class="badge badge-warning">Procesando Pago</span>' : '<span class="badge badge-pending">Pendiente</span>');
 
+            let meetCell = "-";
+            if (bk.meet_link) {
+                meetCell = `<a href="${bk.meet_link}" target="_blank" rel="noopener noreferrer" class="btn-primary" style="padding: 4px 8px; font-size: 0.8rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="Abrir Google Meet"><i class="fa-solid fa-video"></i></a> <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="promptEditMeetLink('${bk.id}', '${bk.meet_link}')" title="Editar enlace"><i class="fa-solid fa-pencil"></i></button>`;
+            } else if (bk.meet_status === 'pending') {
+                meetCell = `<span class="badge badge-warning" style="font-size: 0.75rem;"><i class="fa-solid fa-clock"></i> Pendiente</span> <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="retryMeetGeneration('${bk.id}')" title="Reintentar"><i class="fa-solid fa-rotate-right"></i></button> <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="promptEditMeetLink('${bk.id}', '')" title="Ingresar enlace"><i class="fa-solid fa-link"></i></button>`;
+            }
+
             const actionBtns = isCancelled
                 ? `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="purgeBooking('${bk.id}')"><i class="fa-solid fa-trash"></i> Eliminar</button>`
-                : `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="cancelBooking('${bk.id}')"><i class="fa-solid fa-ban"></i></button>`;
+                : `<button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="openMoveModal('${bk.id}')" title="Mover cita"><i class="fa-solid fa-arrows-up-down-left-right"></i> Mover</button> <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; margin-left: 4px;" onclick="cancelBooking('${bk.id}')" title="Cancelar cita"><i class="fa-solid fa-ban"></i></button>`;
 
             tbody.innerHTML += `
                 <tr>
-                    <td><strong>${bk.date}</strong><br>${bk.timeSlot}</td>
+                    <td><strong>${bk.date}</strong><br>${bk.startTime ? `${bk.startTime} - ${bk.endTime}` : bk.timeSlot}</td>
                     <td>${bk.clientName}<br><small>${bk.clientEmail}</small></td>
                     <td>${provName}</td>
                     <td>${bk.serviceName}</td>
                     <td>${bk.roomName}</td>
                     <td>${statusBadge}</td>
+                    <td>${meetCell}</td>
                     <td>${actionBtns}</td>
                 </tr>
             `;
@@ -1264,21 +1684,23 @@ function exportAdminBookingsExcel() {
     }
 
     const statusMap = { 'Cancelled': 'Cancelada', 'Paid': 'Pagada', 'Pending_Payment': 'Procesando Pago' };
-    const headers = ['Fecha', 'Hora', 'Cliente', 'Email', 'Prestador', 'Servicio', 'Sala', 'Estado'];
+    const headers = ['Fecha', 'Hora', 'Cliente', 'Email', 'Prestador', 'Servicio', 'Sala', 'Estado', 'Google Meet'];
     const csvRows = [headers.join(';')];
 
     rows.forEach(bk => {
         const provName = state.providers.find(p => p.id === bk.providerId)?.name || '';
         const status = statusMap[bk.status] || 'Pendiente';
+        const meet = bk.meet_link || (bk.meet_status === 'pending' ? 'Link pendiente' : '-');
         const line = [
             `"${bk.date || ''}"`,
-            `"${bk.timeSlot || ''}"`,
+            `"${bk.startTime ? `${bk.startTime} - ${bk.endTime}` : (bk.timeSlot || '')}"`,
             `"${bk.clientName || ''}"`,
             `"${bk.clientEmail || ''}"`,
             `"${provName}"`,
             `"${bk.serviceName || ''}"`,
             `"${bk.roomName || ''}"`,
-            `"${status}"`
+            `"${status}"`,
+            `"${meet}"`
         ].join(';');
         csvRows.push(line);
     });
@@ -1297,13 +1719,16 @@ function exportAdminBookingsExcel() {
 async function purgeBooking(id) {
     if (confirm("¿Estás seguro de eliminar esta reserva permanentemente? Esta acción no se puede deshacer.")) {
         try {
-            const res = await fetch(`/api/bookings/${id}/purge`, { method: 'DELETE' });
+            const res = await fetch(`/api/bookings/${id}/purge`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
             if (res.ok) {
                 showToast("Reserva eliminada permanentemente.", "success");
                 await loadAllData();
                 renderAdminBookings();
             }
-        } catch (e) {
+        } catch {
             showToast("Error de conexión.", "error");
         }
     }
@@ -1314,123 +1739,321 @@ function startAdminBooking() {
     window.location.href = 'index.html#agendamiento';
 }
 
-
-
 // ----------------------------------------------------
-// SERVICE EDIT MODE
+// GOOGLE MEET OAUTH & MANUAL LINK MANAGEMENT (Option A)
 // ----------------------------------------------------
-let editingServiceId = null;
-
-async function editService(provId, servId) {
-    const provider = state.providers.find(p => p.id === provId);
-    if (!provider) return;
-    const service = provider.services.find(s => s.id === servId);
-    if (!service) return;
-
-    editingServiceId = servId;
-
-    document.getElementById("adm-serv-provider").value = provId;
-    document.getElementById("adm-serv-name").value = service.name;
-    document.getElementById("adm-serv-price").value = service.price;
-    document.getElementById("adm-serv-duration").value = service.duration;
-
-    setServiceScheduleEditable(true);
-    resetAgendaTimeRanges();
-    document.querySelectorAll('.agenda-weekday-check').forEach(input => { input.checked = false; });
-
-    const roomSelect = document.getElementById("adm-serv-room");
-    let matchedRoomId = service.roomId || '';
-
+async function startProviderGoogleOAuth() {
+    const roomSelect = document.getElementById("prov-meet-room-select");
+    const roomId = roomSelect?.value;
+    if (!roomId) {
+        showToast("Selecciona una sala virtual.", "error");
+        return;
+    }
     try {
-        const agendasRes = await fetch(`/api/agendas?service_id=${encodeURIComponent(servId)}`, {
+        const res = await fetch(`/api/google-meet/oauth/start?roomId=${encodeURIComponent(roomId)}`, {
             headers: getAuthHeaders()
         });
-        const agendas = agendasRes.ok ? await agendasRes.json() : [];
-        const primaryAgenda = agendas[0] || null;
-
-        if (primaryAgenda && primaryAgenda.room_id) {
-            matchedRoomId = primaryAgenda.room_id;
-        }
-        if (roomSelect) {
-            roomSelect.value = matchedRoomId;
-        }
-
-        const singleDateConfig = document.getElementById("single-date-config");
-        const recurrenceConfig = document.getElementById("recurrence-config");
-
-        if (primaryAgenda && primaryAgenda.type === 'recurrent') {
-            const weeklyRadio = document.querySelector('input[name="adm-serv-recurrence"][value="weekly"]');
-            if (weeklyRadio) weeklyRadio.checked = true;
-            if (singleDateConfig) singleDateConfig.style.display = 'none';
-            if (recurrenceConfig) recurrenceConfig.style.display = 'block';
-
-            let rule = {};
-            try {
-                rule = primaryAgenda.recurrence_rule ? JSON.parse(primaryAgenda.recurrence_rule) : {};
-            } catch {
-                rule = {};
-            }
-
-            const weekdays = Array.isArray(rule.byweekday) ? rule.byweekday.map(Number) : [];
-            const timeRangesMap = rule.time_ranges && typeof rule.time_ranges === 'object' ? rule.time_ranges : {};
-
-            weekdays.forEach(day => {
-                const check = document.querySelector(`.agenda-weekday-check[value="${day}"]`);
-                if (check) check.checked = true;
-
-                const dayRanges = Array.isArray(timeRangesMap[String(day)]) && timeRangesMap[String(day)].length > 0
-                    ? timeRangesMap[String(day)]
-                    : [{ start: primaryAgenda.start_time || '09:00', end: primaryAgenda.end_time || '13:00' }];
-
-                const container = document.querySelector(`.agenda-time-ranges[data-day="${day}"]`);
-                if (container) {
-                    while (container.querySelectorAll('.agenda-time-range').length < dayRanges.length) {
-                        addAgendaTimeRange(day);
-                    }
-                    const rows = [...container.querySelectorAll('.agenda-time-range')];
-                    dayRanges.forEach((range, idx) => {
-                        if (rows[idx]) {
-                            const startInput = rows[idx].querySelector('.agenda-range-start');
-                            const endInput = rows[idx].querySelector('.agenda-range-end');
-                            if (startInput) startInput.value = range.start || '09:00';
-                            if (endInput) endInput.value = range.end || '13:00';
-                        }
-                    });
-                }
-            });
-
-            const startDateInput = document.getElementById("adm-serv-recurrence-start-date");
-            const endDateInput = document.getElementById("adm-serv-recurrence-end-date");
-            if (startDateInput) startDateInput.value = primaryAgenda.start_date || rule.dtstart || new Date().toISOString().slice(0, 10);
-            if (endDateInput) endDateInput.value = primaryAgenda.end_date || '';
+        const data = await res.json();
+        if (res.ok && data.url) {
+            window.location.href = data.url;
         } else {
-            const singleRadio = document.querySelector('input[name="adm-serv-recurrence"][value="single"]');
-            if (singleRadio) singleRadio.checked = true;
-            if (singleDateConfig) singleDateConfig.style.display = 'block';
-            if (recurrenceConfig) recurrenceConfig.style.display = 'none';
-
-            if (primaryAgenda) {
-                const singleDateInput = document.getElementById("adm-serv-single-date");
-                const singleStartInput = document.getElementById("adm-serv-single-start");
-                const singleEndInput = document.getElementById("adm-serv-single-end");
-                if (singleDateInput) singleDateInput.value = primaryAgenda.specific_date || '';
-                if (singleStartInput) singleStartInput.value = primaryAgenda.start_time || '09:00';
-                if (singleEndInput) singleEndInput.value = primaryAgenda.end_time || '12:00';
-            }
+            showToast(data.error || "No se pudo iniciar la conexión con Google.", "error");
         }
     } catch (e) {
-        console.error("Error loading service agendas for edit:", e);
-        if (roomSelect) roomSelect.value = matchedRoomId;
+        console.error("Error al iniciar Google OAuth:", e);
+        showToast("Error de conexión al iniciar autorización con Google.", "error");
+    }
+}
+
+function copyProviderMeetInstructions() {
+    const accessUrl = `${window.location.origin}/acceso.html`;
+    const message = `Estimado/a profesional, recuerda conectar tu cuenta de Google Calendar en PsicArte (Pestaña "Conexión Google Meet"): ${accessUrl}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(message).then(() => {
+            showToast("Enlace e instrucciones copiados al portapapeles.", "success");
+        }).catch(() => {
+            showToast(`Acceso para prestadores: ${accessUrl}`, "info");
+        });
+    } else {
+        showToast(`Acceso para prestadores: ${accessUrl}`, "info");
+    }
+}
+
+function notifyProviderGoogleMeet(providerName) {
+    showToast(`Recordatorio registrado para ${providerName}. Usa el botón de copiar instrucciones para enviárselo.`, "info");
+}
+
+async function unlinkGoogleAccount(id) {
+    if (!confirm("¿Estás seguro de desvincular esta cuenta de Google?")) return;
+    try {
+        const res = await fetch(`/api/google-meet/accounts/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        if (res.ok) {
+            showToast("Cuenta de Google desvinculada con éxito.", "success");
+            await loadAllData();
+            if (state.currentUser.role === 'administrador') {
+                renderGoogleAccountsTable();
+            } else {
+                renderProviderGoogleAccounts();
+            }
+        } else {
+            const data = await res.json();
+            showToast(data.error || "Error al desvincular cuenta.", "error");
+        }
+    } catch {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+async function renderGoogleAccountsTable() {
+    const tbody = document.getElementById("google-accounts-table-body");
+    if (!tbody) return;
+
+    try {
+        const res = await fetch('/api/google-meet/accounts', { headers: getAuthHeaders() });
+        if (!res.ok) return;
+        const accounts = await res.json();
+
+        const virtualRooms = (state.rooms || []).filter(r => r.type === 'Virtual');
+        const providers = state.providers || [];
+
+        if (virtualRooms.length === 0 || providers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 15px;">No hay salas virtuales o prestadores registrados.</td></tr>';
+            return;
+        }
+
+        const rowsHtml = [];
+        providers.forEach(p => {
+            virtualRooms.forEach(r => {
+                const acc = accounts.find(a => a.provider_id === p.id && a.room_id === r.id);
+                if (acc) {
+                    rowsHtml.push(`
+                        <tr>
+                            <td><strong>${p.name}</strong></td>
+                            <td>${r.name}</td>
+                            <td><span class="badge badge-paid"><i class="fa-solid fa-circle-check"></i> ${acc.google_email}</span></td>
+                            <td><small><i class="fa-solid fa-rotate"></i> Activa (Auto-renovación)</small></td>
+                            <td>
+                                <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; color: var(--color-error);" onclick="unlinkGoogleAccount('${acc.id}')" title="Desvincular"><i class="fa-solid fa-unlink"></i> Desvincular</button>
+                            </td>
+                        </tr>
+                    `);
+                } else {
+                    rowsHtml.push(`
+                        <tr>
+                            <td><strong>${p.name}</strong></td>
+                            <td>${r.name}</td>
+                            <td><span class="badge badge-warning"><i class="fa-solid fa-triangle-exclamation"></i> Sin vincular</span></td>
+                            <td><small style="color: var(--text-secondary);">Inactiva</small></td>
+                            <td>
+                                <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="notifyProviderGoogleMeet('${p.name}')" title="Avisar prestador"><i class="fa-solid fa-bell"></i> Avisar</button>
+                            </td>
+                        </tr>
+                    `);
+                }
+            });
+        });
+
+        tbody.innerHTML = rowsHtml.join('');
+    } catch (err) {
+        console.error("Error al cargar monitoreo de cuentas Google:", err);
+    }
+}
+
+let providerGoogleAccountsCache = [];
+
+async function updateProviderGoogleStatusCard() {
+    const roomSelect = document.getElementById("prov-meet-room-select");
+    const indicator = document.getElementById("prov-meet-status-indicator");
+    if (!roomSelect || !indicator) return;
+
+    const roomId = roomSelect.value;
+    const acc = providerGoogleAccountsCache.find(a => a.room_id === roomId);
+
+    if (acc) {
+        indicator.innerHTML = `
+            <div style="padding: 10px 14px; border-radius: var(--radius-sm); background: var(--bg-secondary); border-left: 3px solid var(--color-online); font-size: 0.9rem;">
+                <i class="fa-solid fa-circle-check" style="color: var(--color-online); margin-right: 6px;"></i>
+                Conectado con cuenta: <strong>${acc.google_email}</strong>.
+                <span style="color: var(--text-secondary); margin-left: 6px;">Tus videollamadas se generarán automáticamente en tu Google Calendar con auto-renovación permanente.</span>
+            </div>
+        `;
+    } else {
+        indicator.innerHTML = `
+            <div style="padding: 10px 14px; border-radius: var(--radius-sm); background: var(--bg-secondary); border-left: 3px solid var(--color-gold); font-size: 0.9rem;">
+                <i class="fa-solid fa-triangle-exclamation" style="color: var(--color-gold); margin-right: 6px;"></i>
+                Esta sala virtual aún no tiene tu cuenta de Google vinculada. Presiona <strong>Conectar con Google</strong> para autorizar.
+            </div>
+        `;
+    }
+}
+
+async function renderProviderGoogleAccounts() {
+    const listEl = document.getElementById("provider-google-accounts-list");
+    const roomSelect = document.getElementById("prov-meet-room-select");
+
+    const virtualRooms = (state.rooms || []).filter(r => r.type === 'Virtual');
+    if (roomSelect) {
+        roomSelect.innerHTML = virtualRooms.length > 0
+            ? virtualRooms.map(r => `<option value="${r.id}">${r.name}</option>`).join('')
+            : '<option value="">No hay salas virtuales disponibles</option>';
     }
 
-    document.getElementById("adm-serv-allow-reschedule").checked = service.allowReschedule !== 0;
-    document.getElementById("adm-serv-max-reschedules").value = service.maxReschedules || 1;
-    document.getElementById("adm-serv-max-reschedules-container").style.display = service.allowReschedule !== 0 ? "block" : "none";
+    if (!listEl) return;
 
-    const submitBtn = document.querySelector("#admin-service-form button[type='submit']");
-    if (submitBtn) submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> Guardar Cambios';
+    try {
+        const res = await fetch('/api/google-meet/accounts', { headers: getAuthHeaders() });
+        if (!res.ok) return;
+        const allAccounts = await res.json();
+        const myAccounts = allAccounts.filter(a => a.provider_id === state.currentUser?.id);
+        providerGoogleAccountsCache = myAccounts;
 
-    document.getElementById("pane-admin-providers").scrollIntoView({ behavior: 'smooth' });
+        updateProviderGoogleStatusCard();
+
+        if (myAccounts.length === 0) {
+            listEl.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 15px;">No tienes cuentas de Google Calendar vinculadas actualmente.</td></tr>';
+            return;
+        }
+
+        listEl.innerHTML = myAccounts.map(a => {
+            return `
+                <tr>
+                    <td><strong>${a.room_name || 'Sala'}</strong></td>
+                    <td><i class="fa-brands fa-google" style="color: var(--color-accent); margin-right: 6px;"></i> ${a.google_email || '-'}</td>
+                    <td><span class="badge badge-paid"><i class="fa-solid fa-rotate"></i> Permanente (Auto-renovable)</span></td>
+                    <td>
+                        <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; color: var(--color-error);" onclick="unlinkGoogleAccount('${a.id}')" title="Desvincular"><i class="fa-solid fa-unlink"></i> Desvincular</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error("Error al cargar cuentas de Google del prestador:", err);
+    }
+}
+
+function promptEditMeetLink(bookingId, currentLink) {
+    const modal = document.getElementById('edit-meet-modal');
+    if (!modal) return;
+    const bk = state.bookings.find(b => b.id === bookingId);
+    const infoEl = document.getElementById('edit-meet-booking-info');
+    if (infoEl) {
+        infoEl.textContent = bk ? `Cita: ${bk.serviceName} con ${bk.clientName} (${bk.date} ${bk.startTime ? `${bk.startTime} - ${bk.endTime}` : bk.timeSlot})` : `Reserva ID: ${bookingId}`;
+    }
+    const idInput = document.getElementById('edit-meet-booking-id');
+    if (idInput) idInput.value = bookingId;
+    const linkInput = document.getElementById('edit-meet-link-input');
+    if (linkInput) linkInput.value = currentLink || '';
+
+    modal.style.display = 'flex';
+}
+
+function closeEditMeetModal() {
+    const modal = document.getElementById('edit-meet-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitEditMeetLink() {
+    const bookingId = document.getElementById('edit-meet-booking-id')?.value;
+    const meetLink = document.getElementById('edit-meet-link-input')?.value.trim();
+
+    if (!bookingId) return;
+
+    try {
+        const res = await fetch(`/api/bookings/${bookingId}/meet-link`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ meet_link: meetLink || null })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast("Enlace de Google Meet actualizado.", "success");
+            closeEditMeetModal();
+            await loadAllData();
+            renderDashboardPanes();
+        } else {
+            showToast(data.error || "Error al actualizar enlace.", "error");
+        }
+    } catch {
+        showToast("Error de conexión.", "error");
+    }
+}
+
+async function retryMeetGeneration(bookingId) {
+    showToast("Reintentando generar enlace con Google Meet...", "info");
+    try {
+        const res = await fetch(`/api/bookings/${bookingId}/meet-retry`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast("Generación completada: " + (data.meet_link ? "Enlace creado" : "Pendiente"), "success");
+            await loadAllData();
+            renderDashboardPanes();
+        } else {
+            showToast(data.error || "No fue posible generar el enlace.", "error");
+        }
+    } catch {
+        showToast("Error de conexión al reintentar.", "error");
+    }
+}
+
+// ----------------------------------------------------
+// ADMIN ALERTS RENDERER
+// ----------------------------------------------------
+async function renderAdminAlerts() {
+    const banner = document.getElementById("admin-alerts-banner");
+    const list = document.getElementById("admin-alerts-list");
+    if (!banner || !list) return;
+
+    try {
+        const res = await fetch('/api/admin/alerts', { headers: getAuthHeaders() });
+        if (!res.ok) return;
+        const alerts = await res.json();
+        const pendingAlerts = alerts.filter(a => !a.resolved);
+
+        if (pendingAlerts.length === 0) {
+            banner.style.display = "none";
+            list.innerHTML = "";
+            return;
+        }
+
+        banner.style.display = "block";
+        list.innerHTML = pendingAlerts.map(a => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border); font-size: 0.85rem;">
+                <div>
+                    <strong><i class="fa-solid fa-triangle-exclamation" style="color: var(--color-warning); margin-right: 6px;"></i> ${a.type}:</strong>
+                    <span>${a.message}</span>
+                    <small style="color: var(--text-secondary); margin-left: 8px;">(${new Date(a.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })})</small>
+                </div>
+                <button type="button" class="btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="resolveAdminAlert('${a.id}')"><i class="fa-solid fa-check"></i> Resolver</button>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error("Error cargando alertas:", err);
+    }
+}
+
+async function resolveAdminAlert(id) {
+    try {
+        const res = await fetch(`/api/admin/alerts/${id}/resolve`, {
+            method: 'PUT',
+            headers: getAuthHeaders()
+        });
+        if (res.ok) {
+            showToast("Alerta resuelta.", "success");
+            renderAdminAlerts();
+        }
+    } catch {
+        showToast("Error al resolver alerta.", "error");
+    }
+}
+
+function onMoveTargetChange() {
+    // Hook called when user changes room or date in move modal
 }
 
 // ----------------------------------------------------
@@ -2101,7 +2724,7 @@ function renderSingleRoomView(container) {
 
     const html = `
         <div class="room-schedule-single">
-            <h4 style="margin-bottom: 10px;"><i class="fa-solid fa-building"></i> ${room.name} <small style="color: var(--text-secondary);">(${room.openTime} - ${room.closeTime})</small></h4>
+            <h4 style="margin-bottom: 10px;"><i class="fa-solid fa-building"></i> ${room.name} <small style="color: var(--text-secondary);">(${room.type === 'Virtual' ? 'Virtual' : 'Física - Cupo 1'})</small></h4>
             <div class="room-schedule-grid" id="room-schedule-grid-main" data-room-id="${roomId}">
                 ${renderScheduleGrid(roomId, room)}
             </div>
@@ -2127,7 +2750,7 @@ function renderDualRoomView(container) {
                     <select id="dual-room-select-1" class="form-control" onchange="changeDualRoom(1, this.value)" style="width: auto;">
                         ${state.rooms.map(r => `<option value="${r.id}" ${r.id === room1Id ? 'selected' : ''}>${r.name}</option>`).join('')}
                     </select>
-                    <small style="color: var(--text-secondary);">${room1 ? room1.openTime + ' - ' + room1.closeTime : ''}</small>
+                    <small style="color: var(--text-secondary);">${room1 ? (room1.type === 'Virtual' ? 'Virtual' : 'Física') : ''}</small>
                 </div>
                 <div class="room-schedule-grid" id="dual-grid-1" data-room-id="${room1Id}">
                     ${room1 ? renderScheduleGrid(room1Id, room1) : '<p>Selecciona una sala</p>'}
@@ -2139,7 +2762,7 @@ function renderDualRoomView(container) {
                     <select id="dual-room-select-2" class="form-control" onchange="changeDualRoom(2, this.value)" style="width: auto;">
                         ${state.rooms.map(r => `<option value="${r.id}" ${r.id === room2Id ? 'selected' : ''}>${r.name}</option>`).join('')}
                     </select>
-                    <small style="color: var(--text-secondary);">${room2 ? room2.openTime + ' - ' + room2.closeTime : ''}</small>
+                    <small style="color: var(--text-secondary);">${room2 ? (room2.type === 'Virtual' ? 'Virtual' : 'Física') : ''}</small>
                 </div>
                 <div class="room-schedule-grid" id="dual-grid-2" data-room-id="${room2Id}">
                     ${room2 ? renderScheduleGrid(room2Id, room2) : '<p>Selecciona una sala</p>'}
@@ -2177,7 +2800,7 @@ function renderScheduleGrid(roomId, room) {
             current.setDate(current.getDate() + 1);
         }
     } else {
-        // Month view - show all days
+        // Month view
         const current = new Date(start + 'T00:00:00');
         const endDate = new Date(end + 'T00:00:00');
         while (current <= endDate) {
@@ -2186,53 +2809,92 @@ function renderScheduleGrid(roomId, room) {
         }
     }
 
-    // Generate time slots from room open to close
-    const openMin = timeToMinutes(room.openTime);
-    const closeMin = timeToMinutes(room.closeTime);
+    if (!data || !Array.isArray(data.days)) {
+        return '<p style="color: var(--text-secondary); padding: 15px; text-align: center;">Cargando calendario...</p>';
+    }
+
+    // Determine time range from shifts or default 08:00 - 20:00
+    let minMinutes = 480; // 08:00
+    let maxMinutes = 1200; // 20:00
+
+    data.days.forEach(d => {
+        (d.shifts || []).filter(s => s.roomId === roomId).forEach(s => {
+            const sm = timeToMinutes(s.start_time || s.startTime);
+            const em = timeToMinutes(s.end_time || s.endTime);
+            if (sm < minMinutes) minMinutes = Math.floor(sm / 60) * 60;
+            if (em > maxMinutes) maxMinutes = Math.ceil(em / 60) * 60;
+        });
+    });
+
     const timeSlots = [];
-    for (let m = openMin; m < closeMin; m += 30) {
+    for (let m = minMinutes; m < maxMinutes; m += 30) {
         timeSlots.push(minutesToTime(m));
     }
 
-    // Get bookings and spots for this room
-    const roomBookings = data.bookings.filter(b => b.roomId === roomId && b.status === 'Paid');
-    const roomSpots = data.spots.filter(s => s.roomId === roomId);
-
-    // Calculate grid columns: 1 time column + N date columns
-    const totalCols = 1 + dates.length;
-    const gridTemplate = `70px repeat(${dates.length}, minmax(120px, 1fr))`;
+    // Grid columns: 1 time column + N date columns
+    const gridTemplate = `70px repeat(${dates.length}, minmax(140px, 1fr))`;
 
     let html = `<div class="schedule-grid-header" style="display: grid; grid-template-columns: ${gridTemplate};"><div class="time-col">Hora</div>`;
     dates.forEach(d => {
         const dateObj = new Date(d + 'T00:00:00');
-        const dayName = dateObj.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric' });
+        const dayName = dateObj.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
         html += `<div class="date-col">${dayName}</div>`;
     });
     html += '</div>';
 
     html += `<div class="schedule-grid-body" style="display: grid; grid-template-columns: ${gridTemplate};">`;
     timeSlots.forEach(time => {
+        const slotMin = timeToMinutes(time);
+        const slotEndMin = slotMin + 30;
+
         html += `<div class="time-slot">${time}</div>`;
         dates.forEach(date => {
-            const cellBookings = roomBookings.filter(b => {
-                if (b.date !== date) return false;
-                const bStart = timeToMinutes(b.startTime);
-                const bSlot = timeToMinutes(time);
-                return bStart === bSlot;
+            const dayData = data.days.find(d => d.date === date);
+            const shiftsToday = (dayData?.shifts || []).filter(s => s.roomId === roomId);
+            const activeShift = shiftsToday.find(s => {
+                const sm = timeToMinutes(s.start_time || s.startTime);
+                const em = timeToMinutes(s.end_time || s.endTime);
+                return slotMin >= sm && slotMin < em;
             });
 
-            const cellSpots = roomSpots.filter(s => {
-                if (s.date !== date) return false;
-                const sStart = timeToMinutes(s.startTime);
-                const sSlot = timeToMinutes(time);
-                return sStart === sSlot;
+            const activeBreak = (activeShift?.breaks || []).find(b => {
+                const bmStart = timeToMinutes(b.start_time);
+                const bmEnd = timeToMinutes(b.end_time);
+                return slotMin >= bmStart && slotMin < bmEnd;
             });
 
-            html += `<div class="schedule-cell" data-room-id="${roomId}" data-date="${date}" data-time="${time}" ondragover="handleCellDragOver(event)" ondrop="handleCellDrop(event)">`;
+            const isVacation = (dayData?.vacations || []).find(v => v.provider_id === (activeShift?.provider_id || activeShift?.providerId));
+
+            const cellBookings = (dayData?.bookings || []).filter(b => {
+                if (b.roomId !== roomId) return false;
+                const bMin = timeToMinutes(b.startTime);
+                return bMin >= slotMin && bMin < slotEndMin;
+            });
+
+            const isOffHours = !activeShift;
+            const cellStyle = isOffHours ? 'background: var(--bg-secondary); opacity: 0.65;' : '';
+
+            html += `<div class="schedule-cell" style="${cellStyle}" data-room-id="${roomId}" data-date="${date}" data-time="${time}" ondragover="handleCellDragOver(event)" ondrop="handleCellDrop(event)">`;
+
+            if (activeShift && timeToMinutes(activeShift.start_time || activeShift.startTime) === slotMin) {
+                html += `<div style="font-size: 0.72rem; color: var(--color-accent); font-weight: 600; margin-bottom: 2px;"><i class="fa-solid fa-user-doctor"></i> ${activeShift.provider_name || activeShift.providerName}</div>`;
+            }
+
+            if (activeBreak) {
+                html += `<div style="font-size: 0.7rem; color: var(--color-warning); background: var(--color-warning-subtle); padding: 2px 4px; border-radius: var(--radius-sm); margin-bottom: 2px;"><i class="fa-solid fa-mug-hot"></i> Descanso</div>`;
+            }
+
+            if (isVacation) {
+                html += `<div style="font-size: 0.7rem; color: var(--color-error); background: var(--color-error-subtle); padding: 2px 4px; border-radius: var(--radius-sm); margin-bottom: 2px;"><i class="fa-solid fa-plane"></i> Vacaciones</div>`;
+            }
 
             cellBookings.forEach(bk => {
-                const duration = bk.duration || bk.serviceDuration || 50;
-                const heightSlots = Math.ceil(duration / 30);
+                const duration = bk.duration || 50;
+                const heightSlots = Math.max(1, Math.ceil(duration / 30));
+                const meetBadge = bk.meet_link
+                    ? `<a href="${bk.meet_link}" target="_blank" rel="noopener noreferrer" style="color: var(--color-accent); font-size: 0.75rem;" title="Google Meet"><i class="fa-solid fa-video"></i> Meet</a>`
+                    : (bk.meet_status === 'pending' ? `<span class="badge badge-warning" style="font-size: 0.65rem;">Link pend.</span>` : '');
+
                 html += `
                     <div class="booking-draggable" 
                          draggable="true" 
@@ -2242,25 +2904,18 @@ function renderScheduleGrid(roomId, room) {
                          data-start-time="${bk.startTime}"
                          data-end-time="${bk.endTime}"
                          data-service="${bk.serviceName}"
-                         data-provider="${bk.providerName}"
+                         data-provider="${bk.provider_name || bk.providerName || 'Prestador'}"
                          ondragstart="handleBookingDragStart(event)"
                          ondragend="handleBookingDragEnd(event)"
-                         style="height: ${heightSlots * 40 - 4}px;">
-                        <div class="booking-title">${bk.serviceName}</div>
-                        <div class="booking-provider">${bk.providerName}</div>
-                        <div class="booking-time">${bk.startTime} - ${bk.endTime}</div>
+                         style="min-height: ${heightSlots * 40 - 4}px; margin-bottom: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 4px;">
+                            <div class="booking-title" style="font-size: 0.8rem; font-weight: 600;">${bk.serviceName}</div>
+                            <button type="button" class="btn-icon" style="padding: 1px 4px; font-size: 0.7rem; color: var(--text-secondary);" onclick="openMoveModal('${bk.id}')" title="Mover cita"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
+                        </div>
+                        <div class="booking-provider" style="font-size: 0.75rem; color: var(--text-secondary);">${bk.provider_name || bk.providerName || ''}</div>
+                        <div class="booking-time" style="font-size: 0.7rem; color: var(--text-secondary);">${bk.startTime} - ${bk.endTime} ${meetBadge}</div>
                     </div>
                 `;
-            });
-
-            cellSpots.forEach(spot => {
-                if (spot.status === 'available') {
-                    html += `
-                        <div class="spot-available" title="Spot disponible: ${spot.startTime} - ${spot.endTime}">
-                            <i class="fa-solid fa-plus-circle"></i>
-                        </div>
-                    `;
-                }
             });
 
             html += '</div>';
@@ -2325,38 +2980,44 @@ function handleCellDrop(e) {
     if (draggedBookingData.roomId === targetRoomId &&
         draggedBookingData.date === targetDate &&
         draggedBookingData.startTime === targetTime) {
-        return; // No change
+        return;
     }
 
-    // Show move modal
-    moveBookingContext = {
-        bookingId: draggedBookingData.bookingId,
-        newRoomId: targetRoomId,
-        newDate: targetDate,
-        newStartTime: targetTime,
-        originalRoom: draggedBookingData.roomId,
-        originalDate: draggedBookingData.date,
-        service: draggedBookingData.service,
-        provider: draggedBookingData.provider
-    };
-
-    showMoveBookingModal();
+    openMoveModal(draggedBookingData.bookingId, targetRoomId, targetDate, targetTime);
 }
 
-function showMoveBookingModal() {
+function openMoveModal(bookingId, targetRoomId = null, targetDate = null, targetStartTime = null) {
+    const bk = state.bookings.find(b => b.id === bookingId);
+    if (!bk) return;
     const modal = document.getElementById('move-booking-modal');
+    if (!modal) return;
+
+    const idInput = document.getElementById('move-booking-id');
+    if (idInput) idInput.value = bk.id;
+
+    const prov = state.providers.find(p => p.id === bk.providerId);
+    const room = state.rooms.find(r => r.id === bk.roomId);
     const infoDiv = document.getElementById('move-booking-info');
+    if (infoDiv) {
+        infoDiv.innerHTML = `
+            <strong>Servicio:</strong> ${bk.serviceName}<br>
+            <strong>Prestador:</strong> ${prov?.name || bk.providerName || 'Prestador'}<br>
+            <strong>Fecha/Hora Actual:</strong> ${bk.date} (${bk.startTime ? `${bk.startTime} - ${bk.endTime}` : bk.timeSlot}) en ${room?.name || bk.roomName || 'Sala'}
+        `;
+    }
 
-    if (!modal || !infoDiv || !moveBookingContext) return;
+    const roomSelect = document.getElementById('move-new-room');
+    if (roomSelect) {
+        roomSelect.innerHTML = state.rooms.map(r => `
+            <option value="${r.id}" ${(targetRoomId || bk.roomId) === r.id ? 'selected' : ''}>${r.name} (${r.type})</option>
+        `).join('');
+    }
 
-    const newRoom = state.rooms.find(r => r.id === moveBookingContext.newRoomId);
+    const dateInput = document.getElementById('move-new-date');
+    if (dateInput) dateInput.value = targetDate || bk.date;
 
-    infoDiv.innerHTML = `
-        <strong>Servicio:</strong> ${moveBookingContext.service}<br>
-        <strong>Prestador:</strong> ${moveBookingContext.provider}<br>
-        <strong>Desde:</strong> ${moveBookingContext.originalDate} (${moveBookingContext.startTime}) en ${state.rooms.find(r => r.id === moveBookingContext.originalRoom)?.name || 'N/A'}<br>
-        <strong>Hasta:</strong> ${moveBookingContext.newDate} (${moveBookingContext.newStartTime}) en ${newRoom?.name || 'N/A'}
-    `;
+    const timeInput = document.getElementById('move-new-start-time');
+    if (timeInput) timeInput.value = targetStartTime || bk.startTime;
 
     modal.style.display = 'flex';
 }
@@ -2364,32 +3025,36 @@ function showMoveBookingModal() {
 function closeMoveModal() {
     const modal = document.getElementById('move-booking-modal');
     if (modal) modal.style.display = 'none';
-    moveBookingContext = null;
 }
 
-async function executeMoveBooking(moveAll) {
-    if (!moveBookingContext) return;
+async function confirmMoveBookingModal() {
+    const bookingId = document.getElementById('move-booking-id')?.value;
+    const newRoomId = document.getElementById('move-new-room')?.value;
+    const newDate = document.getElementById('move-new-date')?.value;
+    const newStartTime = document.getElementById('move-new-start-time')?.value;
 
-    const { bookingId, newRoomId, newDate, newStartTime } = moveBookingContext;
+    if (!bookingId || !newRoomId || !newDate || !newStartTime) {
+        showToast("Por favor completa todos los campos para mover la cita.", "error");
+        return;
+    }
 
     try {
         const res = await fetch(`/api/bookings/${bookingId}/move`, {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ newRoomId, newDate, newStartTime, moveAll })
+            body: JSON.stringify({ newRoomId, newDate, newStartTime })
         });
-
         const result = await res.json();
-
         if (res.ok) {
-            showToast(result.message || "Reserva movida exitosamente.", "success");
+            showToast("Reserva movida exitosamente.", "success");
             closeMoveModal();
             await loadAllData();
+            renderDashboardPanes();
             renderRoomSchedule();
         } else {
             showToast(result.error || "Error al mover la reserva.", "error");
         }
-    } catch (e) {
+    } catch {
         showToast("Error de conexión al mover reserva.", "error");
     }
 }

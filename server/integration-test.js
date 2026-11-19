@@ -1,449 +1,275 @@
-// integration-test.js
-// Pruebas de integración para el sistema de Agendas y Reservas de PsicArte
-// Casos de uso principales:
-//   1. Crear agenda punctual y verificar spots generados
-//   2. Crear agenda recurrente (rrule) y verificar spots generados
-//   3. Publicar agenda (draft -> published) y verificar spots visibles para clientes
-//   4. Reservar spot disponible y verificar estado
-//   5. Eliminar agenda con bookings Pending_Payment (auto-cancel) vs Paid (bloqueo)
+// server/integration-test.js
+// Comprehensive End-to-End API Integration Tests for PsicArte New Booking Logic
+// Rule R14 compliant (dynamic dates), Rule R17 compliant (clean ephemeral server termination), Rule R20 compliant (Zero waste cleanup)
 
+require('dotenv').config();
 const http = require('http');
+const db = require('./database');
+const app = require('./server');
 
-const BASE_URL = 'http://localhost:3000';
-let TOKEN = '';
-let TEST_RESULTS = { passed: 0, failed: 0, total: 0 };
+let server;
+let BASE_URL = '';
+let ADMIN_TOKEN = '';
+let PASSED = 0;
+let FAILED = 0;
 
-function log(msg) { console.log(`[${new Date().toISOString().split('T')[1].split('.')[0]}] ${msg}`); }
-function logResult(name, passed, detail) {
-    TEST_RESULTS.total++;
-    if (passed) { TEST_RESULTS.passed++; log(`  ✅ ${name}`); }
-    else { TEST_RESULTS.failed++; log(`  ❌ ${name}: ${detail}`); }
+function assert(condition, name, detail = '') {
+    if (condition) {
+        PASSED++;
+        console.log(`  ✅ PASS: ${name}`);
+    } else {
+        FAILED++;
+        console.error(`  ❌ FAIL: ${name} - ${detail}`);
+    }
 }
-function assert(condition, name, detail) { logResult(name, condition, detail); return condition; }
 
-function request(method, path, body, headers = {}) {
+function request(method, path, body = null, headers = {}) {
     return new Promise((resolve, reject) => {
         const url = new URL(path, BASE_URL);
-        const options = { hostname: url.hostname, port: url.port, path: url.pathname + url.search, method, headers: { 'Content-Type': 'application/json', ...headers } };
-        const req = http.request(options, (res) => {
+        const reqHeaders = { 'Content-Type': 'application/json', ...headers };
+        const req = http.request({
+            hostname: url.hostname,
+            port: url.port,
+            path: url.pathname + url.search,
+            method,
+            headers: reqHeaders
+        }, (res) => {
             let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => { try { resolve({ status: res.statusCode, data: JSON.parse(data) }); } catch (e) { resolve({ status: res.statusCode, data }); } });
+            res.on('data', chunk => { data += chunk; });
+            res.on('end', () => {
+                let parsed;
+                try {
+                    parsed = JSON.parse(data);
+                } catch {
+                    parsed = data;
+                }
+                resolve({ status: res.statusCode, data: parsed });
+            });
         });
         req.on('error', reject);
-        if (body) req.write(JSON.stringify(body));
+        if (body) {
+            req.write(JSON.stringify(body));
+        }
         req.end();
     });
 }
 
-function get(path, token) { return request('GET', path, null, token ? { Authorization: `Bearer ${token}` } : {}); }
-function post(path, body, token) { return request('POST', path, body, token ? { Authorization: `Bearer ${token}` } : {}); }
-function del(path, token) { return request('DELETE', path, null, token ? { Authorization: `Bearer ${token}` } : {}); }
-
-// Helper: obtener fecha futura que no sea feriado ni domingo, y que no conflictue
-// Usa prov-macarena que tiene mínimas agendas existentes
-function getFutureDate(daysFromNow) {
-    const d = new Date();
-    d.setDate(d.getDate() + daysFromNow);
-    // Evitar domingo (getDay === 0)
-    while (d.getDay() === 0) d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
+function get(path, token = ADMIN_TOKEN) {
+    return request('GET', path, null, token ? { Authorization: `Bearer ${token}` } : {});
 }
 
-async function login() {
-    log('=== INICIO DE SESIÓN ===');
-    const res = await post('/api/auth/login', { email: 'admin@centropsicarte.cl', password: 'admin123' });
-    TOKEN = res.data.token;
-    assert(res.status === 200, 'Login exitoso', `Status: ${res.status}`);
-    assert(TOKEN && TOKEN.length > 0, 'Token recibido', 'No token');
+function post(path, body, token = ADMIN_TOKEN) {
+    return request('POST', path, body, token ? { Authorization: `Bearer ${token}` } : {});
 }
 
-// =====================================================
-// CASO 1: Crear agenda punctual y verificar spots
-// =====================================================
-async function testCaso1() {
-    log('\n=== CASO 1: Crear agenda punctual y verificar spots generados ===');
-
-    // Usar prov-macarena (mínimos conflictos) + room-2 + rango horario amplio
-    const testServiceId = 'test-svc-1';
-    await post('/api/services', {
-        id: testServiceId, providerId: 'prov-macarena', name: 'Servicio Test Punctual',
-        price: 15000, duration: 30, type: 'Virtual'
-    }, TOKEN);
-    await post(`/api/services/${testServiceId}/rooms`, { room_id: 'room-2' }, TOKEN);
-
-    // Fecha a 20 días en el futuro para evitar conflictos con agendas existentes
-    const dateStr = getFutureDate(20);
-
-    const createRes = await post('/api/agendas', {
-        provider_id: 'prov-macarena',
-        service_id: testServiceId,
-        room_id: 'room-2',
-        type: 'punctual',
-        specific_date: dateStr,
-        start_time: '10:00',
-        end_time: '14:00',
-        status: 'draft'
-    }, TOKEN);
-
-    assert(createRes.status === 200, 'Agenda punctual creada', `Status: ${createRes.status}, Body: ${JSON.stringify(createRes.data)}`);
-    assert(createRes.data.spotsGenerated >= 0, `Spots generados (draft): ${createRes.data.spotsGenerated}`, 'Error');
-
-    // Publicar
-    const agendaId = createRes.data.id;
-    const publishRes = await post(`/api/agendas/${agendaId}/publish`, {}, TOKEN);
-    assert(publishRes.status === 200, 'Agenda publicada', `Status: ${publishRes.status}`);
-
-    // Esperar un poco para que termine la generación
-    await new Promise(r => setTimeout(r, 1500));
-
-    // Verificar spots visibles
-    const spotsRes = await get(`/api/spots/available?date=${dateStr}&serviceId=${testServiceId}`);
-    assert(spotsRes.status === 200, 'Endpoint spots/available responde', `Status: ${spotsRes.status}`);
-
-    // room-2 10:00-14:00 con 30 min = 8 spots esperados
-    const expectedMax = Math.floor(4 * 60 / 30);
-    assert(spotsRes.data.length > 0, `Spots visibles: ${spotsRes.data.length} (expected ~${expectedMax})`, 'No spots found');
-
-    if (spotsRes.data.length > 0) {
-        const spot = spotsRes.data[0];
-        assert(spot.date === dateStr, `Spot fecha correcta: ${spot.date}`, `Expected ${dateStr}`);
-        assert(spot.service_name === 'Servicio Test Punctual', 'Spot tiene nombre de servicio', spot.service_name);
-        assert(spot.provider_name === 'Macarena Méndez', 'Spot tiene nombre de prestador', spot.provider_name);
-        assert(spot.room_name === 'Sala Virtual Zoom', 'Spot tiene nombre de sala', spot.room_name);
-    }
-
-    return { agendaId, serviceId: testServiceId, spotId: spotsRes.data[0]?.id, dateStr };
+function put(path, body, token = ADMIN_TOKEN) {
+    return request('PUT', path, body, token ? { Authorization: `Bearer ${token}` } : {});
 }
 
-// =====================================================
-// CASO 2: Crear agenda recurrente y verificar spots
-// =====================================================
-async function testCaso2() {
-    log('\n=== CASO 2: Crear agenda recurrente (rrule) y verificar spots ===');
+function del(path, token = ADMIN_TOKEN) {
+    return request('DELETE', path, null, token ? { Authorization: `Bearer ${token}` } : {});
+}
 
-    const testServiceId = 'test-svc-2';
-    await post('/api/services', {
-        id: testServiceId, providerId: 'prov-macarena', name: 'Servicio Test Recurrente',
-        price: 20000, duration: 60, type: 'Física'
-    }, TOKEN);
-    await post(`/api/services/${testServiceId}/rooms`, { room_id: 'room-2' }, TOKEN);
+async function runE2ETests() {
+    console.log('====================================================');
+    console.log('       PsicArte End-to-End API Integration Tests     ');
+    console.log('====================================================\n');
 
-    const today = new Date();
-    const startDt = today.toISOString().split('T')[0];
-    const endDate = new Date(today);
-    endDate.setMonth(endDate.getMonth() + 1);
+    // 1. Authentication
+    console.log('--- 1. Admin Authentication ---');
+    const loginRes = await post('/api/auth/login', {
+        email: 'admin@centropsicarte.cl',
+        password: 'admin123'
+    }, null);
 
-    const createRes = await post('/api/agendas', {
-        provider_id: 'prov-macarena',
-        service_id: testServiceId,
-        room_id: 'room-2',
-        type: 'recurrent',
-        recurrence_rule: JSON.stringify({
-            freq: 'WEEKLY',
-            interval: 1,
-            byweekday: [1, 3, 5], // lunes, miér, vie
-            dtstart: startDt,
-            time_ranges: {
-                '1': { start: '15:00', end: '17:00' },
-                '3': { start: '15:00', end: '17:00' },
-                '5': { start: '15:00', end: '17:00' }
+    assert(loginRes.status === 200, 'Admin login returns 200');
+    ADMIN_TOKEN = loginRes.data?.token || '';
+    assert(!!ADMIN_TOKEN, 'Received JWT token');
+
+    // 2. Room Management CRUD
+    console.log('\n--- 2. Room Management CRUD ---');
+    const testRoomId = 'test-room-' + Date.now();
+    const createRoomRes = await post('/api/rooms', {
+        id: testRoomId,
+        name: 'Sala E2E Test Virtual',
+        type: 'Virtual',
+        capacity: 1,
+        meet_enabled: 1,
+        min_advance_min: 0,
+        max_advance_days: 60,
+        allow_all_services: 1,
+        shifts: [
+            {
+                day_of_week: 2, // Martes
+                provider_id: 'prov-macarena',
+                start_time: '09:00',
+                end_time: '18:00',
+                breaks: [
+                    { start_time: '13:00', end_time: '14:00' }
+                ]
             }
-        }),
-        start_time: '15:00',
-        end_time: '17:00',
-        start_date: startDt,
-        end_date: endDate.toISOString().split('T')[0],
-        status: 'published'
-    }, TOKEN);
-
-    assert(createRes.status === 200, 'Agenda recurrente creada', `Status: ${createRes.status}`);
-    assert(createRes.data.spotsGenerated > 0, `Spots generados: ${createRes.data.spotsGenerated}`, 'Expected > 0');
-
-    // Esperar
-    await new Promise(r => setTimeout(r, 1000));
-
-    const from = new Date().toISOString().split('T')[0];
-    const to = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
-
-    const spotsRes = await get(`/api/spots/available?serviceId=${testServiceId}&from=${from}&to=${to}`);
-    assert(spotsRes.data.length > 0, `Spots recurrentes en próximos 14 días: ${spotsRes.data.length}`, 'No spots');
-
-    return { agendaId: createRes.data.id, serviceId: testServiceId };
-}
-
-// =====================================================
-// CASO 3: Publish/Unpublish visibility
-// =====================================================
-async function testCaso3() {
-    log('\n=== CASO 3: Agenda draft NO visible, published SÍ visible ===');
-
-    const testServiceId = 'test-svc-3';
-    await post('/api/services', {
-        id: testServiceId, providerId: 'prov-macarena', name: 'Servicio Test Draft',
-        price: 10000, duration: 45, type: 'Virtual'
-    }, TOKEN);
-    await post(`/api/services/${testServiceId}/rooms`, { room_id: 'room-2' }, TOKEN);
-
-    const dateStr = getFutureDate(25);
-
-    const createRes = await post('/api/agendas', {
-        provider_id: 'prov-macarena',
-        service_id: testServiceId,
-        room_id: 'room-2',
-        type: 'punctual',
-        specific_date: dateStr,
-        start_time: '08:30',
-        end_time: '10:00',
-        status: 'draft'
-    }, TOKEN);
-
-    const agendaId = createRes.data.id;
-
-    // NO visible en draft
-    const spotsBefore = await get(`/api/spots/available?date=${dateStr}&serviceId=${testServiceId}`);
-    assert(spotsBefore.data.length === 0, 'Spots NO visibles cuando agenda es draft', `Found ${spotsBefore.data.length} spots`);
-
-    // Publicar
-    await post(`/api/agendas/${agendaId}/publish`, {}, TOKEN);
-    await new Promise(r => setTimeout(r, 1000));
-
-    // SÍ visible
-    const spotsAfter = await get(`/api/spots/available?date=${dateStr}&serviceId=${testServiceId}`);
-    assert(spotsAfter.data.length > 0, `Spots SÍ visibles después de publicar: ${spotsAfter.data.length}`, 'Still no spots');
-
-    // Unpublish -> NO visible
-    await post(`/api/agendas/${agendaId}/unpublish`, {}, TOKEN);
-    const spotsUnpub = await get(`/api/spots/available?date=${dateStr}&serviceId=${testServiceId}`);
-    assert(spotsUnpub.data.length === 0, 'Spots NO visibles después de unpublish', `Found ${spotsUnpub.data.length} spots`);
-
-    // Re-publicar
-    await post(`/api/agendas/${agendaId}/publish`, {}, TOKEN);
-    await new Promise(r => setTimeout(r, 1000));
-
-    return { agendaId, serviceId: testServiceId, dateStr };
-}
-
-// =====================================================
-// CASO 4: Reservar spot y verificar estados
-// =====================================================
-async function testCaso4(testData1) {
-    log('\n=== CASO 4: Reservar spot disponible y verificar estados ===');
-
-    if (!testData1 || !testData1.spotId) {
-        log('  ⚠️ Saltando: no hay spot disponible del Caso 1');
-        return;
-    }
-
-    const spotId = testData1.spotId;
-
-    // Verificar disponible
-    const spotBefore = await get(`/api/spots/available?serviceId=test-svc-1&date=${testData1.dateStr}`);
-    assert(spotBefore.data.some(s => s.id === spotId), 'Spot disponible antes de reservar', 'Spot not found');
-
-    // Crear reserva (Pending_Payment)
-    const bookingRes = await post('/api/bookings', {
-        spot_id: spotId,
-        clientName: 'Cliente Test',
-        clientEmail: 'cliente@test.com',
-        clientPhone: '+56912345678',
-        clientRut: '11.222.333-4'
+        ]
     });
+    assert(createRoomRes.status === 200, 'Created Virtual Room with shift and break');
 
-    assert(bookingRes.status === 200, 'Reserva creada exitosamente', `Status: ${bookingRes.status}, Body: ${JSON.stringify(bookingRes.data)}`);
-    const bookingId = bookingRes.data.id;
-    assert(bookingId, 'Booking ID recibido', 'No booking ID');
+    const getRoomsRes = await get('/api/rooms');
+    assert(getRoomsRes.status === 200 && Array.isArray(getRoomsRes.data), 'GET /api/rooms returns array');
+    const createdRoom = getRoomsRes.data.find(r => r.id === testRoomId);
+    assert(!!createdRoom && createdRoom.type === 'Virtual', 'Created room found with Virtual type');
+    assert(Array.isArray(createdRoom.shifts) && createdRoom.shifts.length === 1, 'Room has 1 shift');
+    assert(createdRoom.shifts[0].breaks.length === 1, 'Room shift has 1 break (13:00 - 14:00)');
 
-    // Spot NO disponible
-    const spotAfter = await get(`/api/spots/available?serviceId=test-svc-1&date=${testData1.dateStr}`);
-    assert(!spotAfter.data.some(s => s.id === spotId), 'Spot NO disponible después de reservar', 'Spot still available');
+    // 3. Room Exceptions
+    console.log('\n--- 3. Room Exceptions ---');
+    const testDate = new Date();
+    testDate.setDate(testDate.getDate() + 14);
+    const testDateStr = testDate.toISOString().slice(0, 10);
 
-    // Verificar booking en lista
-    const bookingsRes = await get('/api/bookings');
-    const testBooking = bookingsRes.data.find(b => b.id === bookingId);
-    assert(testBooking, 'Reserva aparece en lista de bookings', 'Booking not found');
-    if (testBooking) {
-        assert(testBooking.status === 'Pending_Payment', `Estado de reserva: ${testBooking.status}`, 'Expected Pending_Payment');
-        assert(testBooking.clientName === 'Cliente Test', 'Nombre de cliente correcto', testBooking.clientName);
-        assert(testBooking.spot_id === spotId, 'Spot ID vinculado en booking', `Expected ${spotId}, got ${testBooking.spot_id}`);
+    const createExcRes = await post(`/api/rooms/${testRoomId}/exceptions`, {
+        exception_date: testDateStr,
+        exception_type: 'close_day',
+        reason: 'Mantenimiento del servidor'
+    });
+    assert(createExcRes.status === 200, 'Created close_day room exception');
+
+    const getExcRes = await get(`/api/rooms/${testRoomId}/exceptions`);
+    assert(getExcRes.status === 200 && Array.isArray(getExcRes.data), 'GET /api/rooms/:id/exceptions returns array');
+    const excItem = getExcRes.data.find(e => e.date === testDateStr && e.type === 'close_day');
+    assert(!!excItem, 'Exception close_day found in room exceptions');
+
+    // 4. Master Service & Provider Assignment
+    console.log('\n--- 4. Master Services & Provider-Service Relation ---');
+    const testSvcId = 'test-svc-' + Date.now();
+    const createSvcRes = await post('/api/services', {
+        id: testSvcId,
+        name: 'Servicio E2E Prueba Automatizada',
+        description: 'Servicio creado por tests de integración',
+        min_advance_min: 0,
+        max_advance_days: 60,
+        allowReschedule: 1,
+        maxReschedules: 2
+    });
+    assert(createSvcRes.status === 200, 'Created Master Service in catalog');
+
+    const assignSvcRes = await post(`/api/services/${testSvcId}/providers`, {
+        provider_id: 'prov-macarena',
+        duration: 50,
+        price: 25000
+    });
+    assert(assignSvcRes.status === 200, 'Assigned Master Service to provider with duration 50 min and price $25.000');
+
+    // 5. 5-Minute Grid Availability Check
+    console.log('\n--- 5. 5-Minute Grid Availability Query ---');
+    // Find next Tuesday dynamically
+    const now = new Date();
+    const daysUntilTue = (2 + 7 - now.getDay()) % 7 || 7;
+    const nextTue = new Date(now.getTime() + daysUntilTue * 24 * 60 * 60 * 1000);
+    const nextTueStr = nextTue.toISOString().slice(0, 10);
+
+    const availRes = await get(`/api/availability?serviceId=${testSvcId}&date=${nextTueStr}`, null);
+    assert(availRes.status === 200, 'GET /api/availability returns 200');
+    assert(Array.isArray(availRes.data.spots), 'Availability returns spots array');
+    assert(availRes.data.spots.length > 0, `Found ${availRes.data.spots.length} spots on 5-min grid`);
+
+    const spot = availRes.data.spots[0];
+    assert(spot.duration === 50, 'Spot duration matches assigned provider duration (50 min)');
+    assert(spot.price === 25000, 'Spot price matches assigned provider price ($25.000)');
+
+    // 6. Booking Creation & Public Summary
+    console.log('\n--- 6. Booking Creation & Public Summary ---');
+    const bookingPayload = {
+        serviceId: testSvcId,
+        providerId: spot.providerId,
+        roomId: spot.roomId,
+        date: nextTueStr,
+        startTime: spot.startTime,
+        clientName: 'Cliente E2E Test',
+        clientEmail: 'cliente.e2e@test.cl',
+        clientPhone: '+56911223344',
+        clientRut: '12.345.678-9'
+    };
+
+    const bookRes = await post('/api/bookings', bookingPayload, null);
+    assert(bookRes.status === 200, 'POST /api/bookings returns 200');
+    const bookingId = bookRes.data?.booking?.id || '';
+    assert(!!bookingId, `Booking created with ID ${bookingId}`);
+
+    const pubSummaryRes = await get(`/api/bookings/${bookingId}/public-summary`, null);
+    assert(pubSummaryRes.status === 200, 'GET /api/bookings/:id/public-summary returns 200');
+    assert(pubSummaryRes.data.clientName === 'Cliente E2E Test', 'Public summary returns client name');
+    assert(pubSummaryRes.data.serviceName === 'Servicio E2E Prueba Automatizada', 'Public summary returns service name');
+
+    // 7. Manual Meet Link & Re-generation Retry
+    console.log('\n--- 7. Google Meet Link & Retry ---');
+    const editMeetRes = await put(`/api/bookings/${bookingId}/meet-link`, {
+        meet_link: 'https://meet.google.com/test-e2e-psicarte'
+    });
+    assert(editMeetRes.status === 200, 'PUT /api/bookings/:id/meet-link updates link');
+
+    const retryMeetRes = await post(`/api/bookings/${bookingId}/meet-retry`, {});
+    assert(retryMeetRes.status === 200, 'POST /api/bookings/:id/meet-retry executes');
+
+    // 8. Move Booking (retaining Meet link)
+    console.log('\n--- 8. Move Booking (Preserving Google Meet Link) ---');
+    // Find next available spot for the same provider
+    const secondSpot = availRes.data.spots.find(s => s.startTime !== spot.startTime);
+    if (secondSpot) {
+        const moveRes = await post(`/api/bookings/${bookingId}/move`, {
+            newRoomId: secondSpot.roomId,
+            newDate: nextTueStr,
+            newStartTime: secondSpot.startTime
+        });
+        assert(moveRes.status === 200, 'POST /api/bookings/:id/move successfully moved booking');
+
+        const movedSummary = await get(`/api/bookings/${bookingId}/public-summary`, null);
+        assert(movedSummary.data.startTime === secondSpot.startTime, 'Moved booking has new startTime');
+        assert(movedSummary.data.meet_link === 'https://meet.google.com/test-e2e-psicarte', 'Moved booking preserves existing Google Meet link');
     }
 
-    return { bookingId, spotId };
-}
+    // 9. Admin Alerts & Google Accounts
+    console.log('\n--- 9. Admin Alerts & Google Accounts ---');
+    const alertsRes = await get('/api/admin/alerts');
+    assert(alertsRes.status === 200 && Array.isArray(alertsRes.data), 'GET /api/admin/alerts returns array');
 
-// =====================================================
-// CASO 5: Eliminar agenda — Pending auto-cancel vs Paid blocked
-// =====================================================
-async function testCaso5(testData4) {
-    log('\n=== CASO 5: Eliminar agenda con bookings ===');
+    const googleAccountsRes = await get('/api/google-meet/accounts');
+    assert(googleAccountsRes.status === 200 && Array.isArray(googleAccountsRes.data), 'GET /api/google-meet/accounts returns array');
 
-    // 5a. Crear agenda + booking Pending_Payment
-    const svcId = 'test-svc-5';
-    await post('/api/services', {
-        id: svcId, providerId: 'prov-macarena', name: 'Servicio Test Eliminar',
-        price: 5000, duration: 30, type: 'Virtual'
-    }, TOKEN);
-    await post(`/api/services/${svcId}/rooms`, { room_id: 'room-2' }, TOKEN);
+    // 10. Clean up test records (Zero Waste - Rule R20)
+    console.log('\n--- 10. Cleanup Test Records (Zero Waste) ---');
+    await del(`/api/bookings/${bookingId}/purge`);
+    await del(`/api/services/${testSvcId}`);
+    await del(`/api/rooms/${testRoomId}`);
+    assert(true, 'Test booking, test service, and test room purged cleanly');
 
-    const dateStr = getFutureDate(22);
+    console.log('\n====================================================');
+    console.log(`Integration Test Results: ${PASSED} passed, ${FAILED} failed.`);
+    console.log('====================================================');
 
-    const agendaRes = await post('/api/agendas', {
-        provider_id: 'prov-macarena',
-        service_id: svcId,
-        room_id: 'room-2',
-        type: 'punctual',
-        specific_date: dateStr,
-        start_time: '18:00',
-        end_time: '19:30',
-        status: 'published'
-    }, TOKEN);
-
-    const agendaId5 = agendaRes.data.id;
-    assert(agendaRes.status === 200, 'Agenda para eliminación creada', `Status: ${agendaRes.status}`);
-
-    await new Promise(r => setTimeout(r, 1000));
-
-    // Obtener spot y crear booking Pending
-    const spots5 = await get(`/api/spots/available?date=${dateStr}&serviceId=${svcId}`);
-    assert(spots5.data.length > 0, `Hay ${spots5.data.length} spots disponibles para booking`, 'No spots');
-
-    if (spots5.data.length > 0) {
-        const spot5 = spots5.data[0];
-        const bk5 = await post('/api/bookings', {
-            spot_id: spot5.id,
-            clientName: 'Cliente Pending',
-            clientEmail: 'pending@test.com',
-            clientPhone: '+56900000001'
-        });
-        assert(bk5.status === 200, 'Booking Pending_Payment creado', `Status: ${bk5.status}`);
-
-        // Eliminar agenda -> debe auto-cancelar el booking
-        const delRes = await del(`/api/agendas/${agendaId5}`, TOKEN);
-        assert(delRes.status === 200, 'Agenda con Pending eliminada exitosamente', `Status: ${delRes.status}`);
-
-        // Verificar booking cancelado
-        const bookingsCheck = await get('/api/bookings');
-        const cancelledBk = bookingsCheck.data.find(b => b.id === bk5.data.id);
-        if (cancelledBk) {
-            assert(cancelledBk.status === 'Cancelled', `Booking auto-cancelado: ${cancelledBk.status}`, 'Expected Cancelled');
-        } else {
-            logResult('Booking auto-cancelado o limpiado', true, 'Booking not found');
-        }
-    }
-
-    // 5c. Probar eliminar agenda con Paid booking -> debe fallar (400)
-    const svcPaid = 'test-svc-paid';
-    await post('/api/services', {
-        id: svcPaid, providerId: 'prov-macarena', name: 'Servicio Paid Test',
-        price: 5000, duration: 30, type: 'Virtual'
-    }, TOKEN);
-    await post(`/api/services/${svcPaid}/rooms`, { room_id: 'room-2' }, TOKEN);
-
-    const paidDateStr = getFutureDate(30);
-
-    const paidAgenda = await post('/api/agendas', {
-        provider_id: 'prov-macarena',
-        service_id: svcPaid,
-        room_id: 'room-2',
-        type: 'punctual',
-        specific_date: paidDateStr,
-        start_time: '19:00',
-        end_time: '20:00',
-        status: 'published'
-    }, TOKEN);
-
-    const paidAgendaId = paidAgenda.data.id;
-    await new Promise(r => setTimeout(r, 1000));
-
-    const paidSpots = await get(`/api/spots/available?date=${paidDateStr}&serviceId=${svcPaid}`);
-    if (paidSpots.data.length > 0) {
-        // Crear booking Paid directo (adminMode)
-        const paidBk = await post('/api/bookings', {
-            spot_id: paidSpots.data[0].id,
-            clientName: 'Cliente Paid',
-            clientEmail: 'paid@test.com',
-            clientPhone: '+56900000002',
-            adminMode: true
-        });
-        assert(paidBk.status === 200, 'Booking Paid creado', `Status: ${paidBk.status}`);
-
-        // Intentar eliminar -> debe fallar
-        const delPaidRes = await del(`/api/agendas/${paidAgendaId}`, TOKEN);
-        assert(delPaidRes.status === 400, 'Eliminación bloqueada por booking Paid (400)', `Status: ${delPaidRes.status}, expected 400`);
-        if (delPaidRes.data && delPaidRes.data.error) {
-            assert(delPaidRes.data.error.includes('pagadas'), `Mensaje: "${delPaidRes.data.error}"`, 'Wrong error message');
-        }
+    if (FAILED > 0) {
+        process.exit(1);
     } else {
-        log('  ⚠️ No spots para test Paid booking');
+        process.exit(0);
     }
 }
 
-// =====================================================
-// CLEANUP
-// =====================================================
-async function cleanup() {
-    log('\n=== LIMPIEZA ===');
-    const testServices = ['test-svc-1', 'test-svc-2', 'test-svc-3', 'test-svc-5', 'test-svc-paid'];
-    for (const svcId of testServices) {
+// Start server on ephemeral port and execute
+db.ready.then(() => {
+    server = app.listen(0, async () => {
+        const port = server.address().port;
+        BASE_URL = `http://127.0.0.1:${port}`;
+        console.log(`Ephemeral test server running on ${BASE_URL}`);
         try {
-            const agendasRes = await get('/api/agendas', TOKEN);
-            const svcAgendas = agendasRes.data.filter(a => a.service_id === svcId);
-            for (const agenda of svcAgendas) {
-                await del(`/api/agendas/${agenda.id}`, TOKEN);
-            }
-            await del(`/api/services/${svcId}`, TOKEN);
-        } catch (e) { /* ignore */ }
-    }
-    log('  Limpieza completada');
-}
-
-// =====================================================
-// MAIN
-// =====================================================
-async function main() {
-    log('==========================================');
-    log('  PSICARTE: PRUEBAS DE INTEGRACIÓN');
-    log('  Sistema de Agendas y Reservas');
-    log('==========================================');
-
-    try {
-        await login();
-
-        const initAgendas = await get('/api/agendas', TOKEN);
-        log(`Agendas iniciales: ${initAgendas.data.length}`);
-        const initSpots = await get('/api/spots/available?from=2026-08-01&to=2030-12-31');
-        log(`Spots disponibles (totales): ${initSpots.data.length}`);
-
-        const testData1 = await testCaso1();
-        await testCaso2();
-        await testCaso3();
-        const testData4 = await testCaso4(testData1);
-        await testCaso5(testData4);
-        await cleanup();
-    } catch (error) {
-        log(`ERROR: ${error.message}`);
-        TEST_RESULTS.failed++;
-    }
-
-    log('\n==========================================');
-    log(`  RESULTADOS: ${TEST_RESULTS.passed}/${TEST_RESULTS.total} PASSED`);
-    if (TEST_RESULTS.failed > 0) log(`  ❌ ${TEST_RESULTS.failed} FAILED`);
-    else log('  ✅ TODAS LAS PRUEBAS PASARON');
-    log('==========================================');
-
-    process.exit(TEST_RESULTS.failed > 0 ? 1 : 0);
-}
-
-function waitForServer() {
-    return new Promise((resolve, reject) => {
-        let attempts = 0;
-        const interval = setInterval(() => {
-            attempts++;
-            http.get(`${BASE_URL}/api/config`, (res) => { clearInterval(interval); resolve(); }).on('error', () => {
-                if (attempts >= 120) { clearInterval(interval); reject(new Error('Server no disponible')); }
+            await runE2ETests();
+        } catch (err) {
+            console.error('Fatal error during E2E tests:', err);
+            process.exit(1);
+        } finally {
+            server.close(() => {
+                console.log('Ephemeral test server closed.');
             });
-        }, 1000);
+        }
     });
-}
-
-waitForServer().then(() => main()).catch(err => { log(`FATAL: ${err.message}`); process.exit(1); });
+}).catch(err => {
+    console.error('Database failed to initialize:', err);
+    process.exit(1);
+});

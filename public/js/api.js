@@ -14,7 +14,8 @@ async function loadAllData() {
         state.content = await (await fetch('/api/content')).json();
         state.rooms = await (await fetch('/api/rooms')).json();
         state.providers = await (await fetch('/api/providers')).json();
-        
+        const servRes = await fetch('/api/services');
+        state.services = servRes.ok ? await servRes.json() : [];
         state.activities = await (await fetch('/api/activities')).json();
 
         if (state.currentUser) {
@@ -25,11 +26,8 @@ async function loadAllData() {
             }
             state.bookings = await bookingsRes.json();
 
-            const blocksRes = await fetch('/api/blocks', { headers: getAuthHeaders() });
-            if (blocksRes.ok) state.sicknessBlocks = await blocksRes.json();
-
-            const clientsRes = await fetch('/api/clients', { headers: getAuthHeaders() });
-            if (clientsRes.ok) state.clients = await clientsRes.json();
+            const vacRes = await fetch('/api/vacations', { headers: getAuthHeaders() });
+            if (vacRes.ok) state.vacations = await vacRes.json();
 
             try {
                 const enrollRes = await fetch('/api/activities/enrollments', { headers: getAuthHeaders() });
@@ -42,9 +40,12 @@ async function loadAllData() {
         if (state.currentUser && state.currentUser.role === 'administrador') {
             try {
                 state.khipuNotifications = await (await fetch('/api/admin/khipu-notifications', { headers: getAuthHeaders() })).json();
+                const alertsRes = await fetch('/api/admin/alerts', { headers: getAuthHeaders() });
+                if (alertsRes.ok) state.adminAlerts = await alertsRes.json();
+                const accRes = await fetch('/api/google-meet/accounts', { headers: getAuthHeaders() });
+                if (accRes.ok) state.googleAccounts = await accRes.json();
             } catch (e) {
-                console.error("Error loading Khipu notifications:", e);
-                state.khipuNotifications = [];
+                console.error("Error loading admin extras:", e);
             }
         }
         

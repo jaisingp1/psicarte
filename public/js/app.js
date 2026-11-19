@@ -36,6 +36,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (typeof populateRoomSelects === 'function') {
         populateRoomSelects();
     }
+
+    // Google OAuth callback handling
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('oauth_success')) {
+        showToast("¡Cuenta de Google conectada exitosamente! Las videollamadas de Meet se generarán automáticamente.", "success");
+        window.history.replaceState({}, document.title, window.location.pathname);
+        if (state.currentUser?.role === 'prestador') {
+            const meetBtn = document.querySelector("button[onclick*='provider-meet']");
+            if (meetBtn) meetBtn.click();
+        } else if (state.currentUser?.role === 'administrador') {
+            const adminMeetBtn = document.querySelector("button[onclick*='admin-google-meet']");
+            if (adminMeetBtn) adminMeetBtn.click();
+        }
+    } else if (urlParams.get('oauth_error')) {
+        showToast("Error en autorización de Google: " + urlParams.get('oauth_error'), "error");
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
 });
 
 // ----------------------------------------------------

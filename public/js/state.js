@@ -5,17 +5,28 @@ const state = {
     content: {},
     rooms: [],
     providers: [],
+    services: [],
     bookings: [],
-    clients: [],
+    vacations: [],
     activities: [],
     articles: [],
     activityEnrollments: [],
-    sicknessBlocks: [],
+    adminAlerts: [],
+    googleAccounts: [],
     popupConfig: { active: false, title: "", text: "" },
     bannerConfig: { active: false, text: "" },
     whatsappConfig: { enabled: false, number: "" },
     khipuNotifications: [],
-    currentUser: JSON.parse(sessionStorage.getItem("psicarte_user")) || null
+    currentUser: (() => {
+        try {
+            const raw = sessionStorage.getItem("psicarte_user");
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed ? (parsed.user || parsed) : null;
+        } catch {
+            return null;
+        }
+    })()
 };
 
 // Booking Wizard State

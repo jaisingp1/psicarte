@@ -112,13 +112,24 @@ async function processLogin() {
         const data = await res.json();
         
         if (res.ok) {
-            state.currentUser = data;
-            sessionStorage.setItem("psicarte_user", JSON.stringify(data));
+            const user = data.user || {
+                id: data.id,
+                name: data.name,
+                email: data.email,
+                role: data.role
+            };
+            state.currentUser = user;
+            sessionStorage.setItem("psicarte_user", JSON.stringify(user));
             if (data.token) {
                 setToken(data.token);
             }
-            showToast(`¡Bienvenido/a, ${data.name}!`, "success");
+            showToast(`¡Bienvenido/a, ${user.name || 'usuario'}!`, "success");
             
+            // Cargar datos completos para el rol autenticado
+            if (typeof loadAllData === 'function') {
+                await loadAllData();
+            }
+
             // Redirect to acceso.html or update UI if already there
             const isAccesoPage = window.location.pathname.includes('acceso.html');
             if (isAccesoPage) {
@@ -131,6 +142,7 @@ async function processLogin() {
             showToast(data.error || "Acceso incorrecto", "error");
         }
     } catch (e) {
+        console.error("Error en processLogin:", e);
         showToast("Error al conectar con el servidor.", "error");
     }
 }
@@ -159,9 +171,12 @@ function updateAuthUI() {
         const dashUserRole = document.getElementById("dash-user-role");
         const dashUserAvatar = document.getElementById("dash-user-avatar");
         
-        if (dashUserName) dashUserName.innerText = state.currentUser.name;
-        if (dashUserRole) dashUserRole.innerText = state.currentUser.role;
-        if (dashUserAvatar) dashUserAvatar.innerText = state.currentUser.name.substring(0, 2).toUpperCase();
+        const userName = state.currentUser.name || state.currentUser.email || "Usuario";
+        const userRole = state.currentUser.role || "usuario";
+
+        if (dashUserName) dashUserName.innerText = userName;
+        if (dashUserRole) dashUserRole.innerText = userRole;
+        if (dashUserAvatar) dashUserAvatar.innerText = userName.substring(0, 2).toUpperCase();
         
         renderSidebarMenu();
         renderDashboardPanes();

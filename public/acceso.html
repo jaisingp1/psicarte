@@ -94,6 +94,16 @@
                 <!-- Main Work Area -->
                 <div class="dashboard-main" id="dashboard-main-content">
 
+                    <!-- Admin Alerts Banner -->
+                    <div id="admin-alerts-banner" class="card" style="display: none; border-left: 4px solid var(--color-warning); background: var(--bg-secondary); margin-bottom: 20px; padding: 16px 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+                            <div style="flex: 1;">
+                                <h4 style="margin: 0 0 6px 0; color: var(--color-warning);"><i class="fa-solid fa-triangle-exclamation"></i> Alertas del Sistema (<span id="admin-alerts-count">0</span>)</h4>
+                                <div id="admin-alerts-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- USER / CLIENT PANES -->
                     <div id="pane-client-bookings" class="dashboard-pane">
                         <h3>Mis Agendamientos</h3>
@@ -154,48 +164,93 @@
                     </div>
 
                     <div id="pane-provider-blocks" class="dashboard-pane">
-                        <h3>Bloqueos por Enfermedad / Administrativos</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Bloquea horas específicas en las
-                            que no estarás disponible.</p>
+                        <h3>Vacaciones y Ausencias del Prestador</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Registra tus periodos de vacaciones o ausencias. Durante estos días se bloqueará automáticamente la disponibilidad y no se permitirán nuevas citas.</p>
 
-                        <form id="provider-block-form" onsubmit="addProviderBlock(event)">
+                        <form id="provider-vacation-form" onsubmit="saveProviderVacation(event)">
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="block-date">Fecha de Bloqueo:</label>
-                                    <input type="date" id="block-date" class="form-control" required>
+                                    <label for="prov-vac-start-date">Fecha Inicio:</label>
+                                    <input type="date" id="prov-vac-start-date" class="form-control" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="block-time">Bloque Horario:</label>
-                                    <select id="block-time" class="form-control" required>
-                                        <option value="all">Todo el día</option>
-                                        <option value="09:00-10:00">09:00 - 10:00</option>
-                                        <option value="10:00-11:00">10:00 - 11:00</option>
-                                        <option value="11:00-12:00">11:00 - 12:00</option>
-                                        <option value="20:00-21:00">20:00 - 21:00</option>
-                                        <option value="21:00-22:00">21:00 - 22:00</option>
-                                    </select>
+                                    <label for="prov-vac-end-date">Fecha Término:</label>
+                                    <input type="date" id="prov-vac-end-date" class="form-control" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="prov-vac-start-time">Hora Inicio (opcional):</label>
+                                    <input type="time" id="prov-vac-start-time" class="form-control">
+                                    <small style="color: var(--text-secondary);">Dejar vacío para todo el día</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="prov-vac-end-time">Hora Término (opcional):</label>
+                                    <input type="time" id="prov-vac-end-time" class="form-control">
+                                    <small style="color: var(--text-secondary);">Dejar vacío para todo el día</small>
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label for="block-reason">Motivo:</label>
-                                <input type="text" id="block-reason" class="form-control"
-                                    placeholder="Licencia médica, cita dental..." required>
+                                <label for="prov-vac-reason">Motivo:</label>
+                                <input type="text" id="prov-vac-reason" class="form-control"
+                                    placeholder="Vacaciones de verano, permiso personal, congreso..." required>
                             </div>
-                            <button type="submit" class="btn-primary">Crear Bloqueo de Agenda</button>
+                            <button type="submit" class="btn-primary">Registrar Vacaciones</button>
                         </form>
 
-                        <h4 style="margin-top: 30px; margin-bottom: 10px;">Bloqueos Activos</h4>
+                        <h4 style="margin-top: 30px; margin-bottom: 10px;">Mis Vacaciones Registradas</h4>
                         <div class="table-responsive">
                             <table class="admin-table">
                                 <thead>
                                     <tr>
-                                        <th>Fecha</th>
+                                        <th>Fecha Inicio</th>
+                                        <th>Fecha Término</th>
                                         <th>Horario</th>
                                         <th>Motivo</th>
                                         <th>Acción</th>
                                     </tr>
                                 </thead>
-                                <tbody id="provider-blocks-list"></tbody>
+                                <tbody id="provider-vacations-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- PROVIDER GOOGLE MEET PANE -->
+                    <div id="pane-provider-meet" class="dashboard-pane">
+                        <h3><i class="fa-solid fa-video" style="color: var(--color-accent); margin-right: 8px;"></i> Mi Conexión con Google Meet & Calendar</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                            Conecta tu cuenta de Google Calendar una sola vez mediante inicio de sesión seguro (SSO). El sistema generará automáticamente las videollamadas de Google Meet para tus citas virtuales y renovará el acceso en segundo plano de forma indefinida.
+                        </p>
+
+                        <div class="card" style="box-shadow: none; margin-bottom: 25px; border-left: 4px solid var(--color-accent);">
+                            <h4><i class="fa-brands fa-google" style="color: var(--color-accent); margin-right: 8px;"></i> Vinculación de Cuenta Google</h4>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 15px;">
+                                Selecciona la sala virtual asignada a tus servicios y presiona <strong>Conectar con Google</strong> para autorizar el acceso a tu calendario.
+                            </p>
+                            <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                                <div class="form-group" style="flex: 1; min-width: 240px; margin-bottom: 0;">
+                                    <label for="prov-meet-room-select">Sala Virtual Asignada:</label>
+                                    <select id="prov-meet-room-select" class="form-control" onchange="updateProviderGoogleStatusCard()"></select>
+                                </div>
+                                <button type="button" class="btn-primary" onclick="startProviderGoogleOAuth()" style="display: inline-flex; align-items: center; gap: 8px;">
+                                    <i class="fa-brands fa-google"></i> Conectar con Google (SSO)
+                                </button>
+                            </div>
+                            <div id="prov-meet-status-indicator" style="margin-top: 15px;"></div>
+                        </div>
+
+                        <h4 style="margin-top: 25px; margin-bottom: 10px;">Mis Salas Virtuales Vinculadas</h4>
+                        <div class="table-responsive">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Sala Virtual</th>
+                                        <th>Cuenta Google Vinculada</th>
+                                        <th>Estado de Renovación</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="provider-google-accounts-list"></tbody>
                             </table>
                         </div>
                     </div>
@@ -203,195 +258,223 @@
                     <!-- ADMIN PANES -->
                     <div id="pane-admin-rooms" class="dashboard-pane">
                         <h3>Gestión de Salas (Físicas / Virtuales)</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Crea y edita salas y sus horarios
-                            de funcionamiento.</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Configura las salas físicas o virtuales, franjas semanales de atención, descansos, y excepciones por fecha o feriado.</p>
 
                         <form id="admin-room-form" onsubmit="saveRoom(event)">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="room-name">Nombre de la Sala:</label>
                                     <input type="text" id="room-name" class="form-control"
-                                        placeholder="Ej: Sala 1 - Presencial" required>
+                                        placeholder="Ej: Box 1 Presencial o Sala Virtual 1" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="room-type">Tipo:</label>
-                                    <select id="room-type" class="form-control" required>
+                                    <label for="room-type">Tipo de Sala:</label>
+                                    <select id="room-type" class="form-control" required onchange="toggleRoomTypeFields()">
                                         <option value="Física">Física (Presencial)</option>
                                         <option value="Virtual">Virtual (Online)</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="form-row">
+                                <div class="form-group" id="room-capacity-group">
+                                    <label for="room-capacity">Capacidad Configurable:</label>
+                                    <input type="number" id="room-capacity" class="form-control" value="1" min="1">
+                                    <small style="color: var(--text-secondary);">El cupo efectivo del sistema es 1 (sin solapamiento en la misma sala física).</small>
+                                </div>
+                                <div class="form-group" id="room-meet-group" style="display: none;">
+                                    <label style="display: flex; align-items: center; gap: 8px; margin-top: 28px; cursor: pointer;">
+                                        <input type="checkbox" id="room-meet-enabled" checked> Generar enlace de Google Meet automáticamente tras pago
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-row">
                                 <div class="form-group">
-                                    <label for="room-open">Horario Apertura:</label>
-                                    <input type="time" id="room-open" class="form-control" value="08:30" required>
+                                    <label for="room-min-advance">Antelación Mínima (minutos):</label>
+                                    <input type="number" id="room-min-advance" class="form-control" value="0" min="0">
                                 </div>
                                 <div class="form-group">
-                                    <label for="room-close">Horario Cierre:</label>
-                                    <input type="time" id="room-close" class="form-control" value="18:30" required>
+                                    <label for="room-max-advance">Antelación Máxima (días):</label>
+                                    <input type="number" id="room-max-advance" class="form-control" value="60" min="1">
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label for="room-meeting-link">Enlace de Videollamada (para Salas Virtuales):</label>
-                                <input type="url" id="room-meeting-link" class="form-control"
-                                    placeholder="Ej: https://meet.google.com/xxx-yyyy-zzz o enlace de Zoom">
-                                <small style="color: var(--text-secondary);">Se incluirá automáticamente en el correo de confirmación de reservas online en esta sala.</small>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="room-allow-all-services" checked onchange="toggleRoomServicesSelect()"> Habilitar para todos los servicios del catálogo
+                                </label>
+                                <div id="room-services-container" style="display: none; margin-top: 10px; background: var(--bg-secondary); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
+                                    <span style="font-size: 0.85rem; color: var(--text-secondary); display: block; margin-bottom: 6px;">Servicios permitidos en esta sala:</span>
+                                    <div id="room-services-checkboxes" style="display: flex; flex-wrap: wrap; gap: 12px;"></div>
+                                </div>
                             </div>
-                            <button type="submit" class="btn-primary">Añadir / Guardar Sala</button>
+
+                            <!-- Shifts and Breaks Section -->
+                            <div style="margin-top: 25px; border-top: 1px solid var(--color-border); padding-top: 15px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                                    <div>
+                                        <h4 style="margin: 0;">Franjas de Atención Semanales y Descansos</h4>
+                                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 4px 0 0 0;">Cada franja tiene un único prestador asignado. Puedes definir descansos dentro de cada franja.</p>
+                                    </div>
+                                    <button type="button" class="btn-secondary" onclick="addRoomShiftRow()"><i class="fa-solid fa-plus"></i> Añadir Franja</button>
+                                </div>
+                                <div id="room-shifts-builder" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px;">
+                                    <!-- Shifts dynamically rendered here -->
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 12px; margin-top: 20px;">
+                                <button type="submit" class="btn-primary" id="btn-save-room">Añadir / Guardar Sala</button>
+                                <button type="button" class="btn-secondary" id="btn-cancel-room" onclick="cancelEditRoom()" style="display: none;">Cancelar Edición</button>
+                            </div>
                         </form>
 
-                        <h4 style="margin-top: 30px; margin-bottom: 10px;">Salas Creadas</h4>
+                        <h4 style="margin-top: 35px; margin-bottom: 10px;">Salas Creadas</h4>
                         <div class="table-responsive">
                             <table class="admin-table">
                                 <thead>
                                     <tr>
                                         <th>Nombre</th>
                                         <th>Tipo</th>
-                                        <th>Horario Funcionamiento</th>
+                                        <th>Capacidad / Meet</th>
+                                        <th>Franjas Semanales</th>
+                                        <th>Antelación</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="admin-rooms-list"></tbody>
                             </table>
                         </div>
+
+                        <!-- Room Exceptions Section -->
+                        <div style="margin-top: 40px; border-top: 2px solid var(--color-border); padding-top: 25px;">
+                            <h4><i class="fa-solid fa-calendar-xmark" style="color: var(--color-accent); margin-right: 8px;"></i> Excepciones y Feriados de Salas</h4>
+                            <p style="color: var(--text-secondary); margin-bottom: 15px;">Configura excepciones en fechas puntuales para cerrar la sala, eliminar una franja, modificarla o agregar una franja extraordinaria.</p>
+
+                            <form id="admin-room-exception-form" onsubmit="saveRoomException(event)" style="background: var(--bg-secondary); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); margin-bottom: 20px;">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="exc-room-id">Sala:</label>
+                                        <select id="exc-room-id" class="form-control" required></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="exc-date">Fecha:</label>
+                                        <input type="date" id="exc-date" class="form-control" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="exc-type">Tipo de Excepción:</label>
+                                        <select id="exc-type" class="form-control" required onchange="toggleExceptionFields()">
+                                            <option value="close_day">Cerrar todo el día</option>
+                                            <option value="delete_shift">Eliminar una franja del día</option>
+                                            <option value="modify_shift">Modificar franja del día</option>
+                                            <option value="add_shift">Agregar franja extraordinaria</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-row" id="exc-shift-fields" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="exc-provider-id">Prestador Asignado:</label>
+                                        <select id="exc-provider-id" class="form-control"></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="exc-start-time">Hora Inicio:</label>
+                                        <input type="time" id="exc-start-time" class="form-control" value="09:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="exc-end-time">Hora Término:</label>
+                                        <input type="time" id="exc-end-time" class="form-control" value="13:00">
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="exc-reason">Motivo / Descripción:</label>
+                                    <input type="text" id="exc-reason" class="form-control" placeholder="Ej: Feriado nacional, mantenimiento, extensión horaria..." required>
+                                </div>
+                                <button type="submit" class="btn-primary">Registrar Excepción</button>
+                            </form>
+
+                            <div class="table-responsive">
+                                <table class="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Sala</th>
+                                            <th>Fecha</th>
+                                            <th>Tipo</th>
+                                            <th>Detalle</th>
+                                            <th>Motivo</th>
+                                            <th>Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-room-exceptions-list"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="pane-admin-providers" class="dashboard-pane">
-                        <h3>Gestión de Prestadores y Servicios</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Configura los prestadores y los
-                            servicios que ofrece cada uno.</p>
+                        <h3>Gestión de Servicios y Prestadores</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra el catálogo maestro de servicios y configura la duración y precio específico de cada servicio por prestador.</p>
 
+                        <!-- Master Catalog Section -->
+                        <div class="card" style="box-shadow: none; margin-bottom: 25px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                                <div>
+                                    <h4 style="margin: 0;">Catálogo General de Servicios</h4>
+                                    <small style="color: var(--text-secondary);">Servicios base disponibles en la plataforma con sus políticas generales.</small>
+                                </div>
+                                <button type="button" class="btn-primary" onclick="openMasterServiceModal()"><i class="fa-solid fa-plus"></i> Nuevo Servicio</button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nombre</th>
+                                            <th>Descripción</th>
+                                            <th>Antelación Mín/Máx</th>
+                                            <th>Reagendable</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-master-services-list"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Provider-Service Relationship Section -->
                         <div class="card" style="box-shadow: none;">
-                                <h4>Añadir Servicio a Prestador</h4>
-                                <form id="admin-service-form" onsubmit="addService(event)" style="margin-top: 15px;">
-                                    <p id="service-schedule-locked-note" hidden style="color: var(--text-secondary);">Al editar los datos del servicio, sus horarios y sala permanecen sin cambios.</p>
+                            <h4 id="provider-service-form-title">Asignar Servicio a Prestador</h4>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 15px;">Define qué profesional ofrece el servicio, su duración personalizada (en bloques múltiplos de 5 min) y arancel.</p>
+                            <form id="admin-service-form" onsubmit="saveProviderService(event)">
+                                <div class="form-row">
                                     <div class="form-group">
                                         <label for="adm-serv-provider">Prestador:</label>
                                         <select id="adm-serv-provider" class="form-control" required></select>
                                     </div>
                                     <div class="form-group">
-                                        <label for="adm-serv-name">Nombre del Servicio:</label>
-                                        <input type="text" id="adm-serv-name" class="form-control" required>
+                                        <label for="adm-serv-master-select">Servicio del Catálogo:</label>
+                                        <select id="adm-serv-master-select" class="form-control" required></select>
                                     </div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label for="adm-serv-price">Valor ($):</label>
-                                            <input type="number" id="adm-serv-price" class="form-control" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="adm-serv-duration">Duración (min):</label>
-                                            <input type="number" id="adm-serv-duration" class="form-control" required>
-                                        </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="adm-serv-duration">Duración (minutos, múltiplo de 5):</label>
+                                        <input type="number" id="adm-serv-duration" class="form-control" value="50" min="5" step="5" required>
+                                        <small style="color: var(--text-secondary);">Ej: 30, 45, 50, 60 min (rejilla de 5 min).</small>
                                     </div>
                                     <div class="form-group">
-                                        <label for="adm-serv-room">Sala Asignada:</label>
-                                        <select id="adm-serv-room" class="form-control" required>
-                                            <option value="">Selecciona una sala</option>
-                                        </select>
-                                        <small style="color: var(--text-secondary);">La agenda y sus horarios quedarán asociados a esta sala.</small>
+                                        <label for="adm-serv-price">Arancel / Precio ($ CLP):</label>
+                                        <input type="number" id="adm-serv-price" class="form-control" value="35000" min="0" step="500" required>
                                     </div>
-                                    <div class="form-group">
-                                        <label>Tipo de Agendamiento:</label>
-                                        <div style="display: flex; gap: 15px; margin-top: 5px;">
-                                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-                                                <input type="radio" name="adm-serv-recurrence" value="single" checked onchange="toggleRecurrenceConfig()"> Fecha específica
-                                            </label>
-                                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-                                                <input type="radio" name="adm-serv-recurrence" value="weekly" onchange="toggleRecurrenceConfig()"> Recurrente semanal
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div id="single-date-config" style="background: var(--bg-secondary); padding: 15px; border-radius: var(--radius-sm); margin-bottom: 15px;">
-                                        <div class="form-group">
-                                            <label for="adm-serv-single-date">Fecha del Servicio:</label>
-                                            <input type="date" id="adm-serv-single-date" class="form-control">
-                                        </div>
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label for="adm-serv-single-start">Hora de inicio:</label>
-                                                <input type="time" id="adm-serv-single-start" class="form-control" value="09:00">
-                                            </div>
-                                            <div class="form-group">
-                                                <label for="adm-serv-single-end">Hora de término:</label>
-                                                <input type="time" id="adm-serv-single-end" class="form-control" value="12:00">
-                                            </div>
-                                        </div>
-                                        <small style="color: var(--text-secondary);">Selecciona la fecha y el rango horario para esta agenda.</small>
-                                    </div>
-                                    <div id="recurrence-config" style="display: none; background: var(--bg-secondary); padding: 15px; border-radius: var(--radius-sm); margin-bottom: 15px;">
-                                        <div class="form-group">
-                                            <label>Días y horarios de atención:</label>
-                                            <div class="agenda-weekday-list">
-                                                <fieldset class="agenda-weekday">
-                                                    <legend><label><input type="checkbox" class="agenda-weekday-check" value="1"> Lunes</label></legend>
-                                                    <div class="agenda-time-ranges" data-day="1"><div class="agenda-time-range"><label>Desde <input type="time" class="agenda-range-start" value="09:00"></label><label>Hasta <input type="time" class="agenda-range-end" value="13:00"></label></div></div>
-                                                    <button type="button" class="btn-secondary agenda-add-range" onclick="addAgendaTimeRange(1)">Agregar intervalo</button>
-                                                </fieldset>
-                                                <fieldset class="agenda-weekday">
-                                                    <legend><label><input type="checkbox" class="agenda-weekday-check" value="2"> Martes</label></legend>
-                                                    <div class="agenda-time-ranges" data-day="2"><div class="agenda-time-range"><label>Desde <input type="time" class="agenda-range-start" value="09:00"></label><label>Hasta <input type="time" class="agenda-range-end" value="13:00"></label></div></div>
-                                                    <button type="button" class="btn-secondary agenda-add-range" onclick="addAgendaTimeRange(2)">Agregar intervalo</button>
-                                                </fieldset>
-                                                <fieldset class="agenda-weekday">
-                                                    <legend><label><input type="checkbox" class="agenda-weekday-check" value="3"> Miércoles</label></legend>
-                                                    <div class="agenda-time-ranges" data-day="3"><div class="agenda-time-range"><label>Desde <input type="time" class="agenda-range-start" value="09:00"></label><label>Hasta <input type="time" class="agenda-range-end" value="13:00"></label></div></div>
-                                                    <button type="button" class="btn-secondary agenda-add-range" onclick="addAgendaTimeRange(3)">Agregar intervalo</button>
-                                                </fieldset>
-                                                <fieldset class="agenda-weekday">
-                                                    <legend><label><input type="checkbox" class="agenda-weekday-check" value="4"> Jueves</label></legend>
-                                                    <div class="agenda-time-ranges" data-day="4"><div class="agenda-time-range"><label>Desde <input type="time" class="agenda-range-start" value="09:00"></label><label>Hasta <input type="time" class="agenda-range-end" value="13:00"></label></div></div>
-                                                    <button type="button" class="btn-secondary agenda-add-range" onclick="addAgendaTimeRange(4)">Agregar intervalo</button>
-                                                </fieldset>
-                                                <fieldset class="agenda-weekday">
-                                                    <legend><label><input type="checkbox" class="agenda-weekday-check" value="5"> Viernes</label></legend>
-                                                    <div class="agenda-time-ranges" data-day="5"><div class="agenda-time-range"><label>Desde <input type="time" class="agenda-range-start" value="09:00"></label><label>Hasta <input type="time" class="agenda-range-end" value="13:00"></label></div></div>
-                                                    <button type="button" class="btn-secondary agenda-add-range" onclick="addAgendaTimeRange(5)">Agregar intervalo</button>
-                                                </fieldset>
-                                                <fieldset class="agenda-weekday">
-                                                    <legend><label><input type="checkbox" class="agenda-weekday-check" value="6"> Sábado</label></legend>
-                                                    <div class="agenda-time-ranges" data-day="6"><div class="agenda-time-range"><label>Desde <input type="time" class="agenda-range-start" value="09:00"></label><label>Hasta <input type="time" class="agenda-range-end" value="13:00"></label></div></div>
-                                                    <button type="button" class="btn-secondary agenda-add-range" onclick="addAgendaTimeRange(6)">Agregar intervalo</button>
-                                                </fieldset>
-                                                <fieldset class="agenda-weekday">
-                                                    <legend><label><input type="checkbox" class="agenda-weekday-check" value="7"> Domingo</label></legend>
-                                                    <div class="agenda-time-ranges" data-day="7"><div class="agenda-time-range"><label>Desde <input type="time" class="agenda-range-start" value="09:00"></label><label>Hasta <input type="time" class="agenda-range-end" value="13:00"></label></div></div>
-                                                    <button type="button" class="btn-secondary agenda-add-range" onclick="addAgendaTimeRange(7)">Agregar intervalo</button>
-                                                </fieldset>
-                                            </div>
-                                        </div>
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label for="adm-serv-recurrence-start-date">Fecha Inicio:</label>
-                                                <input type="date" id="adm-serv-recurrence-start-date" class="form-control">
-                                            </div>
-                                            <div class="form-group">
-                                                <label for="adm-serv-recurrence-end-date">Fecha Fin (vacío = para siempre):</label>
-                                                <input type="date" id="adm-serv-recurrence-end-date" class="form-control">
-                                            </div>
-                                        </div>
-                                        <small style="color: var(--text-secondary);">Puedes seleccionar varios días y agregar más de un intervalo horario para cada día.</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label
-                                            style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-                                            <input type="checkbox" id="adm-serv-allow-reschedule" checked> Permitir
-                                            reagendamiento
-                                        </label>
-                                    </div>
-                                    <div class="form-group" id="adm-serv-max-reschedules-container">
-                                        <label for="adm-serv-max-reschedules">Máx. Reagendamientos:</label>
-                                        <input type="number" id="adm-serv-max-reschedules" class="form-control"
-                                            value="1" min="1">
-                                    </div>
-                                    <button type="submit" class="btn-primary" style="width: 100%;">Añadir
-                                        Servicio</button>
-                                </form>
-                            </div>
+                                </div>
+                                <div style="display: flex; gap: 10px;">
+                                    <button type="submit" class="btn-primary" id="btn-save-provider-service">Guardar Asignación</button>
+                                    <button type="button" class="btn-secondary" id="btn-cancel-provider-service" onclick="cancelEditProviderService()" style="display: none;">Cancelar</button>
+                                </div>
+                            </form>
+                        </div>
 
-                        <h4 style="margin-top: 30px; margin-bottom: 10px;">Listado de Prestadores y Servicios</h4>
+                        <h4 style="margin-top: 35px; margin-bottom: 10px;">Listado de Prestadores y Servicios Asignados</h4>
                         <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                             <input type="text" id="adm-services-search" class="form-control" placeholder="Buscar por prestador o servicio..." oninput="renderProvidersServicesTable()" style="max-width: 400px;">
-                            <button class="btn-primary" onclick="generateAllSpots()"><i class="fa-solid fa-calendar-plus"></i> Generar Spots</button>
                             <button class="btn-secondary" onclick="exportProvidersServicesExcel()"><i class="fa-solid fa-file-excel"></i> Exportar Excel</button>
                         </div>
                         <div style="overflow-x: auto;">
@@ -402,7 +485,7 @@
                                         <th style="cursor: pointer;" onclick="sortProvidersServicesTable('serviceName')">Servicio <i class="fa-solid fa-sort"></i></th>
                                         <th style="cursor: pointer;" onclick="sortProvidersServicesTable('price')">Precio <i class="fa-solid fa-sort"></i></th>
                                         <th style="cursor: pointer;" onclick="sortProvidersServicesTable('duration')">Duración <i class="fa-solid fa-sort"></i></th>
-                                        <th style="cursor: pointer;" onclick="sortProvidersServicesTable('type')">Tipo <i class="fa-solid fa-sort"></i></th>
+                                        <th>Modalidad</th>
                                         <th>Reagendable</th>
                                         <th>Acciones</th>
                                     </tr>
@@ -414,55 +497,59 @@
                     </div>
 
                     <div id="pane-admin-blocks" class="dashboard-pane">
-                        <h3>Bloqueos de Agenda (Global)</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra bloqueos de agenda por
-                            enfermedad, licencias o festivos para cualquier prestador.</p>
+                        <h3>Vacaciones y Ausencias de Prestadores</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Administra los periodos de vacaciones y ausencias de todos los prestadores. El sistema valida automáticamente que no existan citas confirmadas en el rango antes de crearlas.</p>
 
-                        <form id="admin-block-form" onsubmit="addAdminBlock(event)">
+                        <form id="admin-vacation-form" onsubmit="saveAdminVacation(event)">
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="adm-block-provider">Prestador:</label>
-                                    <select id="adm-block-provider" class="form-control" required></select>
+                                    <label for="adm-vac-provider">Prestador:</label>
+                                    <select id="adm-vac-provider" class="form-control" required></select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="adm-block-date">Fecha:</label>
-                                    <input type="date" id="adm-block-date" class="form-control" required>
+                                    <label for="adm-vac-reason">Motivo:</label>
+                                    <input type="text" id="adm-vac-reason" class="form-control" placeholder="Vacaciones anuales, congreso, licencia..." required>
                                 </div>
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="adm-block-time">Horario:</label>
-                                    <select id="adm-block-time" class="form-control" required>
-                                        <option value="all">Todo el día</option>
-                                        <option value="09:00-10:00">09:00 - 10:00</option>
-                                        <option value="10:00-11:00">10:00 - 11:00</option>
-                                        <option value="11:00-12:00">11:00 - 12:00</option>
-                                        <option value="20:00-21:00">20:00 - 21:00</option>
-                                        <option value="21:00-22:00">21:00 - 22:00</option>
-                                    </select>
+                                    <label for="adm-vac-start-date">Fecha Inicio:</label>
+                                    <input type="date" id="adm-vac-start-date" class="form-control" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="adm-block-reason">Motivo:</label>
-                                    <input type="text" id="adm-block-reason" class="form-control"
-                                        placeholder="Enfermedad, Licencia, Feriado..." required>
+                                    <label for="adm-vac-end-date">Fecha Término:</label>
+                                    <input type="date" id="adm-vac-end-date" class="form-control" required>
                                 </div>
                             </div>
-                            <button type="submit" class="btn-primary">Registrar Bloqueo</button>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="adm-vac-start-time">Hora Inicio (opcional):</label>
+                                    <input type="time" id="adm-vac-start-time" class="form-control">
+                                    <small style="color: var(--text-secondary);">Dejar vacío para todo el día</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="adm-vac-end-time">Hora Término (opcional):</label>
+                                    <input type="time" id="adm-vac-end-time" class="form-control">
+                                    <small style="color: var(--text-secondary);">Dejar vacío para todo el día</small>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn-primary">Registrar Vacaciones</button>
                         </form>
 
-                        <h4 style="margin-top: 30px; margin-bottom: 10px;">Todos los Bloqueos Activos</h4>
+                        <h4 style="margin-top: 30px; margin-bottom: 10px;">Todas las Vacaciones y Ausencias Registradas</h4>
                         <div class="table-responsive">
                             <table class="admin-table">
                                 <thead>
                                     <tr>
                                         <th>Prestador</th>
-                                        <th>Fecha</th>
-                                        <th>Bloque Horario</th>
+                                        <th>Fecha Inicio</th>
+                                        <th>Fecha Término</th>
+                                        <th>Horario</th>
                                         <th>Motivo</th>
                                         <th>Acción</th>
                                     </tr>
                                 </thead>
-                                <tbody id="admin-blocks-list"></tbody>
+                                <tbody id="admin-vacations-list"></tbody>
                             </table>
                         </div>
                     </div>
@@ -708,6 +795,7 @@
                                         <th style="cursor: pointer;" onclick="sortAdminBookingsTable('serviceName')">Servicio <i class="fa-solid fa-sort"></i></th>
                                         <th style="cursor: pointer;" onclick="sortAdminBookingsTable('roomName')">Sala <i class="fa-solid fa-sort"></i></th>
                                         <th style="cursor: pointer;" onclick="sortAdminBookingsTable('status')">Estado <i class="fa-solid fa-sort"></i></th>
+                                        <th>Google Meet</th>
                                         <th>Acción</th>
                                     </tr>
                                 </thead>
@@ -719,13 +807,8 @@
 
                     <!-- ADMIN ROOM SCHEDULE PANE -->
                     <div id="pane-admin-room-schedule" class="dashboard-pane">
-                        <h3>Agenda de Salas</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Visualiza y gestiona la agenda de todas las salas. Arrastra reservas para moverlas entre salas.</p>
-                        
-                        <div style="margin-bottom: 15px;">
-                            <button class="btn-primary" onclick="generateAllSpots()"><i class="fa-solid fa-calendar-plus"></i> Generar Todos los Spots</button>
-                            <small style="color: var(--text-secondary); margin-left: 10px;">Genera los slots disponibles para todos los servicios configurados.</small>
-                        </div>
+                        <h3>Agenda de Salas (Rejilla de 5 Minutos)</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Visualiza en tiempo real los horarios, franjas efectivas, descansos, vacaciones y reservas de cada sala. Mueve citas revalidando disponibilidad.</p>
                         
                         <div id="room-schedule-controls-top" class="room-schedule-controls">
                             <div class="view-switcher">
@@ -755,21 +838,67 @@
 
                         <!-- Modal para mover reserva -->
                         <div id="move-booking-modal" class="modal-overlay" style="display: none;">
-                            <div class="modal-container" style="max-width: 450px;">
+                            <div class="modal-container" style="max-width: 520px;">
                                 <div class="modal-header">
-                                    <h3>Mover Reserva</h3>
+                                    <h3><i class="fa-solid fa-arrows-up-down-left-right" style="color: var(--color-accent); margin-right: 8px;"></i> Mover Reserva</h3>
                                     <button class="modal-close" onclick="closeMoveModal()"><i class="fa-solid fa-xmark"></i></button>
                                 </div>
                                 <div class="modal-body">
-                                    <p>¿Cómo deseas mover esta reserva?</p>
-                                    <div id="move-booking-info" style="background: var(--bg-secondary); padding: 10px; border-radius: var(--radius-sm); margin: 10px 0; font-size: 0.9rem;"></div>
+                                    <input type="hidden" id="move-booking-id">
+                                    <div id="move-booking-info" style="background: var(--bg-secondary); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); margin-bottom: 15px; font-size: 0.9rem;"></div>
+                                    <div class="form-group">
+                                        <label for="move-new-room">Nueva Sala:</label>
+                                        <select id="move-new-room" class="form-control" onchange="onMoveTargetChange()"></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="move-new-date">Nueva Fecha:</label>
+                                        <input type="date" id="move-new-date" class="form-control" onchange="onMoveTargetChange()" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="move-new-start-time">Hora de Inicio (formato HH:MM, rejilla de 5 min):</label>
+                                        <input type="time" id="move-new-start-time" class="form-control" step="300" required>
+                                        <small style="color: var(--text-secondary);">El sistema revalidará disponibilidad de sala, prestador, descansos y vacaciones al confirmar.</small>
+                                    </div>
                                 </div>
-                                <div class="modal-footer" style="display: flex; gap: 10px;">
+                                <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
                                     <button class="btn-secondary" onclick="closeMoveModal()">Cancelar</button>
-                                    <button class="btn-primary" id="btn-move-single" onclick="executeMoveBooking(false)">Solo este día</button>
-                                    <button class="btn-primary" id="btn-move-all" onclick="executeMoveBooking(true)">Todas las instancias</button>
+                                    <button class="btn-primary" onclick="confirmMoveBookingModal()">Confirmar Movimiento</button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- PANEL DE GOOGLE MEET Y MONITOREO -->
+                    <div id="pane-admin-google-meet" class="dashboard-pane">
+                        <h3><i class="fa-solid fa-video" style="color: var(--color-accent); margin-right: 8px;"></i> Monitoreo de Google Meet por Prestador</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                            Monitorea el estado de vinculación de Google Calendar de cada profesional en las salas virtuales. Cada prestador vincula su cuenta directamente desde su panel personal de forma segura (SSO).
+                        </p>
+
+                        <div class="card" style="box-shadow: none; margin-bottom: 25px; border-left: 4px solid var(--color-online);">
+                            <h4><i class="fa-solid fa-shield-halved" style="color: var(--color-online); margin-right: 8px;"></i> Protocolo de Vinculación Autónoma de Prestadores</h4>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 14px;">
+                                Por seguridad y privacidad de credenciales, cada psicólogo o terapeuta conecta su propia cuenta de Google Calendar iniciando sesión desde su panel (pestaña <em>"Conexión Google Meet"</em>). El sistema almacena tokens permanentes con auto-renovación para generar videollamadas en citas confirmadas.
+                            </p>
+                            <button type="button" class="btn-secondary" onclick="copyProviderMeetInstructions()" style="display: inline-flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-copy"></i> Copiar enlace de acceso para prestadores
+                            </button>
+                        </div>
+
+                        <h4 style="margin-top: 25px; margin-bottom: 10px;">Estado de Vinculación por Prestador</h4>
+                        <div class="table-responsive">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Prestador</th>
+                                        <th>Sala Virtual</th>
+                                        <th>Estado de Conexión</th>
+                                        <th>Auto-renovación</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="google-accounts-table-body"></tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -1331,6 +1460,73 @@
                 <button type="button" class="btn-primary" onclick="confirmSaveThemeChanges(true)">
                     <i class="fa-solid fa-check"></i> Guardar de Todos Modos
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Meet Link Modal -->
+    <div id="edit-meet-modal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-video" style="color: var(--color-accent); margin-right: 8px;"></i> Enlace de Google Meet</h3>
+                <button type="button" class="modal-close" onclick="closeEditMeetModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p id="edit-meet-booking-info" style="font-weight: 500; margin-bottom: 12px; color: var(--text-primary);"></p>
+                <input type="hidden" id="edit-meet-booking-id">
+                <div class="form-group">
+                    <label for="edit-meet-link-input">Enlace de la Videollamada:</label>
+                    <input type="url" id="edit-meet-link-input" class="form-control" placeholder="https://meet.google.com/xxx-yyyy-zzz" required>
+                    <small style="color: var(--text-secondary);">Ingresa el enlace oficial de la sesión virtual en Google Meet.</small>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" class="btn-secondary" onclick="closeEditMeetModal()">Cancelar</button>
+                <button type="button" class="btn-primary" onclick="submitEditMeetLink()">Guardar Enlace</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Master Service Modal -->
+    <div id="master-service-modal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 540px;">
+            <div class="modal-header">
+                <h3 id="master-service-modal-title">Nuevo Servicio en Catálogo</h3>
+                <button type="button" class="modal-close" onclick="closeMasterServiceModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="master-service-id">
+                <div class="form-group">
+                    <label for="master-service-name">Nombre del Servicio:</label>
+                    <input type="text" id="master-service-name" class="form-control" placeholder="Ej: Psicoterapia Individual" required>
+                </div>
+                <div class="form-group">
+                    <label for="master-service-desc">Descripción:</label>
+                    <textarea id="master-service-desc" class="form-control" rows="3" placeholder="Descripción detallada del servicio..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="master-service-min-advance">Antelación Mínima (min):</label>
+                        <input type="number" id="master-service-min-advance" class="form-control" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="master-service-max-advance">Antelación Máxima (días):</label>
+                        <input type="number" id="master-service-max-advance" class="form-control" value="60" min="1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="master-service-allow-reschedule" checked> Permitir Reagendamiento
+                    </label>
+                </div>
+                <div class="form-group" id="master-service-max-reschedules-group">
+                    <label for="master-service-max-reschedules">Máximo de Reagendamientos:</label>
+                    <input type="number" id="master-service-max-reschedules" class="form-control" value="1" min="1">
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" class="btn-secondary" onclick="closeMasterServiceModal()">Cancelar</button>
+                <button type="button" class="btn-primary" onclick="submitMasterService()">Guardar Servicio</button>
             </div>
         </div>
     </div>

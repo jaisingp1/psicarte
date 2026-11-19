@@ -22,7 +22,7 @@ function sendBookingConfirmationEmail(db, bookingId, callback = () => {}) {
     if (!bookingId) return callback(null, { sent: false, reason: 'missing_booking_id' });
 
     db.get(
-        `SELECT b.*, u.name AS providerName, r.type AS roomType, r.meeting_link AS roomMeetingLink
+        `SELECT b.*, u.name AS providerName, r.type AS roomType
          FROM bookings b
          LEFT JOIN users u ON b.providerId = u.id
          LEFT JOIN rooms r ON b.roomId = r.id
@@ -60,16 +60,24 @@ function sendBookingConfirmationEmail(db, bookingId, callback = () => {}) {
                         const contactAddress = contentMap.contactAddress || 'Oficina Virtual Las Bellotas 199, Providencia, RM';
 
                         const isVirtual = booking.roomType === 'Virtual' || /virtual|zoom|online/i.test(booking.roomName || '');
-                        const meetingLink = (booking.roomMeetingLink || '').trim();
+                        const meetLink = (booking.meet_link || '').trim();
 
                         const locationLabel = isVirtual ? 'Enlace de Atención Online' : 'Dirección de Atención Presencial';
-                        const locationValue = isVirtual
-                            ? (meetingLink || `Se enviará a tu correo desde ${contactEmail} minutos antes de la sesión.`)
-                            : contactAddress;
+                        let locationValue = contactAddress;
+                        let locationHtml = `<p><strong>${locationLabel}:</strong> ${contactAddress}</p>`;
 
-                        const locationHtml = isVirtual && meetingLink
-                            ? `<p><strong>${locationLabel}:</strong> <a href="${meetingLink}" target="_blank" rel="noopener noreferrer">${meetingLink}</a></p>`
-                            : `<p><strong>${locationLabel}:</strong> ${locationValue}</p>`;
+                        if (isVirtual) {
+                            if (meetLink) {
+                                locationValue = meetLink;
+                                locationHtml = `<p><strong>Enlace Google Meet:</strong> <a href="${meetLink}" target="_blank" rel="noopener noreferrer">${meetLink}</a></p>`;
+                            } else if (booking.meet_status === 'pending') {
+                                locationValue = 'Link pendiente (se generará automáticamente y estará disponible en su panel)';
+                                locationHtml = `<p><strong>${locationLabel}:</strong> <em>Link pendiente</em> (se actualizará en su panel de citas a la brevedad)</p>`;
+                            } else {
+                                locationValue = `Se enviará a tu correo desde ${contactEmail} minutos antes de la sesión.`;
+                                locationHtml = `<p><strong>${locationLabel}:</strong> ${locationValue}</p>`;
+                            }
+                        }
 
                         const fromAddress = process.env.SMTP_FROM || `"Centro Integral PsicArte" <${contactEmail}>`;
                         const subject = `Confirmación de Reserva - ${booking.serviceName} (${booking.date})`;

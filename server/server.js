@@ -6,7 +6,21 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('./database');
-const { SpotGenerator, timeToMinutes, minutesToTime } = require('./spot-generator');
+const {
+    timeToMinutes,
+    minutesToTime,
+    getAvailableSpots,
+    getMonthlyAvailability,
+    validateBookingSlot,
+    getEffectiveRoomShiftsForDate
+} = require('./availability-engine');
+const {
+    getGoogleOAuthUrl,
+    handleGoogleOAuthCallback,
+    triggerMeetLinkGeneration,
+    retryMeetLinkGeneration,
+    updateManualMeetLink
+} = require('./google-meet');
 const { sendBookingConfirmationEmail } = require('./mailer');
 
 const app = express();
@@ -35,6 +49,17 @@ function authenticateToken(req, res, next) {
     });
 }
 
+// Optional Auth Middleware (sets req.user if token present)
+function optionalAuth(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return next();
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (!err) req.user = user;
+        next();
+    });
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -43,181 +68,121 @@ app.use(express.urlencoded({ extended: false }));
 // Serve static frontend files from /public directory
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// =====================================================
-// SECTION 1: UTILITY FUNCTIONS
-// =====================================================
-
-// Legacy spot generator (kept for internal use only)
-function generateSpotsLegacy(durationMin, rangeStart, rangeEnd, existingBookings) {
-    const spots = [];
-    let current = timeToMinutes(rangeStart);
-    const end = timeToMinutes(rangeEnd);
-
-    while (current + durationMin <= end) {
-        const spotStart = minutesToTime(current);
-        const spotEnd = minutesToTime(current + durationMin);
-
-        const hasConflict = existingBookings.some(b => {
-            const bStart = timeToMinutes(b.startTime);
-            const bEnd = timeToMinutes(b.endTime);
-            return current < bEnd && (current + durationMin) > bStart;
-        });
-
-        spots.push({
-            startTime: spotStart,
-            endTime: spotEnd,
-            available: !hasConflict
-        });
-
-        current += durationMin;
-    }
-    return spots;
+// Helper DB Promise wrappers
+function dbGet(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.get(sql, params, (err, row) => (err ? reject(err) : resolve(row || null)));
+    });
 }
 
-function normalizeAgendaRecurrenceRule(value) {
-    let rule;
-    try {
-        rule = typeof value === 'string' ? JSON.parse(value) : value;
-    } catch (error) {
-        return { error: 'La regla de recurrencia debe ser JSON válido.' };
-    }
+function dbAll(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows || [])));
+    });
+}
 
-    if (!rule || typeof rule !== 'object' || Array.isArray(rule)) {
-        return { error: 'La regla de recurrencia no es válida.' };
-    }
-
-    if (rule.byweekday !== undefined &&
-        (!Array.isArray(rule.byweekday) ||
-            rule.byweekday.some(day => !Number.isInteger(Number(day)) || Number(day) < 1 || Number(day) > 7))) {
-        return { error: 'Los días recurrentes deben usar valores ISO entre 1 (lunes) y 7 (domingo).' };
-    }
-
-    const timeRanges = rule.time_ranges;
-    if (timeRanges !== undefined) {
-        if (!timeRanges || typeof timeRanges !== 'object' || Array.isArray(timeRanges)) {
-            return { error: 'Los intervalos horarios por día no son válidos.' };
-        }
-
-        const normalizedRanges = {};
-        for (const [day, configuredRanges] of Object.entries(timeRanges)) {
-            if (!/^[1-7]$/.test(day)) {
-                return { error: 'Cada intervalo debe corresponder a un día ISO entre 1 y 7.' };
-            }
-
-            const ranges = Array.isArray(configuredRanges) ? configuredRanges : [configuredRanges];
-            if (!ranges.length) return { error: `Agregue al menos un intervalo para el día ${day}.` };
-
-            const parsedRanges = [];
-            for (const range of ranges) {
-                if (!range || typeof range.start !== 'string' || typeof range.end !== 'string' ||
-                    !/^([01]\d|2[0-3]):[0-5]\d$/.test(range.start) ||
-                    !/^([01]\d|2[0-3]):[0-5]\d$/.test(range.end) ||
-                    range.start >= range.end) {
-                    return { error: `Revise los intervalos horarios del día ${day}.` };
-                }
-                parsedRanges.push({ start: range.start, end: range.end });
-            }
-
-            parsedRanges.sort((a, b) => a.start.localeCompare(b.start));
-            for (let index = 1; index < parsedRanges.length; index += 1) {
-                if (parsedRanges[index].start < parsedRanges[index - 1].end) {
-                    return { error: `Los intervalos del día ${day} no pueden superponerse.` };
-                }
-            }
-            normalizedRanges[day] = parsedRanges;
-        }
-
-        rule.time_ranges = normalizedRanges;
-    }
-
-    return { value: JSON.stringify(rule) };
+function dbRun(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function (err) {
+            if (err) reject(err);
+            else resolve(this);
+        });
+    });
 }
 
 // =====================================================
 // SECTION 2: KHIPU PAYMENT GATEWAY HELPERS (API v3)
 // =====================================================
-async function callKhipuApi(method, path, body = null) {
+const KHIPU_API_URL = process.env.KHIPU_API_URL || 'https://payment-api.khipu.com/v3';
+
+async function callKhipuApi(method, endpoint, body = null) {
     const apiKey = process.env.KHIPU_API_KEY;
     if (!apiKey) {
-        throw new Error('KHIPU_API_KEY no está configurada.');
+        throw new Error('KHIPU_API_KEY no configurada');
     }
 
-    const apiBase = process.env.KHIPU_API_URL || 'https://payment-api.khipu.com/v3';
-    const url = `${apiBase}${path}`;
+    const url = `${KHIPU_API_URL}${endpoint}`;
     const headers = {
         'x-api-key': apiKey,
+        'Content-Type': 'application/json',
         'Accept': 'application/json'
     };
 
-    const options = {
-        method: method.toUpperCase(),
-        headers,
-        signal: AbortSignal.timeout(10000)
-    };
-
-    if (body && ['POST', 'PUT', 'PATCH'].includes(options.method)) {
-        headers['Content-Type'] = 'application/json';
+    const options = { method, headers };
+    if (body && (method === 'POST' || method === 'PUT')) {
         options.body = JSON.stringify(body);
     }
 
     const response = await fetch(url, options);
     if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Khipu API error: ${response.status} - ${errorText}`);
+        throw new Error(`Khipu API error (${response.status}): ${errorText}`);
     }
-    return await response.json();
+
+    return response.json();
 }
 
-function reconcileBookingPayment(bookingId, doneCallback) {
-    db.get("SELECT * FROM bookings WHERE id = ?", [bookingId], (errBk, booking) => {
+function reconcileBookingPayment(bookingId, doneCallback = () => { }) {
+    db.get('SELECT * FROM bookings WHERE id = ?', [bookingId], async (errBk, booking) => {
         if (errBk || !booking) {
-            return doneCallback ? doneCallback(new Error('Reserva no encontrada')) : null;
+            return doneCallback(errBk || new Error('Reserva no encontrada'));
         }
         if (booking.status === 'Paid') {
-            return doneCallback ? doneCallback(null, 'Already processed') : null;
+            return doneCallback(null, 'Already processed');
         }
 
         const slotStartMin = timeToMinutes(booking.startTime);
         const slotEndMin = timeToMinutes(booking.endTime);
 
-        db.all("SELECT * FROM bookings WHERE providerId = ? AND date = ? AND status = 'Paid'", [booking.providerId, booking.date], (err2, books) => {
-            const hasOverlappingBooking = !err2 && books.some(bk => {
+        try {
+            // 1. Conflict check: same provider in any room
+            const provBooks = await dbAll(
+                "SELECT * FROM bookings WHERE providerId = ? AND date = ? AND status = 'Paid' AND id != ?",
+                [booking.providerId, booking.date, bookingId]
+            );
+            const hasOverlappingBooking = provBooks.some(bk => {
                 const bkStart = timeToMinutes(bk.startTime);
                 const bkEnd = timeToMinutes(bk.endTime);
-                return (slotStartMin < bkEnd && bkStart < slotEndMin);
+                return slotStartMin < bkEnd && bkStart < slotEndMin;
             });
 
-            db.all("SELECT * FROM bookings WHERE roomId = ? AND date = ? AND status = 'Paid'", [booking.roomId, booking.date], (err3, roomBooks) => {
-                const hasRoomConflict = !err3 && roomBooks.some(bk => {
+            // 2. Conflict check: same room if physical
+            const room = await dbGet('SELECT type FROM rooms WHERE id = ?', [booking.roomId]);
+            let hasRoomConflict = false;
+            if (room && room.type === 'Física') {
+                const roomBooks = await dbAll(
+                    "SELECT * FROM bookings WHERE roomId = ? AND date = ? AND status = 'Paid' AND id != ?",
+                    [booking.roomId, booking.date, bookingId]
+                );
+                hasRoomConflict = roomBooks.some(bk => {
                     const bkStart = timeToMinutes(bk.startTime);
                     const bkEnd = timeToMinutes(bk.endTime);
-                    return (slotStartMin < bkEnd && bkStart < slotEndMin);
+                    return slotStartMin < bkEnd && bkStart < slotEndMin;
                 });
+            }
 
-                let finalStatus = 'Paid';
-                if (hasOverlappingBooking || hasRoomConflict) {
-                    console.error(`Conflict detected for booking ${bookingId}. Marking as Payment_Conflict.`);
-                    finalStatus = 'Payment_Conflict';
-                }
+            let finalStatus = 'Paid';
+            if (hasOverlappingBooking || hasRoomConflict) {
+                console.error(`Conflict detected for booking ${bookingId}. Marking as Payment_Conflict.`);
+                finalStatus = 'Payment_Conflict';
+            }
 
-                db.run("UPDATE bookings SET status = ? WHERE id = ?", [finalStatus, bookingId], (errUp) => {
-                    if (errUp) {
-                        return doneCallback ? doneCallback(errUp) : null;
-                    }
-                    if (finalStatus === 'Paid') {
-                        sendBookingConfirmationEmail(db, bookingId);
-                    }
-                    if (finalStatus === 'Paid' && booking.spot_id) {
-                        db.run("UPDATE spots SET status = 'booked', booking_id = ? WHERE id = ?", [bookingId, booking.spot_id], (errSpot) => {
-                            if (errSpot) console.error('Failed to update spot status:', errSpot.message);
-                            if (doneCallback) doneCallback(null, finalStatus);
-                        });
-                    } else {
-                        if (doneCallback) doneCallback(null, finalStatus);
-                    }
+            await dbRun('UPDATE bookings SET status = ? WHERE id = ?', [finalStatus, bookingId]);
+
+            if (finalStatus === 'Paid') {
+                // Generar Meet Link si es sala virtual con Meet activo
+                triggerMeetLinkGeneration(db, bookingId).catch(meetErr => {
+                    console.error(`[Google Meet Trigger] Error en reserva ${bookingId}:`, meetErr.message);
                 });
-            });
-        });
+                // Enviar confirmación por correo
+                sendBookingConfirmationEmail(db, bookingId);
+            }
+
+            doneCallback(null, finalStatus);
+        } catch (errRec) {
+            console.error('Error reconciling payment:', errRec.message);
+            doneCallback(errRec);
+        }
     });
 }
 
@@ -226,44 +191,49 @@ function reconcileBookingPayment(bookingId, doneCallback) {
 // =====================================================
 app.post('/api/auth/login', (req, res) => {
     const { email, password } = req.body;
-
     if (!email || !password) {
-        return res.status(400).json({ error: 'Faltan credenciales.' });
+        return res.status(400).json({ error: 'Email y contraseña requeridos.' });
     }
 
-    db.get("SELECT id, email, password, name, role FROM users WHERE email = ?", [email], (err, user) => {
+    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
-
-        if (user) {
-            bcrypt.compare(password, user.password, (err2, isMatch) => {
-                if (err2) return res.status(500).json({ error: err2.message });
-                if (!isMatch) {
-                    return res.status(401).json({ error: 'Contraseña incorrecta.' });
-                }
-                const dbRole = user.role === 'admin' ? 'administrador' : user.role;
-                const tokenPayload = { id: user.id, email: user.email, role: dbRole };
-                const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
-                return res.json({ ...tokenPayload, name: user.name, token });
-            });
-            return;
+        if (!user) {
+            return res.status(401).json({ error: 'Credenciales inválidas.' });
         }
 
-        return res.status(401).json({ error: 'Usuario no encontrado.' });
+        const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Credenciales inválidas.' });
+        }
+
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role, name: user.name },
+            JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        res.json({
+            token,
+            user: { id: user.id, email: user.email, role: user.role, name: user.name },
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            name: user.name
+        });
     });
 });
 
 app.post('/api/auth/recover', (req, res) => {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Se requiere email.' });
+    if (!email) {
+        return res.status(400).json({ error: 'Email requerido.' });
+    }
 
-    db.get("SELECT email FROM users WHERE email = ?", [email], (err, row) => {
+    db.get('SELECT id, email FROM users WHERE email = ?', [email], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
-
-        if (row) {
-            return res.json({ success: true, message: `Correo de recuperación enviado a ${email}` });
-        } else {
-            return res.status(404).json({ error: 'Correo no registrado.' });
-        }
+        res.json({
+            message: 'Si el correo existe en nuestro sistema, recibirá instrucciones para restablecer su contraseña.'
+        });
     });
 });
 
@@ -271,153 +241,119 @@ app.post('/api/auth/recover', (req, res) => {
 // SECTION 4: USER ENDPOINTS (Admin CRUD) - PROTECTED
 // =====================================================
 app.get('/api/users', authenticateToken, (req, res) => {
-    db.all(`
-        SELECT u.id, u.email, u.name, u.role, u.rut, u.phone, u.created_at, p.specialty, p.bio
-        FROM users u
-        LEFT JOIN provider_profiles p ON u.id = p.userId
-    `, (err, rows) => {
+    db.all('SELECT id, email, name, role, rut, phone, created_at FROM users', (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
-app.post('/api/users', authenticateToken, (req, res) => {
+app.post('/api/users', authenticateToken, async (req, res) => {
     const { email, password, name, role, rut, phone, specialty, bio } = req.body;
-    if (!email || !password || !name || !role) {
+
+    if (!email || !password || !name) {
         return res.status(400).json({ error: 'Faltan campos requeridos.' });
     }
-    bcrypt.hash(password, 10, (err, hash) => {
-        if (err) return res.status(500).json({ error: err.message });
-        const id = 'user-' + Date.now();
-        db.run("INSERT INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [id, email, hash, name, role, rut || '', phone || ''],
-            function (err2) {
-                if (err2) return res.status(500).json({ error: err2.message });
 
-                if (role === 'prestador') {
-                    const defaultBlocks = JSON.stringify({
-                        2: ["20:00-21:00", "21:00-22:00"],
-                        4: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"],
-                        5: ["09:00-10:00", "10:00-11:00", "11:00-12:00", "20:00-21:00", "21:00-22:00"]
-                    });
-                    db.run("INSERT INTO provider_profiles (userId, specialty, blocks, bio) VALUES (?, ?, ?, ?)",
-                        [id, specialty || '', defaultBlocks, bio || ''], (err3) => {
-                            if (err3) return res.status(500).json({ error: err3.message });
-                            res.json({ success: true, id });
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const userId = req.body.id || crypto.randomUUID();
+
+        db.serialize(() => {
+            db.run(
+                'INSERT INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [userId, email, hashedPassword, name, role || 'usuario', rut || '', phone || ''],
+                function (err) {
+                    if (err) {
+                        if (err.message.includes('UNIQUE')) {
+                            return res.status(400).json({ error: 'El email ya está registrado.' });
                         }
-                    );
-                } else {
-                    res.json({ success: true, id });
+                        return res.status(500).json({ error: err.message });
+                    }
+
+                    if (role === 'prestador') {
+                        db.run(
+                            'INSERT OR REPLACE INTO provider_profiles (userId, specialty, bio) VALUES (?, ?, ?)',
+                            [userId, specialty || '', bio || '']
+                        );
+                    }
+
+                    res.json({ success: true, id: userId });
                 }
-            }
-        );
-    });
+            );
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.put('/api/users/:id', authenticateToken, (req, res) => {
-    const { email, name, role, password, rut, phone, specialty, bio } = req.body;
-    const { id } = req.params;
-    if (!email || !name || !role) {
-        return res.status(400).json({ error: 'Faltan campos requeridos.' });
-    }
+app.put('/api/users/:id', authenticateToken, async (req, res) => {
+    const { email, password, name, role, rut, phone, specialty, bio } = req.body;
 
-    const finalizeUpdate = (hash) => {
-        const query = hash
-            ? "UPDATE users SET email = ?, name = ?, role = ?, password = ?, rut = ?, phone = ? WHERE id = ?"
-            : "UPDATE users SET email = ?, name = ?, role = ?, rut = ?, phone = ? WHERE id = ?";
-        const params = hash
-            ? [email, name, role, hash, rut || '', phone || '', id]
-            : [email, name, role, rut || '', phone || '', id];
+    try {
+        let updateQuery = 'UPDATE users SET email = ?, name = ?, role = ?, rut = ?, phone = ?';
+        let params = [email, name, role, rut, phone];
 
-        db.run(query, params, function (err2) {
-            if (err2) return res.status(500).json({ error: err2.message });
-            if (role === 'prestador' && (specialty !== undefined || bio !== undefined)) {
-                db.get("SELECT userId, specialty, blocks, bio FROM provider_profiles WHERE userId = ?", [id], (errProf, existingProf) => {
-                    if (errProf) return res.status(500).json({ error: errProf.message });
-                    const nextSpecialty = specialty !== undefined ? specialty : (existingProf?.specialty || '');
-                    const nextBio = bio !== undefined ? bio : (existingProf?.bio || '');
-                    const nextBlocks = existingProf?.blocks || '{}';
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            updateQuery += ', password = ?';
+            params.push(hashedPassword);
+        }
+
+        updateQuery += ' WHERE id = ?';
+        params.push(req.params.id);
+
+        db.serialize(() => {
+            db.run(updateQuery, params, function (err) {
+                if (err) return res.status(500).json({ error: err.message });
+
+                if (role === 'prestador') {
                     db.run(
-                        "INSERT OR REPLACE INTO provider_profiles (userId, specialty, blocks, bio) VALUES (?, ?, ?, ?)",
-                        [id, nextSpecialty, nextBlocks, nextBio],
-                        (errSaveProf) => {
-                            if (errSaveProf) return res.status(500).json({ error: errSaveProf.message });
-                            res.json({ success: true });
-                        }
+                        'INSERT OR REPLACE INTO provider_profiles (userId, specialty, bio) VALUES (?, ?, ?)',
+                        [req.params.id, specialty || '', bio || '']
                     );
-                });
-            } else {
-                res.json({ success: true });
-            }
-        });
-    };
+                }
 
-    if (password) {
-        bcrypt.hash(password, 10, (err, hash) => {
-            if (err) return res.status(500).json({ error: err.message });
-            finalizeUpdate(hash);
+                res.json({ success: true });
+            });
         });
-    } else {
-        finalizeUpdate(null);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
 app.delete('/api/users/:id', authenticateToken, (req, res) => {
-    db.get("SELECT email, role FROM users WHERE id = ?", [req.params.id], (err, user) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
-
-        if (user.role === 'usuario') {
-            db.get("SELECT COUNT(*) as count FROM bookings WHERE clientEmail = ?", [user.email], (err2, row) => {
-                if (err2) return res.status(500).json({ error: err2.message });
-                if (row.count > 0) {
-                    return res.status(400).json({ error: 'No se puede eliminar el usuario/cliente porque tiene reservas asociadas.' });
-                }
-
-                db.run("DELETE FROM users WHERE id = ?", [req.params.id], function (err3) {
-                    if (err3) return res.status(500).json({ error: err3.message });
-                    res.json({ success: true });
-                });
-            });
-        } else if (user.role === 'prestador') {
-            db.serialize(() => {
-                db.run("DELETE FROM provider_profiles WHERE userId = ?", [req.params.id]);
-                db.run("DELETE FROM services WHERE providerId = ?", [req.params.id]);
-                db.run("DELETE FROM users WHERE id = ?", [req.params.id], function (err2) {
-                    if (err2) return res.status(500).json({ error: err2.message });
-                    res.json({ success: true });
-                });
-            });
-        } else {
-            db.run("DELETE FROM users WHERE id = ?", [req.params.id], function (err2) {
-                if (err2) return res.status(500).json({ error: err2.message });
-                res.json({ success: true });
-            });
-        }
+    db.serialize(() => {
+        db.run('DELETE FROM provider_services WHERE provider_id = ?', [req.params.id]);
+        db.run('DELETE FROM room_shifts WHERE provider_id = ?', [req.params.id]);
+        db.run('DELETE FROM provider_vacations WHERE provider_id = ?', [req.params.id]);
+        db.run('DELETE FROM provider_room_google_accounts WHERE provider_id = ?', [req.params.id]);
+        db.run('DELETE FROM provider_profiles WHERE userId = ?', [req.params.id]);
+        db.run('DELETE FROM users WHERE id = ?', [req.params.id], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        });
     });
 });
 
 // =====================================================
-// SECTION 5: CONTENT ENDPOINTS (Mission, Vision, etc.)
+// SECTION 5: CONTENT & COMMUNITY ARTICLES ENDPOINTS
 // =====================================================
 app.get('/api/content', (req, res) => {
-    db.all("SELECT * FROM content", (err, rows) => {
+    db.all('SELECT * FROM content', (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        const data = {};
-        rows.forEach(r => {
-            data[r.key] = r.value;
-        });
-        res.json(data);
+        const content = {};
+        (rows || []).forEach(row => { content[row.key] = row.value; });
+        res.json(content);
     });
 });
 
 app.post('/api/content', authenticateToken, (req, res) => {
     const data = req.body;
     db.serialize(() => {
-        const stmt = db.prepare("INSERT OR REPLACE INTO content (key, value) VALUES (?, ?)");
-        Object.keys(data).forEach(k => {
-            stmt.run(k, data[k]);
-        });
+        const stmt = db.prepare('INSERT OR REPLACE INTO content (key, value) VALUES (?, ?)');
+        for (const [key, value] of Object.entries(data)) {
+            stmt.run([key, typeof value === 'object' ? JSON.stringify(value) : String(value)]);
+        }
         stmt.finalize((err) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true });
@@ -426,748 +362,1193 @@ app.post('/api/content', authenticateToken, (req, res) => {
 });
 
 app.get('/api/articles', (req, res) => {
-    db.all(`SELECT id, title, summary, body, created_at, published_at
-        FROM articles WHERE status = 'published'
-        ORDER BY published_at DESC, created_at DESC`, (err, rows) => {
+    db.all(`
+        SELECT a.*, u.name as author_name
+        FROM articles a
+        LEFT JOIN users u ON a.author_id = u.id
+        WHERE a.status = 'published'
+        ORDER BY a.published_at DESC
+    `, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows || []);
     });
 });
 
 app.get('/api/articles/submissions', authenticateToken, (req, res) => {
-    const isAdmin = req.user.role === 'administrador';
-    const query = isAdmin
-        ? `SELECT a.id, a.title, a.summary, a.body, a.status, a.created_at, u.name AS author_name
-            FROM articles a LEFT JOIN users u ON u.id = a.author_id
-            WHERE a.status = 'pending_review' ORDER BY a.created_at ASC`
-        : `SELECT id, title, summary, body, status, created_at
-            FROM articles WHERE author_id = ? ORDER BY created_at DESC`;
-    const params = isAdmin ? [] : [req.user.id];
-    db.all(query, params, (err, rows) => {
+    db.all(`
+        SELECT a.*, u.name as author_name, u.email as author_email
+        FROM articles a
+        LEFT JOIN users u ON a.author_id = u.id
+        ORDER BY a.created_at DESC
+    `, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows || []);
     });
 });
 
 app.post('/api/articles', authenticateToken, (req, res) => {
-    const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
-    const summary = typeof req.body.summary === 'string' ? req.body.summary.trim() : '';
-    const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
-    if (!title || title.length > 120 || !summary || summary.length > 300 || !body || body.length > 10000) {
-        return res.status(400).json({ error: 'Revise el título (máx. 120), resumen (máx. 300) y artículo (máx. 10.000 caracteres).' });
+    const { title, summary, body } = req.body;
+    if (!title || !summary || !body) {
+        return res.status(400).json({ error: 'Título, resumen y cuerpo son requeridos.' });
     }
 
     const id = crypto.randomUUID();
-    const isAdmin = req.user.role === 'administrador';
-    const initialStatus = isAdmin ? 'published' : 'pending_review';
-    const query = isAdmin
-        ? `INSERT INTO articles (id, author_id, title, summary, body, status, published_at)
-           VALUES (?, ?, ?, ?, ?, 'published', CURRENT_TIMESTAMP)`
-        : `INSERT INTO articles (id, author_id, title, summary, body, status)
-           VALUES (?, ?, ?, ?, ?, 'pending_review')`;
+    const isAdmin = req.user?.role === 'administrador';
+    const status = isAdmin ? 'published' : 'pending_review';
+    const publishedAt = isAdmin ? new Date().toISOString() : null;
 
-    db.run(
-        query,
-        [id, req.user.id, title, summary, body],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ success: true, id, status: initialStatus });
-        }
-    );
+    db.run(`
+        INSERT INTO articles (id, author_id, title, summary, body, status, published_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [id, req.user.id, title, summary, body, status, publishedAt], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, id, status });
+    });
 });
 
 app.put('/api/articles/:id/status', authenticateToken, (req, res) => {
-    if (req.user.role !== 'administrador') {
-        return res.status(403).json({ error: 'Solo un administrador puede revisar y publicar artículos.' });
-    }
     const { status } = req.body;
-    if (!['published', 'rejected'].includes(status)) {
-        return res.status(400).json({ error: 'Estado de revisión no válido.' });
-    }
-    db.run(
-        `UPDATE articles
-         SET status = ?, updated_at = CURRENT_TIMESTAMP,
-             published_at = CASE WHEN ? = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END
-         WHERE id = ? AND status = 'pending_review'`,
-        [status, status, req.params.id],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            if (this.changes === 0) return res.status(404).json({ error: 'Artículo pendiente no encontrado.' });
-            res.json({ success: true, status });
-        }
-    );
-});
-
-// =====================================================
-// SECTION 6: ROOMS ENDPOINTS
-// =====================================================
-app.get('/api/rooms', (req, res) => {
-    db.all(`
-        SELECT r.*,
-            (SELECT json_group_array(json_object('id', rs.id, 'day_of_week', rs.day_of_week, 'start_time', rs.start_time, 'end_time', rs.end_time))
-             FROM room_schedules rs WHERE rs.room_id = r.id) as schedules
-        FROM rooms r
-        ORDER BY r.name
-    `, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        const result = (rows || []).map(r => {
-            let parsedSchedules;
-            try {
-                parsedSchedules = JSON.parse(r.schedules || '[]');
-            } catch (err) {
-                parsedSchedules = [];
-            }
-            let openTime = '08:30';
-            let closeTime = '18:30';
-            if (parsedSchedules && parsedSchedules.length > 0) {
-                const startTimes = parsedSchedules.map(s => s.start_time).filter(Boolean).sort();
-                const endTimes = parsedSchedules.map(s => s.end_time).filter(Boolean).sort();
-                if (startTimes.length > 0) openTime = startTimes[0];
-                if (endTimes.length > 0) closeTime = endTimes[endTimes.length - 1];
-            }
-            return {
-                id: r.id,
-                name: r.name,
-                type: r.type,
-                meeting_link: r.meeting_link || '',
-                openTime,
-                closeTime,
-                schedules: parsedSchedules
-            };
-        });
-        res.json(result);
-    });
-});
-
-app.post('/api/rooms', authenticateToken, (req, res) => {
-    const { id, name, type, openTime, closeTime, meeting_link } = req.body;
-    if (!id || !name) {
-        return res.status(400).json({ error: 'Faltan campos requeridos: id, name.' });
-    }
-    const start = openTime || '08:30';
-    const end = closeTime || '18:30';
-    const meetingLinkVal = typeof meeting_link === 'string' ? meeting_link.trim() : '';
-
-    db.serialize(() => {
-        db.run(`INSERT INTO rooms (id, name, type, meeting_link) VALUES (?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, meeting_link = excluded.meeting_link`,
-            [id, name, type || 'consultorio', meetingLinkVal],
-            function (err) {
-                if (err) return res.status(500).json({ error: err.message });
-
-                db.get("SELECT COUNT(*) as count FROM room_schedules WHERE room_id = ?", [id], (errCount, row) => {
-                    if (errCount) return res.status(500).json({ error: errCount.message });
-
-                    if (row.count === 0) {
-                        const stmt = db.prepare("INSERT INTO room_schedules (id, room_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)");
-                        const daysToCreate = type === 'Virtual' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
-                        daysToCreate.forEach(day => {
-                            stmt.run([`rs-${id}-${day}`, id, day, start, end]);
-                        });
-                        stmt.finalize((errFinal) => {
-                            if (errFinal) return res.status(500).json({ error: errFinal.message });
-                            res.json({ success: true, id });
-                        });
-                    } else {
-                        res.json({ success: true, id });
-                    }
-                });
-            }
-        );
-    });
-});
-
-app.put('/api/rooms/:id', authenticateToken, (req, res) => {
-    const { name, type, openTime, closeTime, meeting_link } = req.body;
-    if (!name || !type || !openTime || !closeTime || openTime >= closeTime) {
-        return res.status(400).json({ error: 'Revise el nombre, tipo y rango horario de la sala.' });
-    }
-    const meetingLinkVal = typeof meeting_link === 'string' ? meeting_link.trim() : '';
-
-    db.run('UPDATE rooms SET name = ?, type = ?, meeting_link = ? WHERE id = ?', [name, type, meetingLinkVal, req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: 'Sala no encontrada.' });
-
-        db.all(
-            'SELECT DISTINCT day_of_week FROM room_schedules WHERE room_id = ? ORDER BY day_of_week',
-            [req.params.id],
-            (scheduleErr, dayRows) => {
-                if (scheduleErr) return res.status(500).json({ error: scheduleErr.message });
-
-                const daysToConfigure = (dayRows && dayRows.length > 0)
-                    ? dayRows.map(r => r.day_of_week)
-                    : (type === 'Virtual' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5]);
-
-                db.serialize(() => {
-                    db.run('DELETE FROM room_schedules WHERE room_id = ?', [req.params.id], (delErr) => {
-                        if (delErr) return res.status(500).json({ error: delErr.message });
-                        const stmt = db.prepare('INSERT INTO room_schedules (id, room_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)');
-                        daysToConfigure.forEach(day => {
-                            stmt.run([`rs-${req.params.id}-${day}`, req.params.id, day, openTime, closeTime]);
-                        });
-                        stmt.finalize(updateErr => {
-                            if (updateErr) return res.status(500).json({ error: updateErr.message });
-                            res.json({ success: true, scheduleUpdated: true, message: 'Sala y horario de funcionamiento actualizados correctamente.' });
-                        });
-                    });
-                });
-            }
-        );
-    });
-});
-
-app.delete('/api/rooms/:id', authenticateToken, (req, res) => {
-    db.serialize(() => {
-        db.run("DELETE FROM room_schedules WHERE room_id = ?", [req.params.id]);
-        db.run("DELETE FROM service_rooms WHERE room_id = ?", [req.params.id]);
-        db.run("DELETE FROM rooms WHERE id = ?", [req.params.id], function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
-        });
-    });
-});
-
-// =====================================================
-// SECTION 7: ROOM SCHEDULES ENDPOINTS (all require auth)
-// =====================================================
-app.get('/api/room-schedules', authenticateToken, (req, res) => {
-    db.all(`SELECT rs.*, r.name as room_name FROM room_schedules rs JOIN rooms r ON rs.room_id = r.id ORDER BY rs.room_id, rs.day_of_week, rs.start_time`, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
-    });
-});
-
-app.get('/api/rooms/:roomId/schedules', authenticateToken, (req, res) => {
-    db.all('SELECT * FROM room_schedules WHERE room_id = ? ORDER BY day_of_week, start_time', [req.params.roomId], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
-    });
-});
-
-app.post('/api/room-schedules', authenticateToken, (req, res) => {
-    const { id, room_id, day_of_week, start_time, end_time } = req.body;
-
-    if (!room_id || !day_of_week || !start_time || !end_time) {
-        return res.status(400).json({ error: 'Faltan campos requeridos: room_id, day_of_week, start_time, end_time.' });
+    if (!['pending_review', 'published', 'rejected'].includes(status)) {
+        return res.status(400).json({ error: 'Estado de artículo no válido.' });
     }
 
-    if (timeToMinutes(start_time) >= timeToMinutes(end_time)) {
-        return res.status(400).json({ error: 'start_time debe ser menor que end_time.' });
-    }
-
-    // Check overlap: new block [start_time, end_time] must not overlap any existing block for same room + day_of_week
-    db.all('SELECT * FROM room_schedules WHERE room_id = ? AND day_of_week = ?', [room_id, day_of_week], (err, existing) => {
-        if (err) return res.status(500).json({ error: err.message });
-
-        const newStart = timeToMinutes(start_time);
-        const newEnd = timeToMinutes(end_time);
-        const hasOverlap = (existing || []).some(s => {
-            return timeToMinutes(s.start_time) < newEnd && newStart < timeToMinutes(s.end_time);
-        });
-
-        if (hasOverlap) {
-            return res.status(400).json({ error: 'El bloque horario se solapa con un bloque existente para este día.' });
-        }
-
-        const scheduleId = id || crypto.randomUUID();
-        db.run(
-            'INSERT OR REPLACE INTO room_schedules (id, room_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)',
-            [scheduleId, room_id, day_of_week, start_time, end_time],
-            function (err2) {
-                if (err2) return res.status(500).json({ error: err2.message });
-                res.json({ success: true, id: scheduleId });
-            }
-        );
-    });
-});
-
-app.put('/api/room-schedules/:id', authenticateToken, (req, res) => {
-    const { room_id, day_of_week, start_time, end_time } = req.body;
-
-    if (!room_id || !day_of_week || !start_time || !end_time) {
-        return res.status(400).json({ error: 'Faltan campos requeridos: room_id, day_of_week, start_time, end_time.' });
-    }
-
-    if (timeToMinutes(start_time) >= timeToMinutes(end_time)) {
-        return res.status(400).json({ error: 'start_time debe ser menor que end_time.' });
-    }
-
-    // Check overlap excluding current record
-    db.all('SELECT * FROM room_schedules WHERE room_id = ? AND day_of_week = ? AND id != ?', [room_id, day_of_week, req.params.id], (err, existing) => {
-        if (err) return res.status(500).json({ error: err.message });
-
-        const newStart = timeToMinutes(start_time);
-        const newEnd = timeToMinutes(end_time);
-        const hasOverlap = (existing || []).some(s => {
-            return timeToMinutes(s.start_time) < newEnd && newStart < timeToMinutes(s.end_time);
-        });
-
-        if (hasOverlap) {
-            return res.status(400).json({ error: 'El bloque horario se solapa con un bloque existente para este día.' });
-        }
-
-        db.run(
-            'UPDATE room_schedules SET room_id = ?, day_of_week = ?, start_time = ?, end_time = ? WHERE id = ?',
-            [room_id, day_of_week, start_time, end_time, req.params.id],
-            function (err2) {
-                if (err2) return res.status(500).json({ error: err2.message });
-                res.json({ success: true });
-            }
-        );
-    });
-});
-
-app.delete('/api/room-schedules/:id', authenticateToken, (req, res) => {
-    db.run('DELETE FROM room_schedules WHERE id = ?', [req.params.id], function (err) {
+    const publishedAt = status === 'published' ? new Date().toISOString() : null;
+    db.run(`
+        UPDATE articles
+        SET status = ?, published_at = COALESCE(published_at, ?), updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    `, [status, publishedAt, req.params.id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
 
 // =====================================================
-// SECTION 8: PROVIDERS ENDPOINT (updated to use service_rooms)
+// SECTION 6: ROOMS, SHIFTS, BREAKS & EXCEPTIONS
 // =====================================================
-app.get('/api/providers', (req, res) => {
-    db.all(`
-        SELECT u.id, u.name, u.email, u.role, p.specialty, p.blocks, p.bio
-        FROM users u
-        JOIN provider_profiles p ON u.id = p.userId
-        WHERE u.role = 'prestador'
-    `, (err, provs) => {
-        if (err) return res.status(500).json({ error: err.message });
+app.get('/api/rooms', async (req, res) => {
+    try {
+        const rooms = await dbAll('SELECT * FROM rooms ORDER BY name');
+        const shifts = await dbAll(`
+            SELECT s.*, u.name as provider_name
+            FROM room_shifts s
+            JOIN users u ON s.provider_id = u.id
+            ORDER BY s.room_id, s.day_of_week, s.start_time
+        `);
+        const breaks = await dbAll('SELECT * FROM room_shift_breaks ORDER BY start_time');
+        const roomServices = await dbAll('SELECT * FROM room_services');
 
-        // Get services with their room associations via service_rooms
-        db.all(`
-            SELECT s.*, sr.room_id
-            FROM services s
-            LEFT JOIN service_rooms sr ON s.id = sr.service_id
-        `, (err2, servRows) => {
-            if (err2) return res.status(500).json({ error: err2.message });
+        const breaksByShift = {};
+        for (const b of breaks) {
+            if (!breaksByShift[b.shift_id]) breaksByShift[b.shift_id] = [];
+            breaksByShift[b.shift_id].push(b);
+        }
 
-            // Get room names
-            db.all('SELECT id, name FROM rooms', (err3, rooms) => {
-                if (err3) return res.status(500).json({ error: err3.message });
-
-                const roomMap = {};
-                (rooms || []).forEach(r => { roomMap[r.id] = r.name; });
-
-                // Build service list with room info
-                const serviceMap = {};
-                (servRows || []).forEach(sr => {
-                    if (!serviceMap[sr.id]) {
-                        serviceMap[sr.id] = {
-                            id: sr.id,
-                            providerId: sr.providerId,
-                            name: sr.name,
-                            price: sr.price,
-                            duration: sr.duration,
-                            type: sr.type,
-                            allowReschedule: sr.allowReschedule,
-                            maxReschedules: sr.maxReschedules,
-                            roomIds: [],
-                            roomNames: []
-                        };
-                    }
-                    if (sr.room_id) {
-                        serviceMap[sr.id].roomIds.push(sr.room_id);
-                        if (roomMap[sr.room_id]) {
-                            serviceMap[sr.id].roomNames.push(roomMap[sr.room_id]);
-                        }
-                    }
-                });
-
-                const allServices = Object.values(serviceMap);
-
-                const nested = (provs || []).map(p => {
-                    const blocksParsed = p.blocks ? JSON.parse(p.blocks) : {};
-                    const pServices = allServices.filter(s => s.providerId === p.id);
-                    return {
-                        id: p.id,
-                        name: p.name,
-                        role: p.role,
-                        specialty: p.specialty || p.role,
-                        email: p.email,
-                        blocks: blocksParsed,
-                        bio: p.bio || '',
-                        services: pServices.map(s => ({ ...s, roomId: s.roomIds?.[0] || '' }))
-                    };
-                });
-                res.json(nested);
-            });
-        });
-    });
-});
-
-app.delete('/api/providers/:id', authenticateToken, (req, res) => {
-    db.serialize(() => {
-        db.run("DELETE FROM provider_profiles WHERE userId = ?", [req.params.id]);
-        db.run("DELETE FROM service_rooms WHERE service_id IN (SELECT id FROM services WHERE providerId = ?)", [req.params.id]);
-        db.run("DELETE FROM services WHERE providerId = ?", [req.params.id]);
-        db.run("DELETE FROM users WHERE id = ?", [req.params.id], function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
-        });
-    });
-});
-
-// =====================================================
-// SECTION 9: SERVICES ENDPOINTS
-// =====================================================
-app.post('/api/services', authenticateToken, (req, res) => {
-    const { id, providerId, name, price, duration, type, allowReschedule, maxReschedules, agendaConfig } = req.body;
-
-    if (!id || !providerId || !name || !duration) {
-        return res.status(400).json({ error: 'Faltan campos requeridos: id, providerId, name, duration.' });
-    }
-
-    const allowRescheduleVal = allowReschedule !== undefined ? (allowReschedule ? 1 : 0) : 1;
-    const maxReschedulesVal = maxReschedules || 1;
-
-    db.run(`INSERT INTO services (id, providerId, name, price, duration, type, allowReschedule, maxReschedules)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-            providerId = excluded.providerId,
-            name = excluded.name,
-            price = excluded.price,
-            duration = excluded.duration,
-            type = excluded.type,
-            allowReschedule = excluded.allowReschedule,
-            maxReschedules = excluded.maxReschedules`,
-        [id, providerId, name, price || 0, duration, type || 'sesion', allowRescheduleVal, maxReschedulesVal],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-
-            if (!agendaConfig || !Array.isArray(agendaConfig.roomIds) || agendaConfig.roomIds.length === 0) {
-                return res.json({ success: true, id });
-            }
-
-            let normalizedRecurrenceRule = null;
-            if (agendaConfig.recurrence === 'weekly') {
-                const normalized = normalizeAgendaRecurrenceRule(agendaConfig.recurrenceRule);
-                if (normalized.error) {
-                    return res.status(400).json({ error: normalized.error });
-                }
-                normalizedRecurrenceRule = normalized.value;
-            }
-
-            const targetRoomId = agendaConfig.roomIds[0];
-            db.serialize(() => {
-                db.run('DELETE FROM service_rooms WHERE service_id = ?', [id]);
-                db.run('INSERT OR IGNORE INTO service_rooms (id, service_id, room_id) VALUES (?, ?, ?)', [crypto.randomUUID(), id, targetRoomId]);
-                db.run("DELETE FROM spots WHERE service_id = ? AND status = 'available'", [id]);
-                db.run('DELETE FROM agendas WHERE service_id = ?', [id], (delAgErr) => {
-                    if (delAgErr) return res.status(500).json({ error: delAgErr.message });
-
-                    const newAgendaId = crypto.randomUUID();
-                    const agendaType = agendaConfig.recurrence === 'weekly' ? 'recurrent' : 'punctual';
-                    db.run(
-                        `INSERT INTO agendas (id, provider_id, service_id, room_id, type, recurrence_rule, specific_date, start_time, end_time, start_date, end_date, status)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published')`,
-                        [
-                            newAgendaId,
-                            providerId,
-                            id,
-                            targetRoomId,
-                            agendaType,
-                            normalizedRecurrenceRule,
-                            agendaConfig.specificDate || null,
-                            agendaConfig.startTime,
-                            agendaConfig.endTime,
-                            agendaConfig.startDate || null,
-                            agendaConfig.endDate || null
-                        ],
-                        (insAgErr) => {
-                            if (insAgErr) return res.status(500).json({ error: insAgErr.message });
-                            db.get('SELECT * FROM agendas WHERE id = ?', [newAgendaId], (getAgErr, agendaRow) => {
-                                if (getAgErr || !agendaRow) return res.status(500).json({ error: getAgErr?.message || 'Error leyendo agenda actualizada.' });
-                                const generator = new SpotGenerator(db);
-                                generator.generate(agendaRow, (genResult) => {
-                                    res.json({
-                                        success: true,
-                                        id,
-                                        spotsGenerated: genResult.spotsGenerated || 0,
-                                        message: `Servicio y horarios actualizados (${genResult.spotsGenerated || 0} bloques disponibles generados).`
-                                    });
-                                });
-                            });
-                        }
-                    );
-                });
+        const shiftsByRoom = {};
+        for (const s of shifts) {
+            if (!shiftsByRoom[s.room_id]) shiftsByRoom[s.room_id] = [];
+            shiftsByRoom[s.room_id].push({
+                ...s,
+                breaks: breaksByShift[s.id] || []
             });
         }
-    );
+
+        const servicesByRoom = {};
+        for (const rs of roomServices) {
+            if (!servicesByRoom[rs.room_id]) servicesByRoom[rs.room_id] = [];
+            servicesByRoom[rs.room_id].push(rs.service_id);
+        }
+
+        const result = rooms.map(r => ({
+            id: r.id,
+            name: r.name,
+            type: r.type,
+            capacity: r.type === 'Física' ? (r.capacity || 1) : 0,
+            effective_capacity: 1,
+            meet_enabled: r.type === 'Virtual' ? (r.meet_enabled !== 0 ? 1 : 0) : 0,
+            allow_all_services: r.allow_all_services !== 0 ? 1 : 0,
+            min_advance_min: r.min_advance_min || 0,
+            max_advance_days: r.max_advance_days || 60,
+            service_ids: servicesByRoom[r.id] || [],
+            shifts: shiftsByRoom[r.id] || []
+        }));
+
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-app.delete('/api/services/:id', authenticateToken, (req, res) => {
-    db.serialize(() => {
-        db.run("DELETE FROM service_rooms WHERE service_id = ?", [req.params.id]);
-        db.run("DELETE FROM services WHERE id = ?", [req.params.id], function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
-        });
-    });
-});
+app.post('/api/rooms', authenticateToken, async (req, res) => {
+    const {
+        id,
+        name,
+        type,
+        capacity,
+        meet_enabled,
+        allow_all_services,
+        min_advance_min,
+        max_advance_days,
+        service_ids,
+        shifts
+    } = req.body;
 
-app.get('/api/services/:id/rooms', authenticateToken, (req, res) => {
-    db.all(`
-        SELECT sr.id, sr.room_id, r.name as room_name
-        FROM service_rooms sr
-        JOIN rooms r ON sr.room_id = r.id
-        WHERE sr.service_id = ?
-    `, [req.params.id], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
-    });
-});
-
-app.post('/api/services/:id/rooms', authenticateToken, (req, res) => {
-    const { room_id } = req.body;
-    if (!room_id) {
-        return res.status(400).json({ error: 'Faltan campo requerido: room_id.' });
+    if (!name || !type) {
+        return res.status(400).json({ error: 'Nombre y tipo de sala son requeridos.' });
     }
 
-    // Check service exists
-    db.get('SELECT id FROM services WHERE id = ?', [req.params.id], (err, svc) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!svc) return res.status(404).json({ error: 'Servicio no encontrado.' });
+    const roomId = id || crypto.randomUUID();
+    const isVirtual = type === 'Virtual';
+    const roomCapacity = isVirtual ? 1 : (Number(capacity) || 1);
+    const roomMeetEnabled = isVirtual ? (meet_enabled !== undefined ? (meet_enabled ? 1 : 0) : 1) : 0;
+    const roomAllowAll = allow_all_services !== undefined ? (allow_all_services ? 1 : 0) : 1;
+    const minAdvance = Number(min_advance_min) || 0;
+    const maxAdvance = Number(max_advance_days) || 60;
 
-        // Check room exists
-        db.get('SELECT id FROM rooms WHERE id = ?', [room_id], (err2, room) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            if (!room) return res.status(404).json({ error: 'Sala no encontrada.' });
+    try {
+        await dbRun(`
+            INSERT INTO rooms (id, name, type, capacity, meet_enabled, allow_all_services, min_advance_min, max_advance_days)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [roomId, name, type, roomCapacity, roomMeetEnabled, roomAllowAll, minAdvance, maxAdvance]);
 
-            const assocId = crypto.randomUUID();
-            db.run(
-                'INSERT OR IGNORE INTO service_rooms (id, service_id, room_id) VALUES (?, ?, ?)',
-                [assocId, req.params.id, room_id],
-                function (err3) {
-                    if (err3) return res.status(500).json({ error: err3.message });
-                    res.json({ success: true, id: assocId });
-                }
-            );
-        });
-    });
-});
-
-app.delete('/api/services/:id/rooms/:roomId', authenticateToken, (req, res) => {
-    db.run(
-        'DELETE FROM service_rooms WHERE service_id = ? AND room_id = ?',
-        [req.params.id, req.params.roomId],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
+        // Guardar servicios si allow_all_services === 0
+        if (!roomAllowAll && Array.isArray(service_ids)) {
+            for (const sId of service_ids) {
+                await dbRun('INSERT OR IGNORE INTO room_services (id, room_id, service_id) VALUES (?, ?, ?)', [crypto.randomUUID(), roomId, sId]);
+            }
         }
-    );
+
+        // Guardar franjas y descansos
+        if (Array.isArray(shifts)) {
+            for (const s of shifts) {
+                const shiftId = s.id || crypto.randomUUID();
+                await dbRun(`
+                    INSERT INTO room_shifts (id, room_id, day_of_week, start_time, end_time, provider_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                `, [shiftId, roomId, s.day_of_week, s.start_time, s.end_time, s.provider_id]);
+
+                if (Array.isArray(s.breaks)) {
+                    for (const b of s.breaks) {
+                        await dbRun(`
+                            INSERT INTO room_shift_breaks (id, shift_id, start_time, end_time)
+                            VALUES (?, ?, ?, ?)
+                        `, [crypto.randomUUID(), shiftId, b.start_time, b.end_time]);
+                    }
+                }
+            }
+        }
+
+        res.json({ success: true, id: roomId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-app.get('/api/services/without-rooms', authenticateToken, (req, res) => {
-    db.all(`
-        SELECT s.* FROM services s
-        WHERE s.id NOT IN (SELECT DISTINCT service_id FROM service_rooms)
-    `, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
-    });
+app.put('/api/rooms/:id', authenticateToken, async (req, res) => {
+    const {
+        name,
+        type,
+        capacity,
+        meet_enabled,
+        allow_all_services,
+        min_advance_min,
+        max_advance_days,
+        service_ids,
+        shifts
+    } = req.body;
+
+    const roomId = req.params.id;
+    const isVirtual = type === 'Virtual';
+    const roomCapacity = isVirtual ? 1 : (Number(capacity) || 1);
+    const roomMeetEnabled = isVirtual ? (meet_enabled ? 1 : 0) : 0;
+    const roomAllowAll = allow_all_services ? 1 : 0;
+    const minAdvance = Number(min_advance_min) || 0;
+    const maxAdvance = Number(max_advance_days) || 60;
+
+    try {
+        const updateRes = await dbRun(`
+            UPDATE rooms
+            SET name = ?, type = ?, capacity = ?, meet_enabled = ?, allow_all_services = ?,
+                min_advance_min = ?, max_advance_days = ?
+            WHERE id = ?
+        `, [name, type, roomCapacity, roomMeetEnabled, roomAllowAll, minAdvance, maxAdvance, roomId]);
+
+        if (updateRes.changes === 0) {
+            return res.status(404).json({ error: 'Sala no encontrada.' });
+        }
+
+        // Actualizar room_services
+        await dbRun('DELETE FROM room_services WHERE room_id = ?', [roomId]);
+        if (!roomAllowAll && Array.isArray(service_ids)) {
+            for (const sId of service_ids) {
+                await dbRun('INSERT OR IGNORE INTO room_services (id, room_id, service_id) VALUES (?, ?, ?)', [crypto.randomUUID(), roomId, sId]);
+            }
+        }
+
+        // Si se enviaron shifts, sincronizarlos
+        if (Array.isArray(shifts)) {
+            await dbRun('DELETE FROM room_shifts WHERE room_id = ?', [roomId]);
+            for (const s of shifts) {
+                const shiftId = s.id || crypto.randomUUID();
+                await dbRun(`
+                    INSERT INTO room_shifts (id, room_id, day_of_week, start_time, end_time, provider_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                `, [shiftId, roomId, s.day_of_week, s.start_time, s.end_time, s.provider_id]);
+
+                if (Array.isArray(s.breaks)) {
+                    for (const b of s.breaks) {
+                        await dbRun(`
+                            INSERT INTO room_shift_breaks (id, shift_id, start_time, end_time)
+                            VALUES (?, ?, ?, ?)
+                        `, [crypto.randomUUID(), shiftId, b.start_time, b.end_time]);
+                    }
+                }
+            }
+        }
+
+        res.json({ success: true, message: 'Sala actualizada con éxito.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-function regenerateAgendas(agendas, res) {
-    const totals = { agendasProcessed: 0, spotsGenerated: 0, conflicts: 0, errors: [] };
-    const generator = new SpotGenerator(db);
-    const processNext = index => {
-        if (index >= agendas.length) return res.json(totals);
-        generator.generate(agendas[index], result => {
-            totals.agendasProcessed += 1;
-            totals.spotsGenerated += result.spotsGenerated || 0;
-            totals.conflicts += result.conflicts || 0;
-            totals.errors.push(...(result.errors || []));
-            processNext(index + 1);
+app.delete('/api/rooms/:id', authenticateToken, async (req, res) => {
+    try {
+        await dbRun('DELETE FROM rooms WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Excepciones de Sala
+app.get('/api/rooms/:roomId/exceptions', authenticateToken, async (req, res) => {
+    try {
+        const exceptions = await dbAll(`
+            SELECT e.*, u.name as provider_name
+            FROM room_exceptions e
+            LEFT JOIN users u ON e.provider_id = u.id
+            WHERE e.room_id = ?
+            ORDER BY e.date DESC
+        `, [req.params.roomId]);
+
+        const breaks = await dbAll(`
+            SELECT b.* FROM room_exception_breaks b
+            JOIN room_exceptions e ON b.exception_id = e.id
+            WHERE e.room_id = ?
+        `, [req.params.roomId]);
+
+        const breaksByException = {};
+        for (const b of breaks) {
+            if (!breaksByException[b.exception_id]) breaksByException[b.exception_id] = [];
+            breaksByException[b.exception_id].push(b);
+        }
+
+        const result = exceptions.map(e => ({
+            ...e,
+            breaks: breaksByException[e.id] || []
+        }));
+
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/rooms/:roomId/exceptions', authenticateToken, async (req, res) => {
+    const date = req.body.date || req.body.exception_date;
+    const type = req.body.type || req.body.exception_type;
+    const { target_shift_id, start_time, end_time, provider_id, reason, breaks } = req.body;
+    if (!date || !type) {
+        return res.status(400).json({ error: 'Fecha y tipo de excepción requeridos.' });
+    }
+
+    const exceptionId = crypto.randomUUID();
+    try {
+        await dbRun(`
+            INSERT INTO room_exceptions (id, room_id, date, type, target_shift_id, start_time, end_time, provider_id, reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [exceptionId, req.params.roomId, date, type, target_shift_id || null, start_time || null, end_time || null, provider_id || null, reason || '']);
+
+        if (Array.isArray(breaks)) {
+            for (const b of breaks) {
+                await dbRun(`
+                    INSERT INTO room_exception_breaks (id, exception_id, start_time, end_time)
+                    VALUES (?, ?, ?, ?)
+                `, [crypto.randomUUID(), exceptionId, b.start_time, b.end_time]);
+            }
+        }
+
+        res.json({ success: true, id: exceptionId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/room-exceptions/:id', authenticateToken, async (req, res) => {
+    const { date, type, target_shift_id, start_time, end_time, provider_id, reason, breaks } = req.body;
+    try {
+        await dbRun(`
+            UPDATE room_exceptions
+            SET date = ?, type = ?, target_shift_id = ?, start_time = ?, end_time = ?, provider_id = ?, reason = ?
+            WHERE id = ?
+        `, [date, type, target_shift_id || null, start_time || null, end_time || null, provider_id || null, reason || '', req.params.id]);
+
+        await dbRun('DELETE FROM room_exception_breaks WHERE exception_id = ?', [req.params.id]);
+        if (Array.isArray(breaks)) {
+            for (const b of breaks) {
+                await dbRun(`
+                    INSERT INTO room_exception_breaks (id, exception_id, start_time, end_time)
+                    VALUES (?, ?, ?, ?)
+                `, [crypto.randomUUID(), req.params.id, b.start_time, b.end_time]);
+            }
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/room-exceptions/:id', authenticateToken, async (req, res) => {
+    try {
+        await dbRun('DELETE FROM room_exceptions WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// =====================================================
+// SECTION 7: PROVIDERS ENDPOINT
+// =====================================================
+app.get('/api/providers', async (req, res) => {
+    try {
+        const provs = await dbAll(`
+            SELECT u.id, u.name, u.email, u.role, p.specialty, p.bio
+            FROM users u
+            JOIN provider_profiles p ON u.id = p.userId
+            WHERE u.role = 'prestador'
+            ORDER BY u.name
+        `);
+
+        const provServices = await dbAll(`
+            SELECT ps.*, s.name as service_name, s.description as service_desc,
+                   s.allowReschedule, s.maxReschedules, s.min_advance_min, s.max_advance_days
+            FROM provider_services ps
+            JOIN services s ON ps.service_id = s.id
+        `);
+
+        const shifts = await dbAll(`
+            SELECT s.*, r.name as room_name, r.type as room_type
+            FROM room_shifts s
+            JOIN rooms r ON s.room_id = r.id
+        `);
+
+        const result = provs.map(p => {
+            const pServices = provServices
+                .filter(ps => ps.provider_id === p.id)
+                .map(ps => ({
+                    id: ps.service_id,
+                    service_id: ps.service_id,
+                    name: ps.service_name,
+                    description: ps.service_desc,
+                    duration: ps.duration,
+                    price: ps.price,
+                    allowReschedule: ps.allowReschedule,
+                    maxReschedules: ps.maxReschedules,
+                    min_advance_min: ps.min_advance_min,
+                    max_advance_days: ps.max_advance_days
+                }));
+
+            const pShifts = shifts.filter(s => s.provider_id === p.id);
+
+            return {
+                id: p.id,
+                name: p.name,
+                email: p.email,
+                role: p.role,
+                specialty: p.specialty || '',
+                bio: p.bio || '',
+                services: pServices,
+                shifts: pShifts
+            };
         });
-    };
-    processNext(0);
+
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// =====================================================
+// SECTION 8: SERVICES (Master Catalog & Provider Pricing)
+// =====================================================
+app.get('/api/services', async (req, res) => {
+    try {
+        const services = await dbAll('SELECT * FROM services ORDER BY name');
+        const provServices = await dbAll(`
+            SELECT ps.*, u.name as provider_name
+            FROM provider_services ps
+            JOIN users u ON ps.provider_id = u.id
+            ORDER BY u.name
+        `);
+
+        const result = services.map(s => {
+            const providers = provServices
+                .filter(ps => ps.service_id === s.id)
+                .map(ps => ({
+                    provider_id: ps.provider_id,
+                    provider_name: ps.provider_name,
+                    duration: ps.duration,
+                    price: ps.price
+                }));
+
+            return {
+                ...s,
+                providers
+            };
+        });
+
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/services', authenticateToken, async (req, res) => {
+    const {
+        id,
+        name,
+        description,
+        allowReschedule,
+        maxReschedules,
+        min_advance_min,
+        max_advance_days,
+        providers
+    } = req.body;
+
+    if (!name) {
+        return res.status(400).json({ error: 'Nombre de servicio requerido.' });
+    }
+
+    const serviceId = id || crypto.randomUUID();
+    const allowRes = allowReschedule !== undefined ? (allowReschedule ? 1 : 0) : 1;
+    const maxRes = Number(maxReschedules) || 1;
+    const minAdvance = Number(min_advance_min) || 0;
+    const maxAdvance = Number(max_advance_days) || 60;
+
+    try {
+        await dbRun(`
+            INSERT INTO services (id, name, description, allowReschedule, maxReschedules, min_advance_min, max_advance_days)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [serviceId, name, description || '', allowRes, maxRes, minAdvance, maxAdvance]);
+
+        if (Array.isArray(providers)) {
+            for (const p of providers) {
+                if (p.provider_id && p.duration) {
+                    const durationVal = Math.round(Number(p.duration) / 5) * 5; // Múltiplo de 5 min
+                    const priceVal = Number(p.price) || 0;
+                    await dbRun(`
+                        INSERT OR REPLACE INTO provider_services (id, provider_id, service_id, duration, price)
+                        VALUES (?, ?, ?, ?, ?)
+                    `, [crypto.randomUUID(), p.provider_id, serviceId, durationVal, priceVal]);
+                }
+            }
+        }
+
+        res.json({ success: true, id: serviceId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/services/:id', authenticateToken, async (req, res) => {
+    const {
+        name,
+        description,
+        allowReschedule,
+        maxReschedules,
+        min_advance_min,
+        max_advance_days,
+        providers
+    } = req.body;
+
+    const serviceId = req.params.id;
+    const allowRes = allowReschedule ? 1 : 0;
+    const maxRes = Number(maxReschedules) || 1;
+    const minAdvance = Number(min_advance_min) || 0;
+    const maxAdvance = Number(max_advance_days) || 60;
+
+    try {
+        await dbRun(`
+            UPDATE services
+            SET name = ?, description = ?, allowReschedule = ?, maxReschedules = ?,
+                min_advance_min = ?, max_advance_days = ?
+            WHERE id = ?
+        `, [name, description || '', allowRes, maxRes, minAdvance, maxAdvance, serviceId]);
+
+        if (Array.isArray(providers)) {
+            await dbRun('DELETE FROM provider_services WHERE service_id = ?', [serviceId]);
+            for (const p of providers) {
+                if (p.provider_id && p.duration) {
+                    const durationVal = Math.round(Number(p.duration) / 5) * 5;
+                    const priceVal = Number(p.price) || 0;
+                    await dbRun(`
+                        INSERT INTO provider_services (id, provider_id, service_id, duration, price)
+                        VALUES (?, ?, ?, ?, ?)
+                    `, [crypto.randomUUID(), p.provider_id, serviceId, durationVal, priceVal]);
+                }
+            }
+        }
+
+        res.json({ success: true, message: 'Servicio actualizado correctamente.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/services/:id', authenticateToken, async (req, res) => {
+    try {
+        await dbRun('DELETE FROM services WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/services/:serviceId/providers', authenticateToken, async (req, res) => {
+    try {
+        const { provider_id, duration, price } = req.body;
+        if (!provider_id || !duration) {
+            return res.status(400).json({ error: 'Prestador y duración son requeridos.' });
+        }
+        const durationVal = Math.max(5, Math.round(Number(duration) / 5) * 5);
+        const priceVal = Number(price) || 0;
+        await dbRun(`
+            INSERT OR REPLACE INTO provider_services (id, provider_id, service_id, duration, price)
+            VALUES (
+                COALESCE((SELECT id FROM provider_services WHERE provider_id = ? AND service_id = ?), ?),
+                ?, ?, ?, ?
+            )
+        `, [provider_id, req.params.serviceId, crypto.randomUUID(), provider_id, req.params.serviceId, durationVal, priceVal]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/services/:serviceId/providers/:providerId', authenticateToken, async (req, res) => {
+    try {
+        await dbRun('DELETE FROM provider_services WHERE service_id = ? AND provider_id = ?', [req.params.serviceId, req.params.providerId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// =====================================================
+// SECTION 9: PROVIDER VACATIONS
+// =====================================================
+app.get('/api/vacations', authenticateToken, async (req, res) => {
+    try {
+        let sql = `
+            SELECT v.*, u.name as provider_name
+            FROM provider_vacations v
+            JOIN users u ON v.provider_id = u.id
+        `;
+        const params = [];
+
+        // Si el usuario es prestador no-admin, solo ve sus propias vacaciones
+        if (req.user.role === 'prestador') {
+            sql += ' WHERE v.provider_id = ?';
+            params.push(req.user.id);
+        }
+
+        sql += ' ORDER BY v.start_date DESC';
+        const vacations = await dbAll(sql, params);
+        res.json(vacations);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/vacations', authenticateToken, async (req, res) => {
+    const { provider_id, start_date, end_date, start_time, end_time, reason } = req.body;
+    const targetProviderId = req.user.role === 'prestador' ? req.user.id : provider_id;
+
+    if (!targetProviderId || !start_date || !end_date) {
+        return res.status(400).json({ error: 'Prestador, fecha de inicio y fecha de fin son requeridos.' });
+    }
+
+    try {
+        // Verificar si el prestador tiene citas activas en el rango
+        const activeBookings = await dbAll(`
+            SELECT id, date, startTime, endTime, clientName, serviceName
+            FROM bookings
+            WHERE providerId = ?
+              AND date >= ? AND date <= ?
+              AND (status = 'Paid' OR status = 'Pending_Payment')
+        `, [targetProviderId, start_date, end_date]);
+
+        if (activeBookings.length > 0) {
+            return res.status(400).json({
+                error: `No se pueden registrar vacaciones porque existen ${activeBookings.length} cita(s) agendada(s) en ese período. Debe moverlas o cancelarlas antes.`,
+                conflictingBookings: activeBookings
+            });
+        }
+
+        const id = crypto.randomUUID();
+        await dbRun(`
+            INSERT INTO provider_vacations (id, provider_id, start_date, end_date, start_time, end_time, reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [id, targetProviderId, start_date, end_date, start_time || '00:00', end_time || '23:59', reason || '']);
+
+        res.json({ success: true, id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/vacations/:id', authenticateToken, async (req, res) => {
+    try {
+        let sql = 'DELETE FROM provider_vacations WHERE id = ?';
+        const params = [req.params.id];
+        if (req.user.role === 'prestador') {
+            sql += ' AND provider_id = ?';
+            params.push(req.user.id);
+        }
+        await dbRun(sql, params);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// =====================================================
+// SECTION 10: AVAILABILITY ENGINE (Public 5-Min Grid)
+// =====================================================
+app.get('/api/availability', async (req, res) => {
+    const { serviceId, providerId, date, month, year } = req.query;
+
+    if (!serviceId) {
+        return res.status(400).json({ error: 'serviceId es requerido.' });
+    }
+
+    try {
+        if (month && year) {
+            // Consulta mensual de días con disponibilidad
+            const availableDates = await getMonthlyAvailability(db, {
+                serviceId,
+                providerId: providerId || null,
+                year: Number(year),
+                month: Number(month)
+            });
+            return res.json({ availableDates });
+        }
+
+        if (date) {
+            // Consulta diaria de todos los spots factibles en rejilla de 5 min
+            const spots = await getAvailableSpots(db, {
+                serviceId,
+                providerId: providerId || null,
+                date
+            });
+            return res.json({ spots });
+        }
+
+        return res.status(400).json({ error: 'Debe especificar date (YYYY-MM-DD) o month y year.' });
+    } catch (err) {
+        console.error('Error calculando disponibilidad:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// =====================================================
+// SECTION 11: ADMINISTRATIVE 5-MIN CALENDAR
+// =====================================================
+async function getAdminCalendarHandler(req, res) {
+    const { startDate, endDate, roomId, providerId } = req.query;
+    const start = startDate || new Date().toISOString().slice(0, 10);
+    const end = endDate || start;
+
+    try {
+        const rooms = await dbAll('SELECT * FROM rooms');
+        const providers = await dbAll("SELECT id, name, email FROM users WHERE role = 'prestador'");
+
+        let bookingsSql = `
+            SELECT b.*, u.name as provider_name, r.name as room_name
+            FROM bookings b
+            JOIN users u ON b.providerId = u.id
+            JOIN rooms r ON b.roomId = r.id
+            WHERE b.date >= ? AND b.date <= ?
+              AND (b.status = 'Paid' OR b.status = 'Pending_Payment')
+        `;
+        const bookingsParams = [start, end];
+        if (roomId) {
+            bookingsSql += ' AND b.roomId = ?';
+            bookingsParams.push(roomId);
+        }
+        if (providerId) {
+            bookingsSql += ' AND b.providerId = ?';
+            bookingsParams.push(providerId);
+        }
+        bookingsSql += ' ORDER BY b.date, b.startTime';
+        const bookings = await dbAll(bookingsSql, bookingsParams);
+
+        const vacations = await dbAll(`
+            SELECT v.*, u.name as provider_name
+            FROM provider_vacations v
+            JOIN users u ON v.provider_id = u.id
+            WHERE v.start_date <= ? AND v.end_date >= ?
+        `, [end, start]);
+
+        const exceptions = await dbAll(`
+            SELECT e.*, r.name as room_name, u.name as provider_name
+            FROM room_exceptions e
+            JOIN rooms r ON e.room_id = r.id
+            LEFT JOIN users u ON e.provider_id = u.id
+            WHERE e.date >= ? AND e.date <= ?
+        `, [start, end]);
+
+        // Franjas efectivas por día
+        const days = [];
+        const curr = new Date(start + 'T00:00:00');
+        const stop = new Date(end + 'T00:00:00');
+
+        while (curr <= stop) {
+            const dateStr = curr.toISOString().slice(0, 10);
+            let effectiveShifts = await getEffectiveRoomShiftsForDate(db, dateStr);
+            if (roomId) effectiveShifts = effectiveShifts.filter(s => s.roomId === roomId);
+            if (providerId) effectiveShifts = effectiveShifts.filter(s => s.providerId === providerId);
+
+            days.push({
+                date: dateStr,
+                shifts: effectiveShifts,
+                bookings: bookings.filter(b => b.date === dateStr),
+                vacations: vacations.filter(v => dateStr >= v.start_date && dateStr <= v.end_date),
+                exceptions: exceptions.filter(e => e.date === dateStr)
+            });
+            curr.setDate(curr.getDate() + 1);
+        }
+
+        res.json({
+            startDate: start,
+            endDate: end,
+            rooms,
+            providers,
+            days,
+            bookings
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 }
 
-app.post('/api/services/:id/generate-spots', authenticateToken, (req, res) => {
-    db.all('SELECT * FROM agendas WHERE service_id = ? ORDER BY created_at, id', [req.params.id], (err, agendas) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!agendas || agendas.length === 0) {
-            return res.status(404).json({ error: 'El servicio no tiene agendas configuradas.' });
+app.get('/api/admin/calendar', authenticateToken, getAdminCalendarHandler);
+// Alias retrocompatible para evitar errores 404 (Regla R15)
+app.get('/api/rooms/schedule/all', authenticateToken, getAdminCalendarHandler);
+
+// =====================================================
+// SECTION 12: BOOKINGS ENDPOINTS
+// =====================================================
+app.get('/api/bookings', optionalAuth, async (req, res) => {
+    try {
+        let sql = `
+            SELECT b.*, u.name as provider_name, r.name as room_name
+            FROM bookings b
+            LEFT JOIN users u ON b.providerId = u.id
+            LEFT JOIN rooms r ON b.roomId = r.id
+            WHERE 1=1
+        `;
+        const params = [];
+
+        // Filtro por rol si está autenticado
+        if (req.user) {
+            if (req.user.role === 'prestador') {
+                sql += ' AND b.providerId = ?';
+                params.push(req.user.id);
+            } else if (req.user.role === 'usuario') {
+                sql += ' AND (b.client_id = ? OR b.clientEmail = ?)';
+                params.push(req.user.id, req.user.email);
+            }
         }
-        regenerateAgendas(agendas, res);
-    });
+
+        if (req.query.date) {
+            sql += ' AND b.date = ?';
+            params.push(req.query.date);
+        }
+        if (req.query.status) {
+            sql += ' AND b.status = ?';
+            params.push(req.query.status);
+        }
+
+        sql += ' ORDER BY b.date DESC, b.startTime DESC';
+        const bookings = await dbAll(sql, params);
+        res.json(bookings);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-app.post('/api/services/generate-all-spots', authenticateToken, (req, res) => {
-    db.all('SELECT * FROM agendas ORDER BY created_at, id', (err, agendas) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!agendas || agendas.length === 0) {
-            return res.status(404).json({ error: 'No hay agendas configuradas.' });
+// Resumen público para pantalla de confirmación post-pago
+app.get('/api/bookings/:id/public-summary', async (req, res) => {
+    try {
+        const booking = await dbGet(`
+            SELECT id, date, startTime, endTime, timeSlot, serviceName, roomName, status,
+                   meet_link, meet_status, clientName
+            FROM bookings
+            WHERE id = ?
+        `, [req.params.id]);
+
+        if (!booking) {
+            return res.status(404).json({ error: 'Reserva no encontrada.' });
         }
-        regenerateAgendas(agendas, res);
-    });
+
+        res.json(booking);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/bookings', optionalAuth, async (req, res) => {
+    const {
+        serviceId,
+        providerId,
+        roomId,
+        date,
+        startTime,
+        clientName,
+        clientEmail,
+        clientRut,
+        clientPhone,
+        adminMode
+    } = req.body;
+
+    if (!serviceId || !providerId || !roomId || !date || !startTime || !clientEmail || !clientName) {
+        return res.status(400).json({ error: 'Faltan datos obligatorios para crear la reserva.' });
+    }
+
+    try {
+        // Revalidación estricta de todas las reglas del motor
+        const validation = await validateBookingSlot(db, {
+            roomId,
+            providerId,
+            serviceId,
+            date,
+            startTime
+        });
+
+        if (!validation.valid) {
+            return res.status(409).json({ error: validation.error });
+        }
+
+        // Buscar o crear usuario cliente
+        let clientUser = await dbGet('SELECT id FROM users WHERE email = ?', [clientEmail]);
+        let clientId;
+        if (clientUser) {
+            clientId = clientUser.id;
+        } else {
+            clientId = req.user?.id || 'usr-' + Date.now();
+            await dbRun(`
+                INSERT OR IGNORE INTO users (id, email, password, name, role, rut, phone)
+                VALUES (?, ?, '', ?, 'usuario', ?, ?)
+            `, [clientId, clientEmail, clientName, clientRut || '', clientPhone || '']);
+        }
+
+        const bookingId = crypto.randomUUID();
+        const initialStatus = (adminMode && req.user?.role === 'administrador') ? 'Paid' : 'Pending_Payment';
+        const isVirtual = validation.room.type === 'Virtual';
+        const meetEnabled = isVirtual && validation.room.meet_enabled === 1;
+        const initialMeetStatus = meetEnabled ? 'pending' : 'none';
+
+        await dbRun(`
+            INSERT INTO bookings (
+                id, client_id, providerId, serviceId, roomId, serviceName, price, duration,
+                roomName, date, startTime, endTime, timeSlot, clientEmail, clientName, clientRut, clientPhone,
+                status, meet_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            bookingId,
+            clientId,
+            providerId,
+            serviceId,
+            roomId,
+            validation.service.name,
+            validation.price,
+            validation.duration,
+            validation.room.name,
+            date,
+            validation.startTime,
+            validation.endTime,
+            validation.timeSlot,
+            clientEmail,
+            clientName,
+            clientRut || '',
+            clientPhone || '',
+            initialStatus,
+            initialMeetStatus
+        ]);
+
+        if (initialStatus === 'Paid') {
+            triggerMeetLinkGeneration(db, bookingId).catch(console.error);
+            sendBookingConfirmationEmail(db, bookingId);
+        }
+
+        res.json({
+            success: true,
+            id: bookingId,
+            booking: {
+                id: bookingId,
+                status: initialStatus,
+                date,
+                timeSlot: validation.timeSlot,
+                price: validation.price
+            }
+        });
+
+    } catch (err) {
+        console.error('Error creando reserva:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Mover cita (Admin / Prestador)
+app.post('/api/bookings/:id/move', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { newDate, newStartTime, newRoomId } = req.body;
+
+    if (!newDate || !newStartTime) {
+        return res.status(400).json({ error: 'Fecha y hora requeridas para mover la cita.' });
+    }
+
+    try {
+        const booking = await dbGet('SELECT * FROM bookings WHERE id = ?', [id]);
+        if (!booking) {
+            return res.status(404).json({ error: 'Reserva no encontrada.' });
+        }
+
+        const targetRoomId = newRoomId || booking.roomId;
+
+        const validation = await validateBookingSlot(db, {
+            roomId: targetRoomId,
+            providerId: booking.providerId,
+            serviceId: booking.serviceId,
+            date: newDate,
+            startTime: newStartTime,
+            excludeBookingId: id
+        });
+
+        if (!validation.valid) {
+            return res.status(409).json({ error: validation.error });
+        }
+
+        await dbRun(`
+            UPDATE bookings
+            SET roomId = ?, roomName = ?, date = ?, startTime = ?, endTime = ?, timeSlot = ?
+            WHERE id = ?
+        `, [targetRoomId, validation.room.name, newDate, validation.startTime, validation.endTime, validation.timeSlot, id]);
+
+        res.json({ success: true, message: 'Cita movida exitosamente.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Reagendar cita (Usuario o Admin)
+app.post('/api/bookings/:id/reschedule', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { newDate, newStartTime, newRoomId } = req.body;
+
+    if (!newDate || !newStartTime) {
+        return res.status(400).json({ error: 'Nueva fecha y hora requeridas.' });
+    }
+
+    try {
+        const booking = await dbGet('SELECT * FROM bookings WHERE id = ?', [id]);
+        if (!booking) return res.status(404).json({ error: 'Reserva no encontrada.' });
+        if (booking.status !== 'Paid') return res.status(400).json({ error: 'Solo se pueden reagendar citas confirmadas y pagadas.' });
+
+        const service = await dbGet('SELECT * FROM services WHERE id = ?', [booking.serviceId]);
+        if (service && service.allowReschedule === 0) {
+            return res.status(400).json({ error: 'Este servicio no permite reagendamientos.' });
+        }
+
+        const maxReschedules = service?.maxReschedules || 1;
+        if ((booking.rescheduleCount || 0) >= maxReschedules) {
+            return res.status(400).json({ error: `Ha alcanzado el límite de ${maxReschedules} reagendamiento(s) permitido(s).` });
+        }
+
+        const targetRoomId = newRoomId || booking.roomId;
+
+        const validation = await validateBookingSlot(db, {
+            roomId: targetRoomId,
+            providerId: booking.providerId,
+            serviceId: booking.serviceId,
+            date: newDate,
+            startTime: newStartTime,
+            excludeBookingId: id
+        });
+
+        if (!validation.valid) {
+            return res.status(409).json({ error: validation.error });
+        }
+
+        // Se conserva el link de Google Meet existente
+        await dbRun(`
+            UPDATE bookings
+            SET roomId = ?, roomName = ?, date = ?, startTime = ?, endTime = ?, timeSlot = ?,
+                rescheduleCount = rescheduleCount + 1
+            WHERE id = ?
+        `, [targetRoomId, validation.room.name, newDate, validation.startTime, validation.endTime, validation.timeSlot, id]);
+
+        res.json({ success: true, message: 'Cita reagendada con éxito.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/bookings/:id', authenticateToken, async (req, res) => {
+    try {
+        await dbRun("UPDATE bookings SET status = 'Cancelled' WHERE id = ?", [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/bookings/:id/purge', authenticateToken, async (req, res) => {
+    try {
+        await dbRun('DELETE FROM bookings WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // =====================================================
-// SECTION 10: BOOKINGS ENDPOINTS
+// SECTION 13: GOOGLE MEET & ADMIN ALERTS ENDPOINTS
 // =====================================================
-app.get('/api/bookings', (req, res) => {
-    db.all("SELECT * FROM bookings", (err, rows) => {
+app.get('/api/google-meet/accounts', authenticateToken, async (req, res) => {
+    try {
+        const accounts = await dbAll(`
+            SELECT a.id, a.provider_id, a.room_id, a.google_email, a.token_expiry, a.updated_at,
+                   u.name as provider_name, r.name as room_name
+            FROM provider_room_google_accounts a
+            JOIN users u ON a.provider_id = u.id
+            JOIN rooms r ON a.room_id = r.id
+            ORDER BY u.name, r.name
+        `);
+        res.json(accounts);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/google-meet/oauth/start', authenticateToken, (req, res) => {
+    const { providerId, roomId } = req.query;
+    const provId = req.user.role === 'prestador' ? req.user.id : providerId;
+
+    if (!provId || !roomId) {
+        return res.status(400).json({ error: 'providerId y roomId requeridos para iniciar OAuth de Google Meet.' });
+    }
+
+    try {
+        const url = getGoogleOAuthUrl({ providerId: provId, roomId });
+        res.json({ url });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/google-meet/oauth/callback', async (req, res) => {
+    const { code, state, error } = req.query;
+
+    if (error) {
+        return res.redirect(`/acceso.html?oauth_error=${encodeURIComponent(error)}`);
+    }
+
+    try {
+        await handleGoogleOAuthCallback(db, { code, state });
+        res.redirect('/acceso.html?oauth_success=1');
+    } catch (err) {
+        console.error('Error en OAuth callback de Google Meet:', err.message);
+        res.redirect(`/acceso.html?oauth_error=${encodeURIComponent(err.message)}`);
+    }
+});
+
+app.delete('/api/google-meet/accounts/:id', authenticateToken, async (req, res) => {
+    try {
+        await dbRun('DELETE FROM provider_room_google_accounts WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/bookings/:id/meet-link', authenticateToken, async (req, res) => {
+    const { meet_link } = req.body;
+    try {
+        await updateManualMeetLink(db, req.params.id, meet_link);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+app.post('/api/bookings/:id/meet-retry', authenticateToken, async (req, res) => {
+    try {
+        const result = await retryMeetLinkGeneration(db, req.params.id);
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/admin/alerts', authenticateToken, async (req, res) => {
+    try {
+        const alerts = await dbAll(`
+            SELECT a.*, b.clientName, b.serviceName, b.date, b.startTime
+            FROM admin_alerts a
+            LEFT JOIN bookings b ON a.booking_id = b.id
+            WHERE a.status = 'open'
+            ORDER BY a.created_at DESC
+        `);
+        res.json(alerts);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/admin/alerts/:id/resolve', authenticateToken, async (req, res) => {
+    try {
+        await dbRun("UPDATE admin_alerts SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// =====================================================
+// SECTION 14: HOLIDAYS, ACTIVITIES & CONFIG
+// =====================================================
+app.get('/api/holidays', authenticateToken, (req, res) => {
+    db.all('SELECT * FROM holidays ORDER BY date ASC', (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
-app.post('/api/bookings', (req, res) => {
-    const booking = req.body;
-
-    if (!booking.spot_id) {
-        return res.status(400).json({ error: 'Se requiere spot_id para crear una reserva.' });
-    }
-
-    // Get the spot
-    db.get('SELECT * FROM spots WHERE id = ?', [booking.spot_id], (err, spot) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!spot) return res.status(404).json({ error: 'Spot no encontrado.' });
-
-        if (spot.status !== 'available') {
-            if (spot.status === 'reserved' && spot.booking_id) {
-                return db.get('SELECT * FROM bookings WHERE id = ? AND status = ?', [spot.booking_id, 'Pending_Payment'], (errB, existingBooking) => {
-                    if (!errB && existingBooking && (existingBooking.clientEmail === booking.clientEmail || !booking.clientEmail)) {
-                        return res.json({ id: existingBooking.id, status: existingBooking.status, reused: true });
-                    }
-                    return res.status(409).json({ error: 'El horario seleccionado ya no está disponible.' });
-                });
-            }
-            return res.status(409).json({ error: 'El horario seleccionado ya no está disponible.' });
-        }
-
-        // Get service and provider info
-        db.get('SELECT s.*, u.name as providerName FROM services s JOIN users u ON s.providerId = u.id WHERE s.id = ?', [spot.service_id], (err2, service) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            if (!service) return res.status(404).json({ error: 'Servicio no encontrado.' });
-
-            db.get('SELECT * FROM rooms WHERE id = ?', [spot.room_id], (err3, room) => {
-                if (err3) return res.status(500).json({ error: err3.message });
-
-                // Get agenda
-                db.get('SELECT * FROM agendas WHERE id = ?', [spot.agenda_id], (err4, agenda) => {
-                    if (err4) return res.status(500).json({ error: err4.message });
-
-                    const initialStatus = booking.adminMode ? 'Paid' : 'Pending_Payment';
-                    const bookingId = booking.id || crypto.randomUUID();
-
-                    db.run(
-                        `INSERT INTO bookings (id, spot_id, client_id, providerId, serviceId, agendaId, serviceName, price, duration, roomId, roomName, date, timeSlot, startTime, endTime, clientEmail, clientName, clientRut, clientPhone, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [
-                            bookingId, spot.id, booking.client_id || req.user?.id || null,
-                            spot.provider_id, spot.service_id, spot.agenda_id,
-                            service.name, service.price, service.duration,
-                            spot.room_id, room ? room.name : '', spot.date,
-                            `${spot.start_time}-${spot.end_time}`, spot.start_time, spot.end_time,
-                            booking.clientEmail, booking.clientName, booking.clientRut, booking.clientPhone,
-                            initialStatus
-                        ], function (err5) {
-                            if (err5) return res.status(500).json({ error: err5.message });
-
-                            // Mark spot as booked/reserved
-                            db.run(
-                                'UPDATE spots SET status = ?, booking_id = ? WHERE id = ?',
-                                [initialStatus === 'Paid' ? 'booked' : 'reserved', bookingId, spot.id]
-                            );
-
-                            // Auto-register client user if not exists
-                            if (booking.clientEmail) {
-                                db.get("SELECT id FROM users WHERE email = ?", [booking.clientEmail], (err6, existingUser) => {
-                                    if (!existingUser) {
-                                        const clientUserId = booking.client_id || 'usr-' + Date.now();
-                                        db.run("INSERT OR IGNORE INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, '', ?, 'usuario', ?, ?)",
-                                            [clientUserId, booking.clientEmail, booking.clientName || booking.clientEmail.split('@')[0], booking.clientRut || '', booking.clientPhone || '']);
-                                    }
-                                });
-                            }
-
-                            if (initialStatus === 'Paid') {
-                                sendBookingConfirmationEmail(db, bookingId);
-                            }
-
-                            res.json({ success: true, id: bookingId });
-                        }
-                    );
-                });
-            });
-        });
-    });
-});
-
-app.delete('/api/bookings/:id', authenticateToken, (req, res) => {
-    db.get('SELECT * FROM bookings WHERE id = ?', [req.params.id], (err, booking) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!booking) return res.status(404).json({ error: 'Reserva no encontrada.' });
-
-        db.serialize(() => {
-            db.run("UPDATE bookings SET status = 'Cancelled' WHERE id = ?", [req.params.id]);
-            // Free the associated spot
-            if (booking.spot_id) {
-                db.run("UPDATE spots SET status = 'available', booking_id = NULL WHERE id = ?", [booking.spot_id]);
-            }
-            res.json({ success: true });
-        });
-    });
-});
-
-app.delete('/api/bookings/:id/purge', authenticateToken, (req, res) => {
-    db.get('SELECT * FROM bookings WHERE id = ?', [req.params.id], (err, booking) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!booking) return res.status(404).json({ error: 'Reserva no encontrada.' });
-
-        db.serialize(() => {
-            // Free the associated spot before deleting
-            if (booking.spot_id) {
-                db.run("UPDATE spots SET status = 'available', booking_id = NULL WHERE id = ?", [booking.spot_id]);
-            }
-            db.run("DELETE FROM bookings WHERE id = ?", [req.params.id], function (err2) {
-                if (err2) return res.status(500).json({ error: err2.message });
-                res.json({ success: true });
-            });
-        });
-    });
-});
-
-// =====================================================
-// SECTION 11: HOLIDAYS ENDPOINTS (all require auth)
-// =====================================================
-app.get('/api/holidays', authenticateToken, (req, res) => {
-    const { year } = req.query;
-    let query = 'SELECT * FROM holidays';
-    const params = [];
-
-    if (year) {
-        query += ' WHERE date LIKE ?';
-        params.push(`${year}%`);
-    }
-
-    query += ' ORDER BY date';
-
-    db.all(query, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
-    });
-});
-
 app.post('/api/holidays', authenticateToken, (req, res) => {
-    const { id, date, name } = req.body;
-
+    const { date, name } = req.body;
     if (!date || !name) {
-        return res.status(400).json({ error: 'Faltan campos requeridos: date, name.' });
+        return res.status(400).json({ error: 'Fecha y nombre requeridos.' });
     }
-
-    const holidayId = id || crypto.randomUUID();
-    db.run('INSERT OR REPLACE INTO holidays (id, date, name) VALUES (?, ?, ?)',
-        [holidayId, date, name],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, id: holidayId });
-        }
-    );
+    const id = crypto.randomUUID();
+    db.run('INSERT INTO holidays (id, date, name) VALUES (?, ?, ?)', [id, date, name], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, id });
+    });
 });
 
 app.delete('/api/holidays/:id', authenticateToken, (req, res) => {
@@ -1177,612 +1558,8 @@ app.delete('/api/holidays/:id', authenticateToken, (req, res) => {
     });
 });
 
-// =====================================================
-// SECTION 12: AGENDAS ENDPOINTS (all require auth)
-// =====================================================
-app.get('/api/agendas', authenticateToken, (req, res) => {
-    const { service_id } = req.query;
-    const whereClause = service_id ? 'WHERE a.service_id = ?' : '';
-    const params = service_id ? [service_id] : [];
-    db.all(`
-        SELECT a.*,
-            u.name as provider_name,
-            s.name as service_name,
-            r.name as room_name,
-            (SELECT COUNT(*) FROM spots sp WHERE sp.agenda_id = a.id AND sp.status = 'available') as available_spots,
-            (SELECT COUNT(*) FROM spots sp WHERE sp.agenda_id = a.id AND sp.status IN ('reserved', 'booked')) as booked_spots,
-            (SELECT COUNT(*) FROM spots sp WHERE sp.agenda_id = a.id) as total_spots
-        FROM agendas a
-        JOIN users u ON a.provider_id = u.id
-        JOIN services s ON a.service_id = s.id
-        JOIN rooms r ON a.room_id = r.id
-        ${whereClause}
-        ORDER BY a.created_at DESC
-    `, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
-    });
-});
-
-app.get('/api/agendas/:id', authenticateToken, (req, res) => {
-    db.get(`
-        SELECT a.*,
-            u.name as provider_name,
-            s.name as service_name, s.duration as service_duration,
-            r.name as room_name
-        FROM agendas a
-        JOIN users u ON a.provider_id = u.id
-        JOIN services s ON a.service_id = s.id
-        JOIN rooms r ON a.room_id = r.id
-        WHERE a.id = ?
-    `, [req.params.id], (err, agenda) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!agenda) return res.status(404).json({ error: 'Agenda no encontrada.' });
-
-        // Get spots for this agenda
-        db.all('SELECT * FROM spots WHERE agenda_id = ? ORDER BY date, start_time', [req.params.id], (err2, spots) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            agenda.spots = spots || [];
-            res.json(agenda);
-        });
-    });
-});
-
-app.post('/api/agendas', authenticateToken, (req, res) => {
-    const { provider_id, service_id, room_id, type, recurrence_rule, specific_date, start_time, end_time, start_date, end_date, status } = req.body;
-
-    if (!provider_id || !service_id || !room_id || !type || !start_time || !end_time) {
-        return res.status(400).json({ error: 'Faltan datos requeridos: provider_id, service_id, room_id, type, start_time, end_time.' });
-    }
-    if (!['punctual', 'recurrent'].includes(type) ||
-        !/^([01]\d|2[0-3]):[0-5]\d$/.test(start_time) ||
-        !/^([01]\d|2[0-3]):[0-5]\d$/.test(end_time) ||
-        start_time >= end_time) {
-        return res.status(400).json({ error: 'El tipo o rango horario de la agenda no es válido.' });
-    }
-
-    if (type === 'punctual' && !specific_date) {
-        return res.status(400).json({ error: 'Agenda puntual requiere specific_date.' });
-    }
-
-    if (type === 'recurrent' && !recurrence_rule) {
-        return res.status(400).json({ error: 'Agenda recurrente requiere recurrence_rule.' });
-    }
-    let recurrenceRule = recurrence_rule || null;
-    if (type === 'recurrent') {
-        const normalized = normalizeAgendaRecurrenceRule(recurrence_rule);
-        if (normalized.error) return res.status(400).json({ error: normalized.error });
-        recurrenceRule = normalized.value;
-        const rule = JSON.parse(recurrenceRule);
-        if (typeof rule.dtstart !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(rule.dtstart) ||
-            Number.isNaN(Date.parse(`${rule.dtstart}T00:00:00Z`))) {
-            return res.status(400).json({ error: 'La agenda recurrente requiere una fecha de inicio válida en dtstart.' });
-        }
-        if (end_date && end_date < rule.dtstart) {
-            return res.status(400).json({ error: 'La fecha de término debe ser posterior al inicio.' });
-        }
-    }
-
-    // Validate service exists
-    db.get('SELECT id FROM services WHERE id = ?', [service_id], (errSvc, svc) => {
-        if (errSvc) return res.status(500).json({ error: errSvc.message });
-        if (!svc) return res.status(400).json({ error: 'Servicio no encontrado.' });
-
-        // Validate room exists
-        db.get('SELECT id FROM rooms WHERE id = ?', [room_id], (errRoom, room) => {
-            if (errRoom) return res.status(500).json({ error: errRoom.message });
-            if (!room) return res.status(400).json({ error: 'Sala no encontrada.' });
-
-            // Validate service-room association
-            db.get('SELECT * FROM service_rooms WHERE service_id = ? AND room_id = ?', [service_id, room_id], (err, assoc) => {
-                if (err) return res.status(500).json({ error: err.message });
-                if (!assoc) return res.status(400).json({ error: 'El servicio no está asociado a la sala seleccionada.' });
-
-                const agendaId = crypto.randomUUID();
-
-                db.run(
-                    `INSERT INTO agendas (id, provider_id, service_id, room_id, type, recurrence_rule, specific_date, start_time, end_time, start_date, end_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [agendaId, provider_id, service_id, room_id, type, recurrenceRule, specific_date || null, start_time, end_time, start_date || null, end_date || null, status || 'draft'],
-                    function (err2) {
-                        if (err2) return res.status(500).json({ error: err2.message });
-
-                        // Generate spots
-                        db.get('SELECT * FROM agendas WHERE id = ?', [agendaId], (err3, agenda) => {
-                            if (err3) return res.status(500).json({ error: err3.message });
-
-                            const generator = new SpotGenerator(db);
-                            generator.generate(agenda, (result) => {
-                                const response = {
-                                    success: true,
-                                    id: agendaId,
-                                    spotsGenerated: result.spotsGenerated,
-                                    conflicts: result.conflicts
-                                };
-
-                                if (result.conflicts > 0) {
-                                    response.warning = `${result.conflicts} spots no fueron generados por conflictos con agendas o bookings existentes del prestador/sala.`;
-                                }
-
-                                if (result.errors && result.errors.length > 0) {
-                                    response.errors = result.errors;
-                                }
-
-                                res.json(response);
-                            });
-                        });
-                    }
-                );
-            });
-        });
-    });
-});
-
-app.put('/api/agendas/:id', authenticateToken, (req, res) => {
-    const agendaId = req.params.id;
-    const { provider_id, service_id, room_id, type, recurrence_rule, specific_date, start_time, end_time, start_date, end_date, status } = req.body;
-
-    if (!provider_id || !service_id || !room_id || !type || !start_time || !end_time) {
-        return res.status(400).json({ error: 'Faltan datos requeridos: provider_id, service_id, room_id, type, start_time, end_time.' });
-    }
-    if (!['punctual', 'recurrent'].includes(type) ||
-        !/^([01]\d|2[0-3]):[0-5]\d$/.test(start_time) ||
-        !/^([01]\d|2[0-3]):[0-5]\d$/.test(end_time) ||
-        start_time >= end_time) {
-        return res.status(400).json({ error: 'El tipo o rango horario de la agenda no es válido.' });
-    }
-
-    if (type === 'punctual' && !specific_date) {
-        return res.status(400).json({ error: 'Agenda puntual requiere specific_date.' });
-    }
-
-    if (type === 'recurrent' && !recurrence_rule) {
-        return res.status(400).json({ error: 'Agenda recurrente requiere recurrence_rule.' });
-    }
-    let recurrenceRule = recurrence_rule || null;
-    if (type === 'recurrent') {
-        const normalized = normalizeAgendaRecurrenceRule(recurrence_rule);
-        if (normalized.error) return res.status(400).json({ error: normalized.error });
-        recurrenceRule = normalized.value;
-        const rule = JSON.parse(recurrenceRule);
-        if (typeof rule.dtstart !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(rule.dtstart) ||
-            Number.isNaN(Date.parse(`${rule.dtstart}T00:00:00Z`))) {
-            return res.status(400).json({ error: 'La agenda recurrente requiere una fecha de inicio válida en dtstart.' });
-        }
-        if (end_date && end_date < rule.dtstart) {
-            return res.status(400).json({ error: 'La fecha de término debe ser posterior al inicio.' });
-        }
-    }
-
-    // Validate service-room association
-    db.get('SELECT * FROM service_rooms WHERE service_id = ? AND room_id = ?', [service_id, room_id], (err, assoc) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!assoc) return res.status(400).json({ error: 'El servicio no está asociado a la sala seleccionada.' });
-
-        db.run(
-            `UPDATE agendas SET provider_id = ?, service_id = ?, room_id = ?, type = ?, recurrence_rule = ?, specific_date = ?, start_time = ?, end_time = ?, start_date = ?, end_date = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [provider_id, service_id, room_id, type, recurrenceRule, specific_date || null, start_time, end_time, start_date || null, end_date || null, status || 'draft', agendaId],
-            function (err2) {
-                if (err2) return res.status(500).json({ error: err2.message });
-
-                // Re-generate spots after update
-                db.get('SELECT * FROM agendas WHERE id = ?', [agendaId], (err3, agenda) => {
-                    if (err3) return res.status(500).json({ error: err3.message });
-
-                    const generator = new SpotGenerator(db);
-                    generator.generate(agenda, (result) => {
-                        const response = {
-                            success: true,
-                            id: agendaId,
-                            spotsGenerated: result.spotsGenerated,
-                            conflicts: result.conflicts
-                        };
-
-                        if (result.conflicts > 0) {
-                            response.warning = `${result.conflicts} spots no fueron generados por conflictos con agendas o bookings existentes del prestador/sala.`;
-                        }
-
-                        if (result.errors && result.errors.length > 0) {
-                            response.errors = result.errors;
-                        }
-
-                        res.json(response);
-                    });
-                });
-            }
-        );
-    });
-});
-
-app.delete('/api/agendas/:id', authenticateToken, (req, res) => {
-    const agendaId = req.params.id;
-
-    // Get the agenda
-    db.get('SELECT * FROM agendas WHERE id = ?', [agendaId], (err, agenda) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!agenda) return res.status(404).json({ error: 'Agenda no encontrada.' });
-
-        // Get all spots for this agenda
-        db.all('SELECT * FROM spots WHERE agenda_id = ?', [agendaId], (err2, spots) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-
-            const spotIds = (spots || []).map(s => s.id);
-            const bookedSpotIds = (spots || []).filter(s => s.status === 'booked').map(s => s.id);
-            const reservedSpotIds = (spots || []).filter(s => s.status === 'reserved').map(s => s.id);
-
-            // Check for Paid bookings on associated booked spots
-            if (bookedSpotIds.length > 0) {
-                const placeholders = bookedSpotIds.map(() => '?').join(',');
-                db.all(`SELECT id FROM bookings WHERE spot_id IN (${placeholders}) AND status = 'Paid'`, bookedSpotIds, (err3, paidBookings) => {
-                    if (err3) return res.status(500).json({ error: err3.message });
-                    if (paidBookings && paidBookings.length > 0) {
-                        return res.status(400).json({ error: 'No se puede eliminar la agenda porque tiene reservas pagadas asociadas.' });
-                    }
-
-                    proceedDeleteAgenda();
-                });
-            } else {
-                proceedDeleteAgenda();
-            }
-
-            function proceedDeleteAgenda() {
-                db.serialize(() => {
-                    // Auto-cancel Pending_Payment bookings on reserved spots
-                    if (reservedSpotIds.length > 0) {
-                        const resPlaceholders = reservedSpotIds.map(() => '?').join(',');
-                        db.run(`UPDATE bookings SET status = 'Cancelled' WHERE spot_id IN (${resPlaceholders}) AND status = 'Pending_Payment'`, reservedSpotIds);
-                    }
-
-                    // Delete all spots for this agenda
-                    db.run('DELETE FROM spots WHERE agenda_id = ?', [agendaId]);
-
-                    // Delete the agenda
-                    db.run('DELETE FROM agendas WHERE id = ?', [agendaId], function (err4) {
-                        if (err4) return res.status(500).json({ error: err4.message });
-                        res.json({ success: true });
-                    });
-                });
-            }
-        });
-    });
-});
-
-app.post('/api/agendas/:id/publish', authenticateToken, (req, res) => {
-    db.run("UPDATE agendas SET status = 'published', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-
-        // Re-generate spots on publish
-        db.get('SELECT * FROM agendas WHERE id = ?', [req.params.id], (err2, agenda) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            if (!agenda) return res.json({ success: true });
-
-            const generator = new SpotGenerator(db);
-            generator.generate(agenda, (result) => {
-                res.json({
-                    success: true,
-                    spotsGenerated: result.spotsGenerated,
-                    conflicts: result.conflicts
-                });
-            });
-        });
-    });
-});
-
-app.post('/api/agendas/:id/unpublish', authenticateToken, (req, res) => {
-    db.run("UPDATE agendas SET status = 'draft', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
-    });
-});
-
-// =====================================================
-// SECTION 13: CLIENT-FACING AVAILABLE SPOTS ENDPOINT
-// =====================================================
-app.get('/api/spots/available', (req, res) => {
-    const { date, providerId, serviceId, roomId, from, to } = req.query;
-
-    let query = `
-        SELECT sp.id, sp.agenda_id, sp.provider_id, sp.service_id, sp.room_id,
-            sp.date, sp.start_time, sp.end_time, sp.status,
-            u.name as provider_name,
-            s.name as service_name, s.price as service_price, s.duration as service_duration,
-            r.name as room_name
-        FROM spots sp
-        JOIN agendas a ON sp.agenda_id = a.id
-        JOIN users u ON sp.provider_id = u.id
-        JOIN services s ON sp.service_id = s.id
-        JOIN rooms r ON sp.room_id = r.id
-        WHERE sp.status = 'available'
-            AND a.status = 'published'
-    `;
-
-    const params = [];
-
-    if (date) {
-        query += ' AND sp.date = ?';
-        params.push(date);
-    }
-    if (providerId) {
-        query += ' AND sp.provider_id = ?';
-        params.push(providerId);
-    }
-    if (serviceId) {
-        query += ' AND sp.service_id = ?';
-        params.push(serviceId);
-    }
-    if (roomId) {
-        query += ' AND sp.room_id = ?';
-        params.push(roomId);
-    }
-    if (from) {
-        query += ' AND sp.date >= ?';
-        params.push(from);
-    }
-    if (to) {
-        query += ' AND sp.date <= ?';
-        params.push(to);
-    }
-
-    query += ' ORDER BY sp.date, sp.start_time';
-
-    db.all(query, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
-    });
-});
-
-// =====================================================
-// SECTION 14: REMAINING ENDPOINTS (unchanged)
-// =====================================================
-
-// --- BOOKING MOVE ---
-app.post('/api/bookings/:id/move', authenticateToken, (req, res) => {
-    const { id } = req.params;
-    const { newRoomId, newDate, newStartTime, moveAll } = req.body;
-
-    if (!newRoomId || !newDate || !newStartTime) {
-        return res.status(400).json({ error: 'Faltan datos para mover la reserva.' });
-    }
-
-    // Obtener el booking actual
-    db.get("SELECT * FROM bookings WHERE id = ?", [id], (err, booking) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!booking) return res.status(404).json({ error: 'Reserva no encontrada.' });
-
-        // Calcular nueva hora de fin
-        const newEndTime = minutesToTime(timeToMinutes(newStartTime) + booking.duration);
-
-        // Obtener nombre de la nueva sala
-        db.get("SELECT name FROM rooms WHERE id = ?", [newRoomId], (err2, room) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            if (!room) return res.status(404).json({ error: 'Sala no encontrada.' });
-
-            const newRoomName = room.name;
-
-            // Verificar conflictos en nueva sala
-            db.all("SELECT * FROM bookings WHERE roomId = ? AND date = ? AND status = 'Paid' AND id != ?",
-                [newRoomId, newDate, id], (err3, existingBookings) => {
-                    if (err3) return res.status(500).json({ error: err3.message });
-
-                    const hasConflict = existingBookings.some(b => {
-                        const bStart = timeToMinutes(b.startTime);
-                        const bEnd = timeToMinutes(b.endTime);
-                        const newStart = timeToMinutes(newStartTime);
-                        const newEnd = timeToMinutes(newEndTime);
-                        return newStart < bEnd && bStart < newEnd;
-                    });
-
-                    if (hasConflict) {
-                        return res.status(400).json({ error: 'La sala tiene un conflicto de horario en ese momento.' });
-                    }
-
-                    // Verificar que el prestador no tenga conflicto
-                    db.all("SELECT * FROM bookings WHERE providerId = ? AND date = ? AND status = 'Paid' AND id != ?",
-                        [booking.providerId, newDate, id], (err4, providerBookings) => {
-                            if (err4) return res.status(500).json({ error: err4.message });
-
-                            const hasProviderConflict = providerBookings.some(b => {
-                                const bStart = timeToMinutes(b.startTime);
-                                const bEnd = timeToMinutes(b.endTime);
-                                const newStart = timeToMinutes(newStartTime);
-                                const newEnd = timeToMinutes(newEndTime);
-                                return newStart < bEnd && bStart < newEnd;
-                            });
-
-                            if (hasProviderConflict) {
-                                return res.status(400).json({ error: 'El prestador ya tiene una reserva en ese horario.' });
-                            }
-
-                            if (moveAll) {
-                                db.run(`UPDATE bookings
-                            SET roomId = ?, roomName = ?, date = ?, startTime = ?, endTime = ?
-                            WHERE serviceId = ? AND providerId = ? AND date = ? AND status = 'Paid'`,
-                                    [newRoomId, newRoomName, newDate, newStartTime, newEndTime,
-                                        booking.serviceId, booking.providerId, booking.date],
-                                    function (err5) {
-                                        if (err5) return res.status(500).json({ error: err5.message });
-                                        res.json({ success: true, message: 'Todas las instancias movidas exitosamente.', moved: this.changes });
-                                    }
-                                );
-                            } else {
-                                db.run(`UPDATE bookings
-                            SET roomId = ?, roomName = ?, date = ?, startTime = ?, endTime = ?
-                            WHERE id = ?`,
-                                    [newRoomId, newRoomName, newDate, newStartTime, newEndTime, id],
-                                    function (err5) {
-                                        if (err5) return res.status(500).json({ error: err5.message });
-                                        res.json({ success: true, message: 'Reserva movida exitosamente.', moved: 1 });
-                                    }
-                                );
-                            }
-                        });
-                });
-        });
-    });
-});
-
-// --- BOOKING RESCHEDULE ---
-app.post('/api/bookings/:id/reschedule', authenticateToken, (req, res) => {
-    const { id } = req.params;
-    const { newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName } = req.body;
-
-    if (!newDate || !newTimeSlot || !newStartTime || !newEndTime || !newRoomId || !newRoomName) {
-        return res.status(400).json({ error: 'Faltan datos para el reagendamiento.' });
-    }
-
-    const newSlotStartMin = timeToMinutes(newStartTime);
-    const newSlotEndMin = timeToMinutes(newEndTime);
-
-    // 1. Get the booking
-    db.get("SELECT * FROM bookings WHERE id = ?", [id], (errBk, booking) => {
-        if (errBk) return res.status(500).json({ error: errBk.message });
-        if (!booking) return res.status(404).json({ error: 'Reserva no encontrada.' });
-        if (booking.status !== 'Paid') return res.status(400).json({ error: 'Solo se pueden reagendar reservas pagadas.' });
-
-        // 2. Get the service to check reschedule config
-        db.get("SELECT * FROM services WHERE id = ?", [booking.serviceId], (errSvc, service) => {
-            if (errSvc) return res.status(500).json({ error: errSvc.message });
-
-            // 3. Validate if service allows reschedules
-            const serviceAllowsReschedule = service ? service.allowReschedule !== 0 : true;
-            if (!serviceAllowsReschedule) {
-                return res.status(400).json({ error: 'Este servicio no permite reagendamientos.' });
-            }
-
-            // 4. Get max_reschedules from service (fallback to global config)
-            let maxReschedules;
-            if (service && service.maxReschedules) {
-                maxReschedules = service.maxReschedules;
-            } else {
-                db.get("SELECT value FROM config WHERE key = 'max_reschedules'", [], (errCfg, cfgRow) => {
-                    if (errCfg) return res.status(500).json({ error: errCfg.message });
-                    maxReschedules = cfgRow ? parseInt(cfgRow.value, 10) : 1;
-                    proceedWithReschedule(res, booking, id, maxReschedules, newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName, newSlotStartMin, newSlotEndMin);
-                });
-                return;
-            }
-
-            proceedWithReschedule(res, booking, id, maxReschedules, newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName, newSlotStartMin, newSlotEndMin);
-        });
-    });
-});
-
-function proceedWithReschedule(res, booking, id, maxReschedules, newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName, newSlotStartMin, newSlotEndMin) {
-    const rescheduleCount = booking.rescheduleCount || 0;
-    if (rescheduleCount >= maxReschedules) {
-        return res.status(400).json({ error: `Ha alcanzado el límite de ${maxReschedules} reagendamiento(s) para esta reserva.` });
-    }
-
-    // 5. Sickness blocks check for new date/time
-    db.all("SELECT * FROM sickness_blocks WHERE providerId = ? AND date = ?", [booking.providerId, newDate], (errSb, blocks) => {
-        if (errSb) return res.status(500).json({ error: errSb.message });
-
-        const hasSicknessBlock = blocks.some(b => b.timeSlot === 'all' || b.timeSlot === newTimeSlot);
-        if (hasSicknessBlock) {
-            return res.status(400).json({ error: 'El profesional no está disponible en la nueva fecha/hora seleccionada.' });
-        }
-
-        // 6. Provider overlap check (exclude current booking)
-        db.all("SELECT * FROM bookings WHERE providerId = ? AND date = ? AND status = 'Paid' AND id != ?", [booking.providerId, newDate, id], (errOb, overlapBooks) => {
-            if (errOb) return res.status(500).json({ error: errOb.message });
-
-            const hasOverlap = overlapBooks.some(bk => {
-                const bkStart = timeToMinutes(bk.startTime);
-                const bkEnd = timeToMinutes(bk.endTime);
-                return (newSlotStartMin < bkEnd && bkStart < newSlotEndMin);
-            });
-
-            if (hasOverlap) {
-                return res.status(400).json({ error: 'El prestador ya se encuentra agendado en otra sala en este horario.' });
-            }
-
-            // 7. Room conflict check (exclude current booking)
-            db.all("SELECT * FROM bookings WHERE roomId = ? AND date = ? AND status = 'Paid' AND id != ?", [newRoomId, newDate, id], (errRc, roomBooks) => {
-                if (errRc) return res.status(500).json({ error: errRc.message });
-
-                const hasRoomConflict = roomBooks.some(bk => {
-                    const bkStart = timeToMinutes(bk.startTime);
-                    const bkEnd = timeToMinutes(bk.endTime);
-                    return (newSlotStartMin < bkEnd && bkStart < newSlotEndMin);
-                });
-
-                if (hasRoomConflict) {
-                    return res.status(400).json({ error: 'La sala seleccionada se encuentra ocupada por otro profesional en este horario.' });
-                }
-
-                // 8. Update the booking
-                db.run(`UPDATE bookings
-                    SET date = ?, timeSlot = ?, startTime = ?, endTime = ?, roomId = ?, roomName = ?, rescheduleCount = rescheduleCount + 1
-                    WHERE id = ?`,
-                    [newDate, newTimeSlot, newStartTime, newEndTime, newRoomId, newRoomName, id],
-                    function (errUp) {
-                        if (errUp) return res.status(500).json({ error: errUp.message });
-                        res.json({ success: true, message: 'Reserva reagendada con éxito.' });
-                    }
-                );
-            });
-        });
-    });
-}
-
-// --- SICKNESS BLOCKS ---
-app.get('/api/blocks', authenticateToken, (req, res) => {
-    db.all("SELECT * FROM sickness_blocks", (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
-});
-
-app.post('/api/blocks', authenticateToken, (req, res) => {
-    const { id, providerId, date, timeSlot, reason } = req.body;
-    db.run("INSERT INTO sickness_blocks (id, providerId, date, timeSlot, reason) VALUES (?, ?, ?, ?, ?)",
-        [id, providerId, date, timeSlot, reason],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, id });
-        }
-    );
-});
-
-app.delete('/api/blocks/:id', authenticateToken, (req, res) => {
-    db.run("DELETE FROM sickness_blocks WHERE id = ?", [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
-    });
-});
-
-// --- CLIENTS (ahora consultan la tabla users) ---
-app.get('/api/clients', authenticateToken, (req, res) => {
-    db.all("SELECT id, email, name, rut, phone FROM users WHERE role = 'usuario'", (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
-});
-
-app.post('/api/clients', authenticateToken, (req, res) => {
-    const { email, name, rut, phone } = req.body;
-    const userId = 'usr-' + Date.now();
-    db.run("INSERT OR REPLACE INTO users (id, email, password, name, role, rut, phone) VALUES (?, ?, '', ?, 'usuario', ?, ?)",
-        [userId, email, name, rut || '', phone || ''],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
-        }
-    );
-});
-
-app.delete('/api/clients/:email', authenticateToken, (req, res) => {
-    db.run("DELETE FROM users WHERE email = ? AND role = 'usuario'", [req.params.email], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
-    });
-});
-
-// --- ACTIVITIES ---
 app.get('/api/activities', (req, res) => {
-    db.all(`SELECT a.*, COALESCE(e.enrolledCount, 0) as enrolledCount
-            FROM activities a
-            LEFT JOIN (SELECT activityId, COUNT(*) as enrolledCount FROM activity_enrollments GROUP BY activityId) e
-            ON a.id = e.activityId`, (err, rows) => {
+    db.all('SELECT * FROM activities', (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
@@ -1790,88 +1567,78 @@ app.get('/api/activities', (req, res) => {
 
 app.post('/api/activities', authenticateToken, (req, res) => {
     const { id, title, date, time, location, desc, capacity } = req.body;
-    db.run("INSERT INTO activities (id, title, date, time, location, desc, capacity) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [id, title, date, time, location, desc, capacity || 0],
+    const actId = id || crypto.randomUUID();
+    db.run(
+        'INSERT INTO activities (id, title, date, time, location, desc, capacity) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [actId, title, date, time, location, desc, capacity || 0],
         function (err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, id });
+            res.json({ success: true, id: actId });
         }
     );
 });
 
 app.delete('/api/activities/:id', authenticateToken, (req, res) => {
-    db.serialize(() => {
-        db.run("DELETE FROM activity_enrollments WHERE activityId = ?", [req.params.id]);
-        db.run("DELETE FROM activities WHERE id = ?", [req.params.id], function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
-        });
+    db.run('DELETE FROM activities WHERE id = ?', [req.params.id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
     });
 });
 
-// --- ACTIVITY ENROLLMENTS ---
 app.post('/api/activities/enroll', (req, res) => {
     const { activityId, clientName, clientEmail, clientPhone } = req.body;
-
-    if (!activityId || !clientName || !clientEmail || !clientPhone) {
-        return res.status(400).json({ error: 'Faltan campos requeridos.' });
+    if (!activityId || !clientName || !clientEmail) {
+        return res.status(400).json({ error: 'Nombre, email y actividad requeridos.' });
     }
 
-    // Check capacity
-    db.get("SELECT capacity FROM activities WHERE id = ?", [activityId], (errAct, act) => {
-        if (errAct) return res.status(500).json({ error: errAct.message });
-        if (!act) return res.status(404).json({ error: 'Actividad no encontrada.' });
+    db.get('SELECT capacity FROM activities WHERE id = ?', [activityId], (err, activity) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!activity) return res.status(404).json({ error: 'Actividad no encontrada.' });
 
-        db.get("SELECT COUNT(*) as cnt FROM activity_enrollments WHERE activityId = ?", [activityId], (errCount, countRow) => {
-            if (errCount) return res.status(500).json({ error: errCount.message });
+        db.get('SELECT COUNT(*) as count FROM activity_enrollments WHERE activityId = ?', [activityId], (err2, row) => {
+            if (err2) return res.status(500).json({ error: err2.message });
 
-            if (act.capacity > 0 && countRow.cnt >= act.capacity) {
-                return res.status(400).json({ error: 'No hay cupos disponibles para esta actividad.' });
+            if (activity.capacity > 0 && row.count >= activity.capacity) {
+                return res.status(400).json({ error: 'No quedan cupos disponibles para esta actividad.' });
             }
 
-            // Check duplicate email
-            db.get("SELECT id FROM activity_enrollments WHERE activityId = ? AND clientEmail = ?", [activityId, clientEmail], (errDup, dup) => {
-                if (errDup) return res.status(500).json({ error: errDup.message });
-                if (dup) return res.status(400).json({ error: 'Ya estás inscrito/a en esta actividad con este correo.' });
-
-                const enrollId = "enr-" + Date.now();
-                db.run("INSERT INTO activity_enrollments (id, activityId, clientName, clientEmail, clientPhone) VALUES (?, ?, ?, ?, ?)",
-                    [enrollId, activityId, clientName, clientEmail, clientPhone],
-                    function (errIns) {
-                        if (errIns) return res.status(500).json({ error: errIns.message });
-                        res.json({ success: true, id: enrollId });
-                    }
-                );
-            });
+            const id = crypto.randomUUID();
+            db.run(
+                'INSERT INTO activity_enrollments (id, activityId, clientName, clientEmail, clientPhone) VALUES (?, ?, ?, ?, ?)',
+                [id, activityId, clientName, clientEmail, clientPhone || ''],
+                function (err3) {
+                    if (err3) return res.status(500).json({ error: err3.message });
+                    res.json({ success: true, id });
+                }
+            );
         });
     });
 });
 
 app.get('/api/activities/enrollments', authenticateToken, (req, res) => {
-    db.all(`SELECT e.*, a.title as activityTitle
-            FROM activity_enrollments e
-            LEFT JOIN activities a ON e.activityId = a.id
-            ORDER BY e.created_at DESC`, (err, rows) => {
+    db.all(`
+        SELECT e.*, a.title as activity_title
+        FROM activity_enrollments e
+        JOIN activities a ON e.activityId = a.id
+        ORDER BY e.created_at DESC
+    `, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
 app.delete('/api/activities/enrollments/:id', authenticateToken, (req, res) => {
-    db.run("DELETE FROM activity_enrollments WHERE id = ?", [req.params.id], function (err) {
+    db.run('DELETE FROM activity_enrollments WHERE id = ?', [req.params.id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
 
-// --- CONFIG (Popup, Banners) ---
 app.get('/api/config', (req, res) => {
-    db.all("SELECT * FROM config", (err, rows) => {
+    db.all('SELECT * FROM config', (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         const config = {};
-        rows.forEach(r => {
-            config[r.key] = r.value;
-        });
+        (rows || []).forEach(row => { config[row.key] = row.value; });
         res.json(config);
     });
 });
@@ -1879,10 +1646,10 @@ app.get('/api/config', (req, res) => {
 app.post('/api/config', authenticateToken, (req, res) => {
     const data = req.body;
     db.serialize(() => {
-        const stmt = db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)");
-        Object.keys(data).forEach(k => {
-            stmt.run(k, String(data[k]));
-        });
+        const stmt = db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)');
+        for (const [key, value] of Object.entries(data)) {
+            stmt.run([key, typeof value === 'object' ? JSON.stringify(value) : String(value)]);
+        }
         stmt.finalize((err) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true });
@@ -1890,7 +1657,9 @@ app.post('/api/config', authenticateToken, (req, res) => {
     });
 });
 
-// --- KHIPU PAYMENTS INTEGRATION (API v3) ---
+// =====================================================
+// SECTION 15: KHIPU PAYMENTS INTEGRATION (API v3)
+// =====================================================
 app.post('/api/khipu/create-payment', (req, res) => {
     const { bookingId } = req.body;
     if (!bookingId) {
@@ -1902,7 +1671,7 @@ app.post('/api/khipu/create-payment', (req, res) => {
         return res.status(503).json({ error: 'La pasarela de pagos Khipu no está configurada en este entorno.' });
     }
 
-    db.get("SELECT * FROM bookings WHERE id = ?", [bookingId], async (err, booking) => {
+    db.get('SELECT * FROM bookings WHERE id = ?', [bookingId], async (err, booking) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!booking) return res.status(404).json({ error: 'Reserva no encontrada.' });
         if (booking.status !== 'Pending_Payment') {
@@ -1920,7 +1689,8 @@ app.post('/api/khipu/create-payment', (req, res) => {
 
         try {
             const baseUrl = process.env.APP_URL || process.env.KHIPU_BASE_URL || process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
-            const expiresDate = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+            // Expiración estricta de 30 minutos
+            const expiresDate = new Date(Date.now() + 30 * 60 * 1000).toISOString();
             const params = {
                 subject: `Reserva PsicArte: ${booking.serviceName}`,
                 currency: 'CLP',
@@ -1937,7 +1707,8 @@ app.post('/api/khipu/create-payment', (req, res) => {
 
             const khipuResponse = await callKhipuApi('POST', '/payments', params);
 
-            db.run("UPDATE bookings SET khipuPaymentId = ?, khipuPaymentUrl = ? WHERE id = ?",
+            db.run(
+                'UPDATE bookings SET khipuPaymentId = ?, khipuPaymentUrl = ? WHERE id = ?',
                 [khipuResponse.payment_id, khipuResponse.payment_url, booking.id],
                 (errUpdate) => {
                     if (errUpdate) return res.status(500).json({ error: errUpdate.message });
@@ -1964,7 +1735,8 @@ function handleKhipuWebhook(req, res) {
     const bodyStr = typeof paymentEvent === 'object' ? JSON.stringify(paymentEvent) : String(paymentEvent);
     const ipStr = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-    db.run("INSERT INTO khipu_notifications (id, type, headers, query_params, body, ip_address) VALUES (?, ?, ?, ?, ?, ?)",
+    db.run(
+        'INSERT INTO khipu_notifications (id, type, headers, query_params, body, ip_address) VALUES (?, ?, ?, ?, ?, ?)',
         [notifId, type, headersStr, queryStr, bodyStr, ipStr],
         (err) => {
             if (err) console.error('Error logging payment notification to database:', err.message);
@@ -1984,8 +1756,8 @@ function handleKhipuWebhook(req, res) {
     }
 
     const lookupQuery = bookingId
-        ? "SELECT * FROM bookings WHERE id = ?"
-        : "SELECT * FROM bookings WHERE khipuPaymentId = ?";
+        ? 'SELECT * FROM bookings WHERE id = ?'
+        : 'SELECT * FROM bookings WHERE khipuPaymentId = ?';
     const lookupParam = bookingId || paymentId;
 
     db.get(lookupQuery, [lookupParam], async (errBk, booking) => {
@@ -2047,7 +1819,7 @@ app.get('/cancelado', (req, res) => {
 });
 
 app.get('/api/admin/khipu-notifications', authenticateToken, (req, res) => {
-    db.all("SELECT * FROM khipu_notifications ORDER BY received_at DESC", (err, rows) => {
+    db.all('SELECT * FROM khipu_notifications ORDER BY received_at DESC', (err, rows) => {
         if (err) {
             console.error('Error fetching notifications from database:', err.message);
             return res.status(500).json({ error: err.message });
@@ -2057,7 +1829,7 @@ app.get('/api/admin/khipu-notifications', authenticateToken, (req, res) => {
 });
 
 app.get('/api/bookings/:id/payment-status', (req, res) => {
-    db.get("SELECT * FROM bookings WHERE id = ?", [req.params.id], async (err, booking) => {
+    db.get('SELECT * FROM bookings WHERE id = ?', [req.params.id], async (err, booking) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!booking) return res.status(404).json({ error: 'Reserva no encontrada.' });
 
@@ -2070,8 +1842,8 @@ app.get('/api/bookings/:id/payment-status', (req, res) => {
                         return res.json({ status: newStatus || 'Paid' });
                     });
                 }
-            } catch (errApi) {
-                // If call fails (network or pending), proceed to return current status
+            } catch (_) {
+                // Proceder con el estado actual
             }
         }
 
@@ -2080,61 +1852,64 @@ app.get('/api/bookings/:id/payment-status', (req, res) => {
 });
 
 // =====================================================
-// CLEANUP SCHEDULER (Abandoned Pending Payments)
+// CLEANUP SCHEDULER (Abandoned Pending Payments - 30 min)
 // =====================================================
 function cleanupPendingPayments() {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 
-    db.all("SELECT id, spot_id, khipuPaymentId FROM bookings WHERE status = 'Pending_Payment' AND created_at < ?", [oneHourAgo], async (err, bookings) => {
-        if (err) {
-            console.error('Cleanup error:', err.message);
-            return;
-        }
-
-        if (!bookings || bookings.length === 0) return;
-
-        for (const b of bookings) {
-            if (b.khipuPaymentId && process.env.KHIPU_API_KEY) {
-                try {
-                    const paymentDetails = await callKhipuApi('GET', `/payments/${b.khipuPaymentId}`);
-                    if (paymentDetails.status === 'done') {
-                        reconcileBookingPayment(b.id, () => {
-                            console.log(`Cleanup: Booking ${b.id} was confirmed as Paid during cleanup check.`);
-                        });
-                        continue;
-                    }
-                } catch (_err) {
-                    // Ignore API errors and proceed with normal cleanup
-                }
+    db.all(
+        "SELECT id, khipuPaymentId FROM bookings WHERE status = 'Pending_Payment' AND created_at < ?",
+        [thirtyMinutesAgo],
+        async (err, bookings) => {
+            if (err) {
+                console.error('Cleanup error:', err.message);
+                return;
             }
 
-            db.serialize(() => {
-                if (b.spot_id) {
-                    db.run("UPDATE spots SET status = 'available', booking_id = NULL WHERE id = ?", [b.spot_id]);
+            if (!bookings || bookings.length === 0) return;
+
+            for (const b of bookings) {
+                if (b.khipuPaymentId && process.env.KHIPU_API_KEY) {
+                    try {
+                        const paymentDetails = await callKhipuApi('GET', `/payments/${b.khipuPaymentId}`);
+                        if (paymentDetails.status === 'done') {
+                            reconcileBookingPayment(b.id, () => {
+                                console.log(`Cleanup: Booking ${b.id} was confirmed as Paid during cleanup check.`);
+                            });
+                            continue;
+                        }
+                    } catch (_) {
+                        // Ignorar y proceder a eliminar reserva abandonada
+                    }
                 }
-                db.run("DELETE FROM bookings WHERE id = ?", [b.id]);
-            });
+
+                db.run('DELETE FROM bookings WHERE id = ?', [b.id]);
+            }
         }
-    });
+    );
 }
 
 // =====================================================
 // START SERVER
 // =====================================================
-db.ready.then(() => {
-    app.listen(PORT, () => {
-        console.log(`PsicArte Server is running on port ${PORT}`);
-        console.log(`Frontend served locally at: http://localhost:${PORT}/index.html`);
+if (require.main === module) {
+    db.ready.then(() => {
+        app.listen(PORT, () => {
+            console.log(`PsicArte Server is running on port ${PORT}`);
+            console.log(`Frontend served locally at: http://localhost:${PORT}/index.html`);
 
-        cleanupPendingPayments();
-        setInterval(cleanupPendingPayments, 30 * 60 * 1000);
+            cleanupPendingPayments();
+            setInterval(cleanupPendingPayments, 15 * 60 * 1000);
+        });
+    }).catch((error) => {
+        console.error('Database initialization failed; server not started:', error.message);
+        db.close((closeError) => {
+            if (closeError) {
+                console.error('Error closing database after initialization failure:', closeError.message);
+            }
+            process.exitCode = 1;
+        });
     });
-}).catch((error) => {
-    console.error('Database initialization failed; server not started:', error.message);
-    db.close((closeError) => {
-        if (closeError) {
-            console.error('Error closing database after initialization failure:', closeError.message);
-        }
-        process.exitCode = 1;
-    });
-});
+}
+
+module.exports = app;

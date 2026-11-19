@@ -1,167 +1,211 @@
-// Focused integration test - DYNAMIC DATES (Rule R14 compliant)
+// scripts/test-focused.js
+// Focused automated domain tests for PsicArte's 5-minute availability engine & booking rules
+// Rule R14 compliant (all dates computed dynamically)
+
 require('dotenv').config();
 const db = require('../server/database');
-const { SpotGenerator } = require('../server/spot-generator');
+const {
+    timeToMinutes,
+    minutesToTime,
+    getDayOfWeek,
+    getEffectiveRoomShiftsForDate,
+    buildContiguousWindows,
+    checkBreakRule,
+    isProviderOnVacation,
+    checkAdvanceLimits,
+    calculateProviderMetricsForDay,
+    getAvailableSpots,
+    validateBookingSlot
+} = require('../server/availability-engine');
 
-const generator = new SpotGenerator(db);
+let PASSED = 0;
+let FAILED = 0;
 
-async function q(sql, params = []) {
-    return new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(rows || []);
-            }
-        });
-    });
-}
-async function run(sql, params = []) {
-    return new Promise((resolve, reject) => {
-        db.run(sql, params, function (err) {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(this);
-            }
-        });
-    });
-}
-function gen(agenda) {
-    return new Promise((resolve, reject) => {
-        generator.generate(agenda, (result) => {
-            if (result.errors && result.errors.length > 0) reject(result.errors[0]);
-            else resolve(result);
-        });
-    });
+function assert(condition, testName, detail = '') {
+    if (condition) {
+        PASSED++;
+        console.log(`  ✅ PASS: ${testName}`);
+    } else {
+        FAILED++;
+        console.error(`  ❌ FAIL: ${testName} - ${detail}`);
+    }
 }
 
-async function main() {
-    // Dynamic next Monday calculation
+async function runTests() {
+    console.log('====================================================');
+    console.log('   PsicArte 5-Min Availability Engine Domain Tests   ');
+    console.log('====================================================\n');
+
+    // 1. Time conversion helpers
+    console.log('--- 1. Time Conversion Helpers ---');
+    assert(timeToMinutes('09:00') === 540, '09:00 -> 540 min');
+    assert(timeToMinutes('12:40') === 760, '12:40 -> 760 min');
+    assert(minutesToTime(540) === '09:00', '540 min -> 09:00');
+    assert(minutesToTime(760) === '12:40', '760 min -> 12:40');
+
+    // 2. Break rule verification
+    console.log('\n--- 2. Break Rule Verification ---');
+    // Rule: break 12:30 - 13:30 (750 to 810).
+    // Can end at most 10 min into break (up to 12:40 = 760).
+    // Cannot start inside break.
+    const testBreaks = [{
+        start_time: '12:30',
+        end_time: '13:30',
+        startMins: 750,
+        endMins: 810
+    }];
+
+    // Spot ending exactly when break starts (11:40 - 12:30)
+    assert(checkBreakRule(700, 750, testBreaks) === true, 'Spot ending exactly at break start (11:40 - 12:30) is compliant');
+
+    // Spot ending 10 minutes into break (11:50 - 12:40) -> Allowed by +10 min tolerance
+    assert(checkBreakRule(710, 760, testBreaks) === true, 'Spot ending 10 min into break (11:50 - 12:40) is compliant');
+
+    // Spot ending 15 minutes into break (11:55 - 12:45) -> Disallowed (> 10 min)
+    assert(checkBreakRule(715, 765, testBreaks) === false, 'Spot ending 15 min into break (11:55 - 12:45) is rejected');
+
+    // Spot starting inside break (12:30 - 13:20) -> Disallowed
+    assert(checkBreakRule(750, 800, testBreaks) === false, 'Spot starting at break start (12:30 - 13:20) is rejected');
+
+    // Spot starting at 12:35 (755) inside break -> Disallowed
+    assert(checkBreakRule(755, 805, testBreaks) === false, 'Spot starting inside break (12:35) is rejected');
+
+    // Spot starting at break end (13:30 - 14:20) -> Allowed
+    assert(checkBreakRule(810, 860, testBreaks) === true, 'Spot starting exactly at break end (13:30 - 14:20) is compliant');
+
+    // 3. Contiguous Shifts Window Merging
+    console.log('\n--- 3. Contiguous Shifts Window Merging ---');
+    const shiftsToMerge = [
+        {
+            roomId: 'room-1',
+            providerId: 'prov-macarena',
+            startTime: '09:00',
+            endTime: '13:00',
+            startMins: 540,
+            endMins: 780,
+            breaks: [{ start_time: '12:30', end_time: '13:00', startMins: 750, endMins: 780 }]
+        },
+        {
+            roomId: 'room-1',
+            providerId: 'prov-macarena',
+            startTime: '13:00',
+            endTime: '17:00',
+            startMins: 780,
+            endMins: 1020,
+            breaks: []
+        },
+        {
+            roomId: 'room-2',
+            providerId: 'prov-cristian',
+            startTime: '10:00',
+            endTime: '14:00',
+            startMins: 600,
+            endMins: 840,
+            breaks: []
+        }
+    ];
+
+    const mergedWindows = buildContiguousWindows(shiftsToMerge);
+    assert(mergedWindows.length === 2, 'Contiguous shifts for prov-macarena merged into 1 window, total 2 windows');
+    const macarenaWindow = mergedWindows.find(w => w.providerId === 'prov-macarena');
+    assert(macarenaWindow && macarenaWindow.startTime === '09:00' && macarenaWindow.endTime === '17:00', 'Merged window spans 09:00 to 17:00');
+    assert(macarenaWindow.breaks.length === 1, 'Merged window preserves breaks');
+
+    // 4. Vacation Checks
+    console.log('\n--- 4. Provider Vacations Verification ---');
+    const macarenaVacations = [
+        {
+            provider_id: 'prov-macarena',
+            start_date: '2026-12-01',
+            end_date: '2026-12-05',
+            start_time: null,
+            end_time: null
+        }
+    ];
+    const cristianVacations = [
+        {
+            provider_id: 'prov-cristian',
+            start_date: '2026-12-10',
+            end_date: '2026-12-10',
+            start_time: '14:00',
+            end_time: '18:00'
+        }
+    ];
+
+    assert(isProviderOnVacation(macarenaVacations, '2026-12-03', 600, 650) === true, 'All-day vacation blocks spot');
+    assert(isProviderOnVacation(macarenaVacations, '2026-12-06', 600, 650) === false, 'Date outside vacation is not blocked');
+    assert(isProviderOnVacation(cristianVacations, '2026-12-10', 600, 650) === false, 'Morning spot (10:00) before partial vacation (14:00) is allowed');
+    assert(isProviderOnVacation(cristianVacations, '2026-12-10', 870, 920) === true, 'Afternoon spot (14:30) during partial vacation is blocked');
+
+    // 5. Dynamic Next Weekday Availability Query
+    console.log('\n--- 5. Dynamic Availability on Seeded DB ---');
+    const serviceRows = await new Promise((res, rej) => db.all('SELECT * FROM services LIMIT 1', (e, r) => e ? rej(e) : res(r)));
+    const testService = serviceRows[0];
+    assert(!!testService, `Found seeded service for testing: ${testService?.name}`);
+
+    // Find next Tuesday dynamically
     const now = new Date();
-    const daysUntilMonday = (1 + 7 - now.getDay()) % 7 || 7;
-    const monday = new Date(now.getTime() + daysUntilMonday * 24 * 60 * 60 * 1000);
-    const SHORT_START = monday.toISOString().split('T')[0];
-    const twoWeeksLater = new Date(monday.getTime() + 14 * 24 * 60 * 60 * 1000);
-    const SHORT_END = twoWeeksLater.toISOString().split('T')[0];
+    const daysUntilTue = (2 + 7 - now.getDay()) % 7 || 7;
+    const nextTue = new Date(now.getTime() + daysUntilTue * 24 * 60 * 60 * 1000);
+    const nextTueStr = nextTue.toISOString().slice(0, 10);
 
-    const tueDate = new Date(monday.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const wedDate = new Date(monday.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const thuDate = new Date(monday.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const friDate = new Date(monday.getTime() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const spots = await getAvailableSpots(db, {
+        serviceId: testService.id,
+        date: nextTueStr
+    });
 
-    console.log('=== Focused Integration Tests ===\n');
-    console.log(`Test Range: ${SHORT_START} to ${SHORT_END} (Tue: ${tueDate}, Wed: ${wedDate}, Thu: ${thuDate})`);
+    assert(Array.isArray(spots), 'getAvailableSpots returns an array');
+    assert(spots.length > 0, `Spots found on next Tuesday (${nextTueStr}): ${spots.length}`);
 
-    await run("DELETE FROM spots WHERE agenda_id LIKE 't%'");
-    await run("DELETE FROM agendas WHERE id LIKE 't%'");
-    await run("DELETE FROM bookings WHERE id LIKE 't%'");
-    await run("INSERT OR IGNORE INTO services (id, providerId, name, duration) VALUES ('svc-a', 'prov-test', 'Svc A', 30)");
-    await run("INSERT OR IGNORE INTO services (id, providerId, name, duration) VALUES ('svc-b', 'prov-test', 'Svc B', 60)");
-    await run("INSERT OR IGNORE INTO service_rooms (id, service_id, room_id) VALUES ('sr-a1', 'svc-a', 'room-1')");
-    await run("INSERT OR IGNORE INTO service_rooms (id, service_id, room_id) VALUES ('sr-b2', 'svc-b', 'room-2')");
+    // Verify 5-minute grid alignment
+    const all5MinAligned = spots.every(s => {
+        const sm = timeToMinutes(s.startTime);
+        const em = timeToMinutes(s.endTime);
+        return sm % 5 === 0 && em % 5 === 0;
+    });
+    assert(all5MinAligned, 'All generated spots are aligned to the 5-minute grid');
 
-    // === CASE 1: Tue/Thu 8-13, Wed 9-14 ===
-    const a1 = {
-        id: 't1', provider_id: 'prov-test', service_id: 'svc-a', room_id: 'room-1',
-        type: 'recurrent',
-        recurrence_rule: JSON.stringify({
-            freq: 'WEEKLY', interval: 1, byweekday: [2, 4, 3], dtstart: SHORT_START,
-            time_ranges: { '2': { start: '08:00', end: '13:00' }, '4': { start: '08:00', end: '13:00' }, '3': { start: '09:00', end: '14:00' } }
-        }),
-        start_time: '08:00', end_time: '14:00', start_date: SHORT_START, end_date: SHORT_END, status: 'published'
-    };
-    const r1 = await gen(a1);
-    console.log(`Caso 1: ${r1.spotsGenerated} spots generated`);
+    // Verify separation by provider
+    const providersFound = new Set(spots.map(s => s.providerId));
+    console.log(`  Spots offered across ${providersFound.size} providers: ${[...providersFound].join(', ')}`);
+    assert(providersFound.size >= 1, 'Spots include provider IDs');
 
-    let spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', thuDate]);
-    console.log(`  Thu (${thuDate}): ${spots.length} spots (expect 7): ${spots.map(s => s.start_time).join(', ')}`);
-    console.log(`  ${spots.length === 7 ? '✓ PASS' : '✗ FAIL'}`);
+    // 6. Strict Slot Validation (validateBookingSlot)
+    console.log('\n--- 6. Strict Slot Validation ---');
+    if (spots.length > 0) {
+        const spotToTest = spots[0];
+        const valRes = await validateBookingSlot(db, {
+            serviceId: spotToTest.serviceId,
+            providerId: spotToTest.providerId,
+            roomId: spotToTest.roomId,
+            date: nextTueStr,
+            startTime: spotToTest.startTime
+        });
+        assert(valRes.valid === true, `validateBookingSlot accepts valid spot at ${spotToTest.startTime}`);
 
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', wedDate]);
-    console.log(`  Wed (${wedDate}): ${spots.length} spots (expect 8): ${spots.map(s => s.start_time).join(', ')}`);
-    console.log(`  ${spots.length === 8 ? '✓ PASS' : '✗ FAIL'}`);
-
-    // === CASE 2: Booking conflict on room-1, Thursday, 10:00-11:00 ===
-    await run("INSERT INTO bookings (id, providerId, serviceId, roomId, date, startTime, endTime, status) VALUES ('t-bk1','prov-other','svc-b','room-1',?,'10:00','11:00','Paid')", [thuDate]);
-    await gen(a1);
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', thuDate]);
-    console.log(`\nCaso 2: ${spots.length} spots (expect 5): ${spots.map(s => s.start_time).join(', ')}`);
-    const noConflict = !spots.some(s => s.start_time === '10:00' || s.start_time === '10:30');
-    console.log(`  10:00-11:00 omitted: ${noConflict ? '✓ PASS' : '✗ FAIL'}`);
-    console.log(`  Count: ${spots.length === 5 ? '✓ PASS' : '✗ FAIL'}`);
-    await run("DELETE FROM bookings WHERE id='t-bk1'");
-
-    // === CASE 3: Dynamic Holiday punctual ===
-    const holidayRow = await q("SELECT date, name FROM holidays WHERE date >= date('now') ORDER BY date ASC LIMIT 1");
-    if (holidayRow.length > 0) {
-        const holidayDate = holidayRow[0].date;
-        const a3 = {
-            id: 't3', provider_id: 'prov-test', service_id: 'svc-a', room_id: 'room-1',
-            type: 'punctual', specific_date: holidayDate, start_time: '08:30', end_time: '12:30', status: 'published'
-        };
-        const r3 = await gen(a3);
-        console.log(`\nCaso 3 (holiday ${holidayDate} - ${holidayRow[0].name}): ${r3.spotsGenerated} spots (expect 0): ${r3.spotsGenerated === 0 ? '✓ PASS' : '✗ FAIL'}`);
+        // Invalid time out of shift bounds (e.g. 03:00 AM)
+        const invalidRes = await validateBookingSlot(db, {
+            serviceId: spotToTest.serviceId,
+            providerId: spotToTest.providerId,
+            roomId: spotToTest.roomId,
+            date: nextTueStr,
+            startTime: '03:00'
+        });
+        assert(invalidRes.valid === false, 'validateBookingSlot rejects 03:00 AM spot out of bounds');
     }
 
-    // === CASE 4: Non-holiday punctual (Friday of next week) ===
-    const a4 = {
-        id: 't4', provider_id: 'prov-test', service_id: 'svc-a', room_id: 'room-1',
-        type: 'punctual', specific_date: friDate, start_time: '08:30', end_time: '12:30', status: 'published'
-    };
-    await gen(a4);
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? ORDER BY start_time', ['t4']);
-    console.log(`\nCaso 4 (Non-holiday ${friDate}): ${spots.length} spots (expect 7)`);
-    const no12 = !spots.some(s => s.start_time === '12:00');
-    console.log(`  12:00-12:30 omitted: ${no12 ? '✓ PASS' : '✗ FAIL'}`);
-    console.log(`  Count: ${spots.length === 7 ? '✓ PASS' : '✗ FAIL'}`);
+    console.log('\n====================================================');
+    console.log(`Results: ${PASSED} passed, ${FAILED} failed.`);
+    console.log('====================================================');
 
-    // === CASE 5: Provider conflict — ORDER MATTERS ===
-    const a5b = {
-        id: 't5b', provider_id: 'prov-test', service_id: 'svc-b', room_id: 'room-2',
-        type: 'recurrent',
-        recurrence_rule: JSON.stringify({
-            freq: 'WEEKLY', interval: 1, byweekday: [2], dtstart: SHORT_START,
-            time_ranges: { '2': { start: '08:00', end: '13:00' } }
-        }),
-        start_time: '08:00', end_time: '13:00', start_date: SHORT_START, end_date: SHORT_END, status: 'published'
-    };
-
-    // Remove t1 first so t5b can claim Tuesday
-    await run("DELETE FROM spots WHERE agenda_id = 't1'");
-    await run("DELETE FROM agendas WHERE id = 't1'");
-
-    const r5b = await gen(a5b);
-    console.log(`\nCaso 5 - Step 1 (t5b generated): ${r5b.spotsGenerated} spots, ${r5b.conflicts} conflicts`);
-
-    // Now regenerate t1
-    const r5a = await gen(a1);
-    console.log(`Caso 5 - Step 2 (t1 regenerated): ${r5a.spotsGenerated} spots, ${r5a.conflicts} conflicts`);
-
-    // Tue: should be 0 for t1 (provider conflict with t5b)
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', tueDate]);
-    console.log(`  Tue (${tueDate}) (t1): ${spots.length} spots (expect 0)`);
-    console.log(`  ${spots.length === 0 ? '✓ PASS' : '✗ FAIL'}`);
-
-    // Tue: should have spots for t5b
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t5b', tueDate]);
-    console.log(`  Tue (${tueDate}) (t5b): ${spots.length} spots (expect >0)`);
-    console.log(`  ${spots.length > 0 ? '✓ PASS' : '✗ FAIL'}`);
-
-    // Thu: should still work for t1
-    spots = await q('SELECT start_time FROM spots WHERE agenda_id=? AND date=? ORDER BY start_time', ['t1', thuDate]);
-    console.log(`  Thu (${thuDate}) (t1): ${spots.length} spots (expect 7)`);
-    console.log(`  ${spots.length === 7 ? '✓ PASS' : '✗ FAIL'}`);
-
-    // Cleanup
-    await run("DELETE FROM spots WHERE agenda_id LIKE 't%'");
-    await run("DELETE FROM agendas WHERE id LIKE 't%'");
-    await run("DELETE FROM bookings WHERE id LIKE 't%'");
-    await run("DELETE FROM service_rooms WHERE id LIKE 'sr-%'");
-    await run("DELETE FROM services WHERE id LIKE 'svc-%'");
-
-    console.log('\n=== All tests completed ===');
-    process.exit(0);
+    if (FAILED > 0) {
+        process.exit(1);
+    } else {
+        process.exit(0);
+    }
 }
 
-setTimeout(() => main(), 1000);
+runTests().catch(err => {
+    console.error('Fatal error running focused tests:', err);
+    process.exit(1);
+});

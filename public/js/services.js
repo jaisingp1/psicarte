@@ -1,6 +1,16 @@
 // ----------------------------------------------------
 // SERVICES SECTION (Dynamic Rendering)
 // ----------------------------------------------------
+function getProviderServiceModality(provider) {
+    const shifts = provider.shifts || [];
+    const hasVirtual = shifts.some(s => s.room_type === 'Virtual');
+    const hasPhysical = shifts.some(s => s.room_type === 'Física');
+    if (hasVirtual && hasPhysical) return 'both';
+    if (hasVirtual) return 'Virtual';
+    if (hasPhysical) return 'Física';
+    return 'Virtual';
+}
+
 function renderServicesSection() {
     const tabsContainer = document.getElementById("provider-tabs");
     const gridContainer = document.getElementById("dynamic-services-container");
@@ -36,11 +46,12 @@ function renderServicesSection() {
 
     // Get selected provider and apply filters
     const provider = state.providers.find(p => p.id === selectedServicesProviderId);
-    let services = provider ? [...provider.services] : [];
+    let services = provider ? [...(provider.services || [])] : [];
+    const modality = provider ? getProviderServiceModality(provider) : 'Virtual';
 
     // Filter by modality
     if (selectedServiceType !== 'all') {
-        services = services.filter(s => s.type === selectedServiceType);
+        services = services.filter(() => modality === 'both' || modality === selectedServiceType);
     }
 
     // Filter by search query
@@ -55,18 +66,20 @@ function renderServicesSection() {
         return;
     }
 
+    const badgeHtml = modality === 'both'
+        ? `<span class="service-badge service-badge-virtual"><i class="fa-solid fa-wifi"></i> Online</span> <span class="service-badge service-badge-physical"><i class="fa-solid fa-building"></i> Presencial</span>`
+        : (modality === 'Virtual'
+            ? `<span class="service-badge service-badge-virtual"><i class="fa-solid fa-wifi"></i> Online</span>`
+            : `<span class="service-badge service-badge-physical"><i class="fa-solid fa-building"></i> Presencial</span>`);
+
     if (servicesView === 'list') {
         gridContainer.className = 'services-list-view';
         gridContainer.innerHTML = '';
         services.forEach(s => {
-            const typeLabel = s.type === 'Virtual' ? 'Online' : 'Presencial';
-            const typeIcon = s.type === 'Virtual' ? 'fa-wifi' : 'fa-building';
             gridContainer.innerHTML += `
                 <div class="service-list-item">
                     <div class="service-list-main">
-                        <span class="service-badge service-badge-${s.type === 'Virtual' ? 'virtual' : 'physical'}">
-                            <i class="fa-solid ${typeIcon}"></i> ${typeLabel}
-                        </span>
+                        ${badgeHtml}
                         <span class="service-list-name">${s.name}</span>
                     </div>
                     <div class="service-list-meta">
@@ -74,7 +87,7 @@ function renderServicesSection() {
                         <span><i class="fa-solid fa-user-doctor"></i> ${provider.name}</span>
                     </div>
                     <div class="service-list-price">
-                        <span>$${s.price.toLocaleString("es-CL")} <small>/ sesión</small></span>
+                        <span>$${Number(s.price).toLocaleString("es-CL")} <small>/ sesión</small></span>
                         <button class="btn-primary" type="button" onclick="bookServiceFromCard('${provider.id}', '${s.id}')">Reservar</button>
                     </div>
                 </div>
@@ -84,22 +97,18 @@ function renderServicesSection() {
         gridContainer.className = 'services-grid';
         gridContainer.innerHTML = '';
         services.forEach(s => {
-            const typeLabel = s.type === 'Virtual' ? 'Online' : 'Presencial';
-            const typeIcon = s.type === 'Virtual' ? 'fa-wifi' : 'fa-building';
             gridContainer.innerHTML += `
                 <div class="service-card">
                     <div class="service-card-header">
                         <h4 class="service-card-title">${s.name}</h4>
-                        <span class="service-badge service-badge-${s.type === 'Virtual' ? 'virtual' : 'physical'}">
-                            <i class="fa-solid ${typeIcon}"></i> ${typeLabel}
-                        </span>
+                        ${badgeHtml}
                     </div>
                     <div class="service-card-meta">
                         <span><i class="fa-solid fa-clock"></i> ${s.duration} minutos</span>
                         <span><i class="fa-solid fa-user-doctor"></i> ${provider.name}</span>
                     </div>
                     <div class="service-card-price">
-                        <span class="price-amount">$${s.price.toLocaleString("es-CL")}</span>
+                        <span class="price-amount">$${Number(s.price).toLocaleString("es-CL")}</span>
                         <span class="price-unit">Sesión</span>
                     </div>
                     <button class="btn-primary service-card-book" type="button" onclick="bookServiceFromCard('${provider.id}', '${s.id}')">Reservar este servicio</button>

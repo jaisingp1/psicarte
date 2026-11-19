@@ -1,6 +1,6 @@
--- valores_iniciales.sql
--- Seed Data for Centro Integral PsicArte
--- Refactored: Agenda & Booking Module
+-- valores_iniciales_dev.sql
+-- Seed Data for Centro Integral PsicArte (Ambiente de Desarrollo y Pruebas)
+-- Nueva lógica de disponibilidad dinámica en rejilla de 5 minutos
 -- 1. Seed Content (Homepage Customizable Content)
 INSERT
     OR REPLACE INTO content (key, value)
@@ -33,37 +33,12 @@ Desde nuestras distintas áreas de trabajo, abordamos temáticas vinculadas a sa
     ),
     ('contactEmail', 'contacto@centropsicarte.cl'),
     ('contactPhone', '+56961676706'),
-    ('contactAddress', 'Oficina Virtual Las Bellotas 199, Providencia, RM');
--- 2. Seed Rooms (no openTime/closeTime — moved to room_schedules)
-INSERT
-    OR REPLACE INTO rooms (id, name, type, meeting_link)
-VALUES ('room-1', 'Sala Física Principal', 'Física', ''),
-    ('room-2', 'Sala Virtual Zoom', 'Virtual', 'https://meet.google.com/psicarte-sala-virtual');
--- 3. Seed Room Schedules (per day-of-week operating blocks)
--- Room 1: Mon-Fri 8:30-12:00 and 13:00-17:00
-INSERT
-    OR REPLACE INTO room_schedules (id, room_id, day_of_week, start_time, end_time)
-VALUES ('rs-1-1', 'room-1', 1, '08:30', '12:00'),
-    ('rs-1-2', 'room-1', 1, '13:00', '17:00'),
-    ('rs-1-3', 'room-1', 2, '08:30', '12:00'),
-    ('rs-1-4', 'room-1', 2, '13:00', '17:00'),
-    ('rs-1-5', 'room-1', 3, '08:30', '12:00'),
-    ('rs-1-6', 'room-1', 3, '13:00', '17:00'),
-    ('rs-1-7', 'room-1', 4, '08:30', '12:00'),
-    ('rs-1-8', 'room-1', 4, '13:00', '17:00'),
-    ('rs-1-9', 'room-1', 5, '08:30', '12:00'),
-    ('rs-1-10', 'room-1', 5, '13:00', '17:00');
--- Room 2: Mon-Sat 8:30-20:00 (virtual, longer hours)
-INSERT
-    OR REPLACE INTO room_schedules (id, room_id, day_of_week, start_time, end_time)
-VALUES ('rs-2-1', 'room-2', 1, '08:30', '20:00'),
-    ('rs-2-2', 'room-2', 2, '08:30', '20:00'),
-    ('rs-2-3', 'room-2', 3, '08:30', '20:00'),
-    ('rs-2-4', 'room-2', 4, '08:30', '20:00'),
-    ('rs-2-5', 'room-2', 5, '08:30', '20:00'),
-    ('rs-2-6', 'room-2', 6, '08:30', '20:00');
--- 4. Seed Users
--- Admin
+    (
+        'contactAddress',
+        'Oficina Virtual Las Bellotas 199, Providencia, RM'
+    );
+-- 2. Seed Users
+-- Administrador y Prestadores
 INSERT
     OR REPLACE INTO users (id, email, password, name, role, rut, phone)
 VALUES (
@@ -74,11 +49,8 @@ VALUES (
         'administrador',
         '',
         ''
-    );
--- Prestadores
-INSERT
-    OR REPLACE INTO users (id, email, password, name, role, rut, phone)
-VALUES (
+    ),
+    (
         'prov-ivan',
         'ivan@centropsicarte.cl',
         '$2b$10$691/H0ahdP1OgYvZkgNW4.vEvbsWcEekZBBrFdiV02t8EydBKnVWa',
@@ -105,7 +77,7 @@ VALUES (
         '',
         ''
     );
--- Clientes
+-- Clientes de desarrollo
 INSERT
     OR REPLACE INTO users (id, email, password, name, role, rut, phone)
 VALUES (
@@ -243,323 +215,488 @@ VALUES (
         '17.822.444-1',
         '+56943219876'
     );
--- 5. Seed Provider Profiles
+-- 3. Seed Provider Profiles
 INSERT
-    OR REPLACE INTO provider_profiles (userId, specialty, blocks, bio)
+    OR REPLACE INTO provider_profiles (userId, specialty, bio)
 VALUES (
         'prov-ivan',
         'Actor, coach, capacitador',
-        '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}',
         'Actor teatral y audiovisual, profesor de teatro, dramaturgo e instructor de yoga, con formación universitaria en actuación y puesta en escena. Mi trabajo integra el arte, la expresión corporal, la comunicación y el bienestar, articulando herramientas escénicas, pedagógicas y socioemocionales para acompañar procesos creativos, educativos y personales.'
     ),
     (
         'prov-valentina',
         'Psicóloga clínica y laboral (Registro SIS 710236)',
-        '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}',
         'Psicóloga clínica titulada de la Universidad Andrés Bello, graduada Cum Laude, con formación en enfoques psicoanalítico, sistémico-narrativo y centrado en soluciones. Cuento con experiencia en atención presencial y online a niños, niñas, adolescentes y adultos, acompañando procesos terapéuticos desde una mirada integral.'
     ),
     (
         'prov-macarena',
         'Coordinadora eventos',
-        '{"2":["20:00-21:00","21:00-22:00"],"4":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"],"5":["09:00-10:00","10:00-11:00","11:00-12:00","20:00-21:00","21:00-22:00"]}',
         'Coordinación de ventas de obras y artes escénicas para empresas, centros educativos o particulares. Reuniones informativas de proyectos teatrales y artísticos en PsicArte.'
     );
--- 6. Seed Services (simplified: no roomId, no recurrence fields)
+-- 4. Seed Rooms
+INSERT
+    OR REPLACE INTO rooms (
+        id,
+        name,
+        type,
+        capacity,
+        meet_enabled,
+        allow_all_services,
+        min_advance_min,
+        max_advance_days
+    )
+VALUES (
+        'room-1',
+        'Sala Física Principal',
+        'Física',
+        1,
+        0,
+        1,
+        0,
+        60
+    ),
+    (
+        'room-2',
+        'Sala Virtual Zoom/Meet',
+        'Virtual',
+        1,
+        1,
+        1,
+        0,
+        60
+    );
+-- 5. Seed Room Shifts (Asignaciones prestador–sala–franja)
+-- Sala 1 (Física): Iván Pastén
+INSERT
+    OR REPLACE INTO room_shifts (
+        id,
+        room_id,
+        day_of_week,
+        start_time,
+        end_time,
+        provider_id
+    )
+VALUES (
+        'shift-1-1',
+        'room-1',
+        1,
+        '08:30',
+        '12:30',
+        'prov-ivan'
+    ),
+    (
+        'shift-1-2',
+        'room-1',
+        1,
+        '13:30',
+        '17:30',
+        'prov-ivan'
+    ),
+    (
+        'shift-1-3',
+        'room-1',
+        2,
+        '08:30',
+        '12:30',
+        'prov-ivan'
+    ),
+    (
+        'shift-1-4',
+        'room-1',
+        2,
+        '13:30',
+        '17:30',
+        'prov-ivan'
+    ),
+    (
+        'shift-1-5',
+        'room-1',
+        3,
+        '08:30',
+        '12:30',
+        'prov-ivan'
+    ),
+    (
+        'shift-1-6',
+        'room-1',
+        3,
+        '13:30',
+        '17:30',
+        'prov-ivan'
+    ),
+    (
+        'shift-1-7',
+        'room-1',
+        4,
+        '08:30',
+        '12:30',
+        'prov-ivan'
+    ),
+    (
+        'shift-1-8',
+        'room-1',
+        4,
+        '13:30',
+        '17:30',
+        'prov-ivan'
+    ),
+    (
+        'shift-1-9',
+        'room-1',
+        5,
+        '08:30',
+        '12:30',
+        'prov-ivan'
+    ),
+    (
+        'shift-1-10',
+        'room-1',
+        5,
+        '13:30',
+        '17:30',
+        'prov-ivan'
+    );
+-- Sala 2 (Virtual): Valentina en mañanas, Iván/Macarena en tardes
+INSERT
+    OR REPLACE INTO room_shifts (
+        id,
+        room_id,
+        day_of_week,
+        start_time,
+        end_time,
+        provider_id
+    )
+VALUES (
+        'shift-2-1',
+        'room-2',
+        1,
+        '08:30',
+        '13:00',
+        'prov-valentina'
+    ),
+    (
+        'shift-2-2',
+        'room-2',
+        1,
+        '14:00',
+        '19:00',
+        'prov-macarena'
+    ),
+    (
+        'shift-2-3',
+        'room-2',
+        2,
+        '08:30',
+        '13:00',
+        'prov-valentina'
+    ),
+    (
+        'shift-2-4',
+        'room-2',
+        2,
+        '14:00',
+        '19:00',
+        'prov-ivan'
+    ),
+    (
+        'shift-2-5',
+        'room-2',
+        3,
+        '08:30',
+        '13:00',
+        'prov-valentina'
+    ),
+    (
+        'shift-2-6',
+        'room-2',
+        3,
+        '14:00',
+        '19:00',
+        'prov-valentina'
+    ),
+    (
+        'shift-2-7',
+        'room-2',
+        4,
+        '08:30',
+        '13:00',
+        'prov-valentina'
+    ),
+    (
+        'shift-2-8',
+        'room-2',
+        4,
+        '14:00',
+        '19:00',
+        'prov-ivan'
+    ),
+    (
+        'shift-2-9',
+        'room-2',
+        5,
+        '08:30',
+        '13:00',
+        'prov-valentina'
+    ),
+    (
+        'shift-2-10',
+        'room-2',
+        5,
+        '14:00',
+        '19:00',
+        'prov-macarena'
+    ),
+    (
+        'shift-2-11',
+        'room-2',
+        6,
+        '09:00',
+        '14:00',
+        'prov-valentina'
+    );
+-- 6. Seed Room Shift Breaks
+INSERT
+    OR REPLACE INTO room_shift_breaks (id, shift_id, start_time, end_time)
+VALUES ('brk-1', 'shift-1-1', '10:30', '11:00'),
+    ('brk-2', 'shift-2-1', '10:30', '11:00'),
+    ('brk-3', 'shift-2-5', '10:30', '11:00'),
+    ('brk-4', 'shift-2-6', '16:30', '17:00');
+-- 7. Seed Services (Master Catalog)
 INSERT
     OR REPLACE INTO services (
         id,
-        providerId,
         name,
-        price,
-        duration,
-        type,
+        description,
         allowReschedule,
-        maxReschedules
+        maxReschedules,
+        min_advance_min,
+        max_advance_days
     )
 VALUES (
-        'ivan-s1',
-        'prov-ivan',
+        'srv-coaching',
         'Coaching de Vida, Personal y Profesional Online',
-        20990,
-        50,
-        'Virtual',
+        'Acompañamiento individual para potenciar tus metas personales y profesionales con enfoque integral.',
         1,
-        1
+        1,
+        0,
+        60
     ),
     (
-        'ivan-s2',
-        'prov-ivan',
+        'srv-teatro',
         'Talleres: Teatro, expresión corporal, etc.',
-        20990,
-        120,
-        'Física',
+        'Talleres prácticos orientados a la desinhibición, voz, cuerpo y creatividad escénica.',
         0,
-        1
-    ),
-    (
-        'ivan-s3',
-        'prov-ivan',
-        'Pack 4 Sesiones de Yoga Presencial',
-        25990,
-        50,
-        'Física',
         1,
-        1
+        60,
+        60
     ),
     (
-        'ivan-s4',
-        'prov-ivan',
+        'srv-yoga',
+        'Pack 4 Sesiones de Yoga Presencial',
+        'Prácticas corporales y respiratorias para reducir el estrés y conectar con el bienestar integral.',
+        1,
+        1,
+        0,
+        60
+    ),
+    (
+        'srv-capacitacion-ind',
         'Capacitaciones individuales: Habilidades blandas',
-        20990,
-        50,
-        'Virtual',
+        'Sesiones personalizadas de comunicación asertiva, liderazgo consciente y manejo del estrés.',
         1,
-        1
+        1,
+        0,
+        60
     ),
     (
-        'ivan-s5',
-        'prov-ivan',
+        'srv-capacitacion-grup',
         'Capacitaciones grupales: Habilidades blandas',
-        60990,
-        90,
-        'Física',
+        'Intervención presencial para equipos de trabajo orientada al clima laboral y resolución de conflictos.',
         1,
-        1
+        1,
+        120,
+        60
     ),
     (
-        'ivan-s6',
-        'prov-ivan',
+        'srv-reunion-cap',
         'Reunión informativa de capacitaciones',
+        'Reunión de coordinación y levantamiento de necesidades formativas o de bienestar institucional.',
+        1,
+        1,
         0,
-        45,
-        'Virtual',
-        1,
-        1
+        60
     ),
     (
-        'val-s1',
-        'prov-valentina',
+        'srv-psico-online',
         'Psicoterapia Online Preferencial',
-        20990,
-        50,
-        'Virtual',
+        'Atención psicológica individual integral para adultos y jóvenes con enfoque humanista y clínico.',
         1,
-        3
+        3,
+        0,
+        60
     ),
     (
-        'val-s2',
-        'prov-valentina',
+        'srv-parental',
         'Psicoterapia Online Habilidades Parentales',
-        25990,
-        50,
-        'Virtual',
+        'Acompañamiento y orientación a padres y cuidadores en crianza respetuosa y desafíos socioemocionales.',
         1,
-        1
-    ),
-    (
-        'val-s3',
-        'prov-valentina',
-        'Terapia de Parejas Online',
-        30990,
-        50,
-        'Virtual',
         1,
-        1
-    ),
-    (
-        'val-s4',
-        'prov-valentina',
-        'Terapia Online Flores de Bach',
-        20990,
-        45,
-        'Virtual',
-        1,
-        1
-    ),
-    (
-        'val-s5',
-        'prov-valentina',
-        'Evaluación Psicológica Online (Relatores/OS-10)',
-        60990,
-        50,
-        'Virtual',
-        1,
-        1
-    ),
-    (
-        'val-s6',
-        'prov-valentina',
-        'Informes y Certificados',
-        20990,
-        5,
-        'Virtual',
-        1,
-        1
-    ),
-    (
-        'maca-s1',
-        'prov-macarena',
-        'Reunión informativa: Venta de obras y artes escénicas',
         0,
-        45,
-        'Virtual',
+        60
+    ),
+    (
+        'srv-parejas',
+        'Terapia de Parejas Online',
+        'Espacio terapéutico para el fortalecimiento vincular, la escucha activa y la resolución de conflictos.',
         1,
-        1
-    );
--- 7. Seed Service-Rooms (many-to-many, migrated from old service.roomId)
-INSERT
-    OR REPLACE INTO service_rooms (id, service_id, room_id)
-VALUES ('sr-1', 'ivan-s1', 'room-2'),
-    ('sr-2', 'ivan-s2', 'room-1'),
-    ('sr-3', 'ivan-s3', 'room-1'),
-    ('sr-4', 'ivan-s4', 'room-2'),
-    ('sr-5', 'ivan-s5', 'room-1'),
-    ('sr-6', 'ivan-s6', 'room-2'),
-    ('sr-7', 'val-s1', 'room-2'),
-    ('sr-8', 'val-s2', 'room-2'),
-    ('sr-9', 'val-s3', 'room-2'),
-    ('sr-10', 'val-s4', 'room-2'),
-    ('sr-11', 'val-s5', 'room-2'),
-    ('sr-12', 'val-s6', 'room-2'),
-    ('sr-13', 'maca-s1', 'room-2');
--- 8. Seed Agendas (migrated from old service recurrence data)
--- 8. Seed Agendas (Recurrentes para todos los servicios de prueba)
-INSERT OR REPLACE INTO agendas (
-    id, provider_id, service_id, room_id, type, recurrence_rule, start_time, end_time, start_date, end_date, status
-) VALUES
-    ('agenda-ivan-s1', 'prov-ivan', 'ivan-s1', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,3],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
-    ('agenda-ivan-s2', 'prov-ivan', 'ivan-s2', 'room-1', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
-    ('agenda-ivan-s3', 'prov-ivan', 'ivan-s3', 'room-1', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[3],"dtstart":"2026-01-01"}', '14:00', '17:00', '2026-01-01', NULL, 'published'),
-    ('agenda-ivan-s4', 'prov-ivan', 'ivan-s4', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2,4],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
-    ('agenda-ivan-s5', 'prov-ivan', 'ivan-s5', 'room-1', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[4],"dtstart":"2026-01-01"}', '09:00', '12:00', '2026-01-01', NULL, 'published'),
-    ('agenda-ivan-s6', 'prov-ivan', 'ivan-s6', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[5],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
-    ('agenda-val-s1', 'prov-valentina', 'val-s1', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,3,5],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
-    ('agenda-val-s2', 'prov-valentina', 'val-s2', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2,4],"dtstart":"2026-01-01"}', '09:00', '13:00', '2026-01-01', NULL, 'published'),
-    ('agenda-val-s3', 'prov-valentina', 'val-s3', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,3],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
-    ('agenda-val-s4', 'prov-valentina', 'val-s4', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[2,4],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
-    ('agenda-val-s5', 'prov-valentina', 'val-s5', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[5],"dtstart":"2026-01-01"}', '14:00', '18:00', '2026-01-01', NULL, 'published'),
-    ('agenda-val-s6', 'prov-valentina', 'val-s6', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[6],"dtstart":"2026-01-01"}', '10:00', '13:00', '2026-01-01', NULL, 'published'),
-    ('agenda-maca-s1', 'prov-macarena', 'maca-s1', 'room-2', 'recurrent', '{"freq":"WEEKLY","interval":1,"byweekday":[1,2,3,4,5],"dtstart":"2026-01-01"}', '15:00', '18:00', '2026-01-01', NULL, 'published');
-
--- 9. Seed Bookings (with client_id linked to users)
-INSERT
-    OR REPLACE INTO bookings (
-        id,
-        spot_id,
-        client_id,
-        providerId,
-        serviceId,
-        agendaId,
-        serviceName,
-        price,
-        duration,
-        roomId,
-        roomName,
-        date,
-        timeSlot,
-        startTime,
-        endTime,
-        clientEmail,
-        clientName,
-        clientRut,
-        clientPhone,
-        status
-    )
-VALUES (
-        'bk-1',
-        NULL,
-        'usr-romilio',
-        'prov-valentina',
-        'val-s1',
-        'agenda-val-s1',
-        'Psicoterapia Online Preferencial',
-        20990,
-        50,
-        'room-2',
-        'Sala Virtual Zoom',
-        '2026-07-28',
-        '10:00-10:50',
-        '10:00',
-        '10:50',
-        'romilio@correo.com',
-        'Romilio Orellana',
-        '15.422.311-K',
-        '+56987654321',
-        'Paid'
+        1,
+        0,
+        60
     ),
     (
-        'bk-2',
-        NULL,
-        'usr-romilio',
+        'srv-bach',
+        'Terapia Online Flores de Bach',
+        'Consulta complementaria de esencias florales para el equilibrio de emociones y estados de estrés.',
+        1,
+        1,
+        0,
+        60
+    ),
+    (
+        'srv-eval-psico',
+        'Evaluación Psicológica Online (Relatores/OS-10)',
+        'Evaluación psicométrica y entrevista clínica con emisión de informe de idoneidad.',
+        1,
+        1,
+        0,
+        60
+    ),
+    (
+        'srv-informes',
+        'Informes y Certificados',
+        'Emisión de certificados clínicos e informes de proceso terapéutico.',
+        1,
+        1,
+        0,
+        60
+    ),
+    (
+        'srv-maca-artes',
+        'Reunión informativa: Venta de obras y artes escénicas',
+        'Reunión de vinculación para producciones escénicas, ventas de funciones y obras corporativas o escolares.',
+        1,
+        1,
+        0,
+        60
+    );
+-- 8. Seed Provider-Services (Duraciones múltiplos de 5 min y precios por prestador)
+INSERT
+    OR REPLACE INTO provider_services (id, provider_id, service_id, duration, price)
+VALUES (
+        'ps-ivan-1',
         'prov-ivan',
-        'ivan-s3',
-        'agenda-ivan-s3',
-        'Pack 4 Sesiones de Yoga Presencial',
-        25990,
+        'srv-coaching',
         50,
-        'room-1',
-        'Sala Física Principal',
-        '2026-08-14',
-        '11:00-11:50',
-        '11:00',
-        '11:50',
-        'romilio@correo.com',
-        'Romilio Orellana',
-        '15.422.311-K',
-        '+56987654321',
-        'Paid'
+        20990
+    ),
+    (
+        'ps-ivan-2',
+        'prov-ivan',
+        'srv-teatro',
+        120,
+        20990
+    ),
+    ('ps-ivan-3', 'prov-ivan', 'srv-yoga', 50, 25990),
+    (
+        'ps-ivan-4',
+        'prov-ivan',
+        'srv-capacitacion-ind',
+        50,
+        20990
+    ),
+    (
+        'ps-ivan-5',
+        'prov-ivan',
+        'srv-capacitacion-grup',
+        90,
+        60990
+    ),
+    (
+        'ps-ivan-6',
+        'prov-ivan',
+        'srv-reunion-cap',
+        45,
+        0
+    ),
+    (
+        'ps-val-1',
+        'prov-valentina',
+        'srv-psico-online',
+        50,
+        20990
+    ),
+    (
+        'ps-val-2',
+        'prov-valentina',
+        'srv-parental',
+        50,
+        25990
+    ),
+    (
+        'ps-val-3',
+        'prov-valentina',
+        'srv-parejas',
+        50,
+        30990
+    ),
+    (
+        'ps-val-4',
+        'prov-valentina',
+        'srv-bach',
+        45,
+        20990
+    ),
+    (
+        'ps-val-5',
+        'prov-valentina',
+        'srv-eval-psico',
+        50,
+        60990
+    ),
+    (
+        'ps-val-6',
+        'prov-valentina',
+        'srv-informes',
+        15,
+        20990
+    ),
+    (
+        'ps-maca-1',
+        'prov-macarena',
+        'srv-maca-artes',
+        45,
+        0
+    ),
+    (
+        'ps-maca-2',
+        'prov-macarena',
+        'srv-reunion-cap',
+        30,
+        0
     );
--- 10. Seed Activities
+-- 9. Seed Community Articles Iniciales
 INSERT
-    OR REPLACE INTO activities (id, title, date, time, location, desc, capacity)
-VALUES (
-        'act-1',
-        'Charla Abierta: Ansiedad y Manejo de Estrés',
-        date('now', '+2 days'),
-        '19:00 a 20:30 hrs',
-        'Sala Virtual Zoom',
-        'Charla abierta para la comunidad sobre salud mental cotidiana.',
-        25
-    ),
-    (
-        'act-2',
-        'Taller Comunitario de Expresión Teatral',
-        date('now', '+10 days'),
-        '18:00 a 20:00 hrs',
-        'Sala Física Principal',
-        'Taller lúdico de improvisación y juego dramático dirigido por Iván Pastén.',
-        15
-    ),
-    (
-        'act-3',
-        'Círculo de Apoyo: Crianza Respetuosa',
-        date('now', '+15 days'),
-        '17:00 a 18:30 hrs',
-        'Sala Física Principal',
-        'Encuentro reflexivo sobre crianza, límites con amor y contención emocional.',
-        12
-    ),
-    (
-        'act-4',
-        'Taller de Arteterapia y Expresión Creativa',
-        date('now', '+18 days'),
-        '18:00 a 20:00 hrs',
-        'Sala Física Principal',
-        'Taller para explorar emociones a través del arte y la creatividad.',
-        15
-    ),
-    (
-        'act-5',
-        'Charla: Herramientas para la Comunicación Asertiva',
-        date('now', '+22 days'),
-        '19:00 a 20:30 hrs',
-        'Sala Virtual Zoom',
-        'Charla práctica sobre técnicas de comunicación asertiva en el día a día.',
-        20
-    );
--- 10b. Seed Community Articles (Publicados para prueba de Inicio y Comunidad)
-INSERT
-    OR REPLACE INTO articles (id, author_id, title, summary, body, status, created_at, updated_at, published_at)
+    OR REPLACE INTO articles (
+        id,
+        author_id,
+        title,
+        summary,
+        body,
+        status,
+        created_at,
+        updated_at,
+        published_at
+    )
 VALUES (
         'art-1',
         'prov-valentina',
@@ -586,48 +723,29 @@ A través del entrenamiento escénico y el coaching, acompañamos a personas, co
         datetime('now', '-2 days'),
         datetime('now', '-2 days')
     );
-
--- 11. Seed Configurations
+-- 10. Seed Configurations
 INSERT
     OR REPLACE INTO config (key, value)
-VALUES ('popup_active', 'true'),
-    ('popup_title', 'Aviso de Feriados'),
-    (
-        'popup_text',
-        'Estimada comunidad, el centro integral PsicArte suspenderá actividades presenciales los días 15 y 16 de Septiembre. Las atenciones virtuales continuarán según acuerdo con su terapeuta.'
-    ),
-    ('banner_active', 'true'),
+VALUES ('popup_active', 'false'),
+    ('popup_title', ''),
+    ('popup_text', ''),
+    ('banner_active', 'false'),
     (
         'banner_text',
         '¡Agende sus horas de consulta en línea de forma rápida y segura! Sistema de pago habilitado.'
     ),
     ('whatsapp_number', '56961676706'),
     ('whatsapp_enabled', 'true'),
-    ('instagram_url', 'https://www.instagram.com/centropsicarte/'),
+    (
+        'instagram_url',
+        'https://www.instagram.com/centropsicarte/'
+    ),
     ('max_reschedules', '1'),
-    ('theme_custom_tokens', '{"light":{"--bg-primary":"#FEFDF9","--bg-secondary":"#F7F1E2","--text-primary":"#001B40","--text-secondary":"#4A5568","--color-accent":"#782050","--color-accent-text":"#FEFDF9","--color-border":"#E2E8F0","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#FEFDF9","--header-border":"#E2E8F0","--nav-link-color":"#001B40","--nav-link-accent":"#782050","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#2D4363","--btn-primary-bg":"#782050","--btn-primary-text":"#FEFDF9","--btn-secondary-bg":"#FEFDF9","--btn-secondary-text":"#001B40","--btn-secondary-border":"#E2E8F0","--btn-icon-bg":"#FEFDF9","--btn-icon-text":"#001B40","--input-bg":"#F7F1E2","--input-text":"#001B40","--input-border":"#E2E8F0","--input-focus-border":"#782050","--bg-card":"#FFFFFF","--card-border":"#E2E8F0","--card-hover-border":"#782050","--service-price-color":"#782050","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#B88028","--color-in-person-text":"#001B40","--filter-active-bg":"#782050","--filter-active-text":"#FEFDF9","--modal-bg":"#FFFFFF","--modal-text":"#001B40","--modal-border":"#E2E8F0","--modal-overlay-color":"#001933","--popup-title-color":"#782050","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#FFFFFF","--step-active-bg":"#782050","--step-active-text":"#FEFDF9","--cal-cell-bg":"#F7F1E2","--cal-cell-text":"#001B40","--cal-selected-bg":"#782050","--cal-selected-text":"#FEFDF9","--slot-bg":"#F7F1E2","--slot-text":"#001B40","--slot-selected-bg":"#782050","--slot-selected-text":"#FEFDF9","--color-success":"#2F855A","--color-warning":"#B75012","--color-error":"#C53030","--color-info":"#2B6CB0","--toast-bg":"#FFFFFF","--toast-text":"#001B40","--whatsapp-bg":"#1E8E46","--whatsapp-text":"#FFFFFF"},"dark":{"--bg-primary":"#031C32","--bg-secondary":"#0A2542","--text-primary":"#FEFDF9","--text-secondary":"#CBD5E1","--color-accent":"#D8A048","--color-accent-text":"#001B40","--color-border":"#1E3A5F","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#031C32","--header-border":"#1E3A5F","--nav-link-color":"#FEFDF9","--nav-link-accent":"#D8A048","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#1E3A5F","--btn-primary-bg":"#D8A048","--btn-primary-text":"#001B40","--btn-secondary-bg":"#0D2C4D","--btn-secondary-text":"#FEFDF9","--btn-secondary-border":"#1E3A5F","--btn-icon-bg":"#0D2C4D","--btn-icon-text":"#FEFDF9","--input-bg":"#0A2542","--input-text":"#FEFDF9","--input-border":"#1E3A5F","--input-focus-border":"#D8A048","--bg-card":"#0D2C4D","--card-border":"#1E3A5F","--card-hover-border":"#D8A048","--service-price-color":"#D8A048","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#D8A048","--color-in-person-text":"#001B40","--filter-active-bg":"#D8A048","--filter-active-text":"#001B40","--modal-bg":"#0D2C4D","--modal-text":"#FEFDF9","--modal-border":"#1E3A5F","--modal-overlay-color":"#000D1A","--popup-title-color":"#D8A048","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#0D2C4D","--step-active-bg":"#D8A048","--step-active-text":"#001B40","--cal-cell-bg":"#0A2542","--cal-cell-text":"#FEFDF9","--cal-selected-bg":"#D8A048","--cal-selected-text":"#001B40","--slot-bg":"#0A2542","--slot-text":"#FEFDF9","--slot-selected-bg":"#D8A048","--slot-selected-text":"#001B40","--color-success":"#48BB78","--color-warning":"#F6AD55","--color-error":"#FC8181","--color-info":"#63B3ED","--toast-bg":"#0D2C4D","--toast-text":"#FEFDF9","--whatsapp-bg":"#25D366","--whatsapp-text":"#001B40"},"defaults":{"light":{"--bg-primary":"#FEFDF9","--bg-secondary":"#F7F1E2","--text-primary":"#001B40","--text-secondary":"#4A5568","--color-accent":"#782050","--color-accent-text":"#FEFDF9","--color-border":"#E2E8F0","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#FEFDF9","--header-border":"#E2E8F0","--nav-link-color":"#001B40","--nav-link-accent":"#782050","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#2D4363","--btn-primary-bg":"#782050","--btn-primary-text":"#FEFDF9","--btn-secondary-bg":"#FEFDF9","--btn-secondary-text":"#001B40","--btn-secondary-border":"#E2E8F0","--btn-icon-bg":"#FEFDF9","--btn-icon-text":"#001B40","--input-bg":"#F7F1E2","--input-text":"#001B40","--input-border":"#E2E8F0","--input-focus-border":"#782050","--bg-card":"#FFFFFF","--card-border":"#E2E8F0","--card-hover-border":"#782050","--service-price-color":"#782050","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#B88028","--color-in-person-text":"#001B40","--filter-active-bg":"#782050","--filter-active-text":"#FEFDF9","--modal-bg":"#FFFFFF","--modal-text":"#001B40","--modal-border":"#E2E8F0","--modal-overlay-color":"#001933","--popup-title-color":"#782050","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#FFFFFF","--step-active-bg":"#782050","--step-active-text":"#FEFDF9","--cal-cell-bg":"#F7F1E2","--cal-cell-text":"#001B40","--cal-selected-bg":"#782050","--cal-selected-text":"#FEFDF9","--slot-bg":"#F7F1E2","--slot-text":"#001B40","--slot-selected-bg":"#782050","--slot-selected-text":"#FEFDF9","--color-success":"#2F855A","--color-warning":"#B75012","--color-error":"#C53030","--color-info":"#2B6CB0","--toast-bg":"#FFFFFF","--toast-text":"#001B40","--whatsapp-bg":"#1E8E46","--whatsapp-text":"#FFFFFF"},"dark":{"--bg-primary":"#031C32","--bg-secondary":"#0A2542","--text-primary":"#FEFDF9","--text-secondary":"#CBD5E1","--color-accent":"#D8A048","--color-accent-text":"#001B40","--color-border":"#1E3A5F","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#031C32","--header-border":"#1E3A5F","--nav-link-color":"#FEFDF9","--nav-link-accent":"#D8A048","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#1E3A5F","--btn-primary-bg":"#D8A048","--btn-primary-text":"#001B40","--btn-secondary-bg":"#0D2C4D","--btn-secondary-text":"#FEFDF9","--btn-secondary-border":"#1E3A5F","--btn-icon-bg":"#0D2C4D","--btn-icon-text":"#FEFDF9","--input-bg":"#0A2542","--input-text":"#FEFDF9","--input-border":"#1E3A5F","--input-focus-border":"#D8A048","--bg-card":"#0D2C4D","--card-border":"#1E3A5F","--card-hover-border":"#D8A048","--service-price-color":"#D8A048","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#D8A048","--color-in-person-text":"#001B40","--filter-active-bg":"#D8A048","--filter-active-text":"#001B40","--modal-bg":"#0D2C4D","--modal-text":"#FEFDF9","--modal-border":"#1E3A5F","--modal-overlay-color":"#000D1A","--popup-title-color":"#D8A048","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#0D2C4D","--step-active-bg":"#D8A048","--step-active-text":"#001B40","--cal-cell-bg":"#0A2542","--cal-cell-text":"#FEFDF9","--cal-selected-bg":"#D8A048","--cal-selected-text":"#001B40","--slot-bg":"#0A2542","--slot-text":"#FEFDF9","--slot-selected-bg":"#D8A048","--slot-selected-text":"#001B40","--color-success":"#48BB78","--color-warning":"#F6AD55","--color-error":"#FC8181","--color-info":"#63B3ED","--toast-bg":"#0D2C4D","--toast-text":"#FEFDF9","--whatsapp-bg":"#25D366","--whatsapp-text":"#001B40"}}}');
--- 12. Seed Khipu Notifications
-INSERT
-    OR REPLACE INTO khipu_notifications (
-        id,
-        type,
-        headers,
-        query_params,
-        body,
-        ip_address,
-        received_at
-    )
-VALUES (
-        'notif-1',
-        'payment_3.0',
-        '{"content-type":"application/json","x-khipu-signature":"t=1711965600393,s=sample_signature"}',
-        '{}',
-        '{"payment_id":"gqzdy6chjne9","receiver_id":985101,"subject":"Reserva PsicArte: Terapia Individual","amount":35000,"currency":"CLP","transaction_id":"bk-1","bank":"Banco de Chile","payer_name":"Cliente Ejemplo","payer_email":"cliente@ejemplo.com","payment_method":"simplified_transfer","conciliation_date":"2026-08-10T14:30:00.000Z"}',
-        '127.0.0.1',
-        datetime('now', '-2 hours')
+    (
+        'theme_custom_tokens',
+        '{"light":{"--bg-primary":"#FEFDF9","--bg-secondary":"#F7F1E2","--text-primary":"#001B40","--text-secondary":"#4A5568","--color-accent":"#782050","--color-accent-text":"#FEFDF9","--color-border":"#E2E8F0","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#FEFDF9","--header-border":"#E2E8F0","--nav-link-color":"#001B40","--nav-link-accent":"#782050","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#2D4363","--btn-primary-bg":"#782050","--btn-primary-text":"#FEFDF9","--btn-secondary-bg":"#FEFDF9","--btn-secondary-text":"#001B40","--btn-secondary-border":"#E2E8F0","--btn-icon-bg":"#FEFDF9","--btn-icon-text":"#001B40","--input-bg":"#F7F1E2","--input-text":"#001B40","--input-border":"#E2E8F0","--input-focus-border":"#782050","--bg-card":"#FFFFFF","--card-border":"#E2E8F0","--card-hover-border":"#782050","--service-price-color":"#782050","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#B88028","--color-in-person-text":"#001B40","--filter-active-bg":"#782050","--filter-active-text":"#FEFDF9","--modal-bg":"#FFFFFF","--modal-text":"#001B40","--modal-border":"#E2E8F0","--modal-overlay-color":"#001933","--popup-title-color":"#782050","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#FFFFFF","--step-active-bg":"#782050","--step-active-text":"#FEFDF9","--cal-cell-bg":"#F7F1E2","--cal-cell-text":"#001B40","--cal-selected-bg":"#782050","--cal-selected-text":"#FEFDF9","--slot-bg":"#F7F1E2","--slot-text":"#001B40","--slot-selected-bg":"#782050","--slot-selected-text":"#FEFDF9","--color-success":"#2F855A","--color-warning":"#B75012","--color-error":"#C53030","--color-info":"#2B6CB0","--toast-bg":"#FFFFFF","--toast-text":"#001B40","--whatsapp-bg":"#1E8E46","--whatsapp-text":"#FFFFFF"},"dark":{"--bg-primary":"#031C32","--bg-secondary":"#0A2542","--text-primary":"#FEFDF9","--text-secondary":"#CBD5E1","--color-accent":"#D8A048","--color-accent-text":"#001B40","--color-border":"#1E3A5F","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#031C32","--header-border":"#1E3A5F","--nav-link-color":"#FEFDF9","--nav-link-accent":"#D8A048","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#1E3A5F","--btn-primary-bg":"#D8A048","--btn-primary-text":"#001B40","--btn-secondary-bg":"#0D2C4D","--btn-secondary-text":"#FEFDF9","--btn-secondary-border":"#1E3A5F","--btn-icon-bg":"#0D2C4D","--btn-icon-text":"#FEFDF9","--input-bg":"#0A2542","--input-text":"#FEFDF9","--input-border":"#1E3A5F","--input-focus-border":"#D8A048","--bg-card":"#0D2C4D","--card-border":"#1E3A5F","--card-hover-border":"#D8A048","--service-price-color":"#D8A048","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#D8A048","--color-in-person-text":"#001B40","--filter-active-bg":"#D8A048","--filter-active-text":"#001B40","--modal-bg":"#0D2C4D","--modal-text":"#FEFDF9","--modal-border":"#1E3A5F","--modal-overlay-color":"#000D1A","--popup-title-color":"#D8A048","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#0D2C4D","--step-active-bg":"#D8A048","--step-active-text":"#001B40","--cal-cell-bg":"#0A2542","--cal-cell-text":"#FEFDF9","--cal-selected-bg":"#D8A048","--cal-selected-text":"#001B40","--slot-bg":"#0A2542","--slot-text":"#FEFDF9","--slot-selected-bg":"#D8A048","--slot-selected-text":"#001B40","--color-success":"#48BB78","--color-warning":"#F6AD55","--color-error":"#FC8181","--color-info":"#63B3ED","--toast-bg":"#0D2C4D","--toast-text":"#FEFDF9","--whatsapp-bg":"#25D366","--whatsapp-text":"#001B40"},"defaults":{"light":{"--bg-primary":"#FEFDF9","--bg-secondary":"#F7F1E2","--text-primary":"#001B40","--text-secondary":"#4A5568","--color-accent":"#782050","--color-accent-text":"#FEFDF9","--color-border":"#E2E8F0","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#FEFDF9","--header-border":"#E2E8F0","--nav-link-color":"#001B40","--nav-link-accent":"#782050","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#2D4363","--btn-primary-bg":"#782050","--btn-primary-text":"#FEFDF9","--btn-secondary-bg":"#FEFDF9","--btn-secondary-text":"#001B40","--btn-secondary-border":"#E2E8F0","--btn-icon-bg":"#FEFDF9","--btn-icon-text":"#001B40","--input-bg":"#F7F1E2","--input-text":"#001B40","--input-border":"#E2E8F0","--input-focus-border":"#782050","--bg-card":"#FFFFFF","--card-border":"#E2E8F0","--card-hover-border":"#782050","--service-price-color":"#782050","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#B88028","--color-in-person-text":"#001B40","--filter-active-bg":"#782050","--filter-active-text":"#FEFDF9","--modal-bg":"#FFFFFF","--modal-text":"#001B40","--modal-border":"#E2E8F0","--modal-overlay-color":"#001933","--popup-title-color":"#782050","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#FFFFFF","--step-active-bg":"#782050","--step-active-text":"#FEFDF9","--cal-cell-bg":"#F7F1E2","--cal-cell-text":"#001B40","--cal-selected-bg":"#782050","--cal-selected-text":"#FEFDF9","--slot-bg":"#F7F1E2","--slot-text":"#001B40","--slot-selected-bg":"#782050","--slot-selected-text":"#FEFDF9","--color-success":"#2F855A","--color-warning":"#B75012","--color-error":"#C53030","--color-info":"#2B6CB0","--toast-bg":"#FFFFFF","--toast-text":"#001B40","--whatsapp-bg":"#1E8E46","--whatsapp-text":"#FFFFFF"},"dark":{"--bg-primary":"#031C32","--bg-secondary":"#0A2542","--text-primary":"#FEFDF9","--text-secondary":"#CBD5E1","--color-accent":"#D8A048","--color-accent-text":"#001B40","--color-border":"#1E3A5F","--color-navy":"#001B40","--color-gold":"#D8A048","--color-pomegranate":"#782050","--header-bg":"#031C32","--header-border":"#1E3A5F","--nav-link-color":"#FEFDF9","--nav-link-accent":"#D8A048","--footer-bg":"#001B40","--footer-text":"#FEFDF9","--footer-accent":"#D8A048","--footer-border":"#1E3A5F","--btn-primary-bg":"#D8A048","--btn-primary-text":"#001B40","--btn-secondary-bg":"#0D2C4D","--btn-secondary-text":"#FEFDF9","--btn-secondary-border":"#1E3A5F","--btn-icon-bg":"#0D2C4D","--btn-icon-text":"#FEFDF9","--input-bg":"#0A2542","--input-text":"#FEFDF9","--input-border":"#1E3A5F","--input-focus-border":"#D8A048","--bg-card":"#0D2C4D","--card-border":"#1E3A5F","--card-hover-border":"#D8A048","--service-price-color":"#D8A048","--color-online":"#802850","--color-online-text":"#FEFDF9","--color-in-person":"#D8A048","--color-in-person-text":"#001B40","--filter-active-bg":"#D8A048","--filter-active-text":"#001B40","--modal-bg":"#0D2C4D","--modal-text":"#FEFDF9","--modal-border":"#1E3A5F","--modal-overlay-color":"#000D1A","--popup-title-color":"#D8A048","--banner-bg":"#782050","--banner-text":"#FFF9F3","--booking-widget-bg":"#0D2C4D","--step-active-bg":"#D8A048","--step-active-text":"#001B40","--cal-cell-bg":"#0A2542","--cal-cell-text":"#FEFDF9","--cal-selected-bg":"#D8A048","--cal-selected-text":"#001B40","--slot-bg":"#0A2542","--slot-text":"#FEFDF9","--slot-selected-bg":"#D8A048","--slot-selected-text":"#001B40","--color-success":"#48BB78","--color-warning":"#F6AD55","--color-error":"#FC8181","--color-info":"#63B3ED","--toast-bg":"#0D2C4D","--toast-text":"#FEFDF9","--whatsapp-bg":"#25D366","--whatsapp-text":"#001B40"}}}'
     );
--- 13. Chilean National Holidays 2026-2030
--- Includes irrenunciables, movables with Tue->Mon/Wed->Fri rule, and Semana Santa
+-- 11. Chilean National Holidays 2026-2030
 INSERT
     OR REPLACE INTO holidays (id, date, name)
 VALUES ('hol-2026-1', '2026-01-01', 'Año Nuevo (2026)'),

@@ -1,16 +1,52 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const { execFileSync } = require('child_process');
 
 const dbPath = path.resolve(__dirname, '..', 'database.sqlite');
+const shouldReset = process.argv.includes('--reset') || process.env.RESET_DB === 'true';
 
-if (process.argv.includes('--reset') || process.env.RESET_DB === 'true') {
+let preservedUsers = [];
+let preservedProfiles = [];
+
+if (shouldReset && fs.existsSync(dbPath)) {
     try {
+        const backupScript = `
+const sqlite3 = require('sqlite3');
+const targetPath = process.env.RESET_DB_TARGET;
+const db = new sqlite3.Database(targetPath, sqlite3.OPEN_READONLY, (err) => {
+    if (err) { process.stdout.write(JSON.stringify({ users: [], profiles: [] })); return; }
+    db.all('SELECT id, email, password, name, role, rut, phone, created_at FROM users', [], (uErr, users) => {
+        db.all('SELECT userId, specialty, bio FROM provider_profiles', [], (pErr, profiles) => {
+            process.stdout.write(JSON.stringify({
+                users: (!uErr && users) ? users : [],
+                profiles: (!pErr && profiles) ? profiles : []
+            }));
+            db.close();
+        });
+    });
+});
+`;
+        const raw = execFileSync(process.execPath, ['-e', backupScript], {
+            encoding: 'utf8',
+            env: { ...process.env, RESET_DB_TARGET: dbPath }
+        });
+        const parsed = JSON.parse(raw.trim() || '{}');
+        preservedUsers = parsed.users || [];
+        preservedProfiles = parsed.profiles || [];
         if (fs.existsSync(dbPath)) {
             fs.unlinkSync(dbPath);
+            console.log(`Database reset: backed up ${preservedUsers.length} users and ${preservedProfiles.length} provider profiles.`);
         }
     } catch (e) {
-        console.error('Error deleting database file during reset:', e.message);
+        console.error('Error backing up users during reset:', e.message);
+        try {
+            if (fs.existsSync(dbPath)) {
+                fs.unlinkSync(dbPath);
+            }
+        } catch (unlinkErr) {
+            console.error('Error deleting database file during reset:', unlinkErr.message);
+        }
     }
 }
 
@@ -46,6 +82,29 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 db.ready = databaseReady;
+
+function restorePreservedData(onComplete) {
+    if (!preservedUsers || preservedUsers.length === 0) {
+        return onComplete();
+    }
+    db.serialize(() => {
+        const userStmt = db.prepare('INSERT OR REPLACE INTO users (id, email, password, name, role, rut, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        for (const u of preservedUsers) {
+            userStmt.run(u.id, u.email, u.password, u.name, u.role, u.rut || '', u.phone || '', u.created_at || new Date().toISOString());
+        }
+        userStmt.finalize();
+
+        if (preservedProfiles && preservedProfiles.length > 0) {
+            const profStmt = db.prepare('INSERT OR REPLACE INTO provider_profiles (userId, specialty, bio) VALUES (?, ?, ?)');
+            for (const p of preservedProfiles) {
+                profStmt.run(p.userId, p.specialty || '', p.bio || '');
+            }
+            profStmt.finalize();
+        }
+        console.log(`Restored ${preservedUsers.length} users and ${preservedProfiles.length} provider profiles after reset.`);
+        onComplete();
+    });
+}
 
 function initializeDatabase() {
     db.serialize(() => {
@@ -89,9 +148,8 @@ function initializeDatabase() {
                                 return;
                             }
                             console.log('Database seeded successfully from SQL file.');
-                            resolveDatabaseReady();
-                            setImmediate(() => {
-                                generateSpotsForAllAgendas();
+                            restorePreservedData(() => {
+                                resolveDatabaseReady();
                             });
                         });
                     } else {
@@ -104,79 +162,6 @@ function initializeDatabase() {
             console.error('Failed to read SQL initialization files:', e.message);
             rejectDatabaseReady(e);
         }
-    });
-}
-
-function generateSpotsForAllAgendas() {
-    db.all('SELECT * FROM agendas WHERE status = \'published\'', (err, agendas) => {
-        if (err) {
-            console.error('Error loading agendas for spot generation:', err.message);
-            return;
-        }
-        if (!agendas || agendas.length === 0) {
-            console.log('No published agendas found for spot generation.');
-            return;
-        }
-
-        console.log(`Generating spots for ${agendas.length} published agendas...`);
-        let processed = 0;
-
-        // Procesar agendas secuencialmente para evitar conflictos entre sí
-        function processNext(idx) {
-            if (idx >= agendas.length) {
-                console.log('Spot generation completed for all agendas.');
-                linkExistingBookingsToSpots();
-                return;
-            }
-
-            const agenda = agendas[idx];
-            generateSpotsForAgenda(agenda, (result) => {
-                console.log(`Agenda ${agenda.id}: ${result.spotsGenerated} spots generated, ${result.conflicts} conflicts.`);
-                processed++;
-                processNext(processed);
-            });
-        }
-
-        processNext(0);
-    });
-}
-
-function linkExistingBookingsToSpots() {
-    db.all('SELECT * FROM bookings WHERE spot_id IS NULL', (err, bookings) => {
-        if (err || !bookings || bookings.length === 0) {
-            console.log('No unlinked bookings found.');
-            return;
-        }
-
-        let matched = 0;
-        let processed = 0;
-
-        bookings.forEach(booking => {
-            db.get(
-                'SELECT id FROM spots WHERE provider_id = ? AND room_id = ? AND date = ? AND start_time = ? AND end_time = ? AND status = \'available\' LIMIT 1',
-                [booking.providerId, booking.roomId, booking.date, booking.startTime, booking.endTime],
-                (err2, spot) => {
-                    if (!err2 && spot) {
-                        db.run('UPDATE spots SET status = \'booked\', booking_id = ? WHERE id = ?', [booking.id, spot.id]);
-                        db.run('UPDATE bookings SET spot_id = ? WHERE id = ?', [spot.id, booking.id]);
-                        matched++;
-                    }
-                    processed++;
-                    if (processed === bookings.length) {
-                        console.log(`Linked ${matched} existing bookings to spots.`);
-                    }
-                }
-            );
-        });
-    });
-}
-
-function generateSpotsForAgenda(agenda, callback) {
-    const { SpotGenerator } = require('./spot-generator');
-    const generator = new SpotGenerator(db);
-
-    generator.generate(agenda, (result) => {
-        callback(result);
     });
 }
 

@@ -95,9 +95,17 @@
                                 <p style="font-weight: 600;" id="summary-room">-</p>
                             </div>
                             <div>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Profesional</span>
+                                <p style="font-weight: 600;" id="summary-provider">-</p>
+                            </div>
+                            <div>
                                 <span style="font-size: 0.85rem; color: var(--text-secondary);">Paciente</span>
                                 <p style="font-weight: 600;" id="summary-client">-</p>
                             </div>
+                        </div>
+                        <div id="summary-meet-container" style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--color-border);" hidden>
+                            <span style="font-size: 0.85rem; color: var(--text-secondary); display: block; margin-bottom: 6px;">Videollamada Google Meet</span>
+                            <div id="summary-meet-content"></div>
                         </div>
                     </div>
 
@@ -204,17 +212,40 @@
 
         async function fetchBookingDetails(id) {
             try {
-                const res = await fetch('/api/bookings');
+                const res = await fetch(`/api/bookings/${id}/public-summary`);
                 if (!res.ok) return;
-                const bookings = await res.json();
-                const b = bookings.find(item => item.id === id);
+                const b = await res.json();
                 if (b) {
                     document.getElementById("summary-booking-id").textContent = b.id;
                     document.getElementById("summary-service").textContent = b.serviceName || "Consulta";
+                    const provEl = document.getElementById("summary-provider");
+                    if (provEl) provEl.textContent = b.providerName || "-";
                     document.getElementById("summary-date").textContent = b.date || "-";
                     document.getElementById("summary-time").textContent = `${b.startTime || ""} - ${b.endTime || ""}`;
-                    document.getElementById("summary-room").textContent = b.roomName || "Por confirmar";
+                    document.getElementById("summary-room").textContent = `${b.roomName || "Por confirmar"}${b.roomType ? ` (${b.roomType})` : ""}`;
                     document.getElementById("summary-client").textContent = b.clientName || b.clientEmail || "-";
+
+                    const meetContainer = document.getElementById("summary-meet-container");
+                    const meetContent = document.getElementById("summary-meet-content");
+                    if (meetContainer && meetContent) {
+                        if (b.meet_link) {
+                            meetContainer.hidden = false;
+                            meetContent.innerHTML = `
+                                <a href="${b.meet_link}" target="_blank" rel="noopener noreferrer" class="btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 18px; font-size: 0.95rem;">
+                                    <i class="fa-solid fa-video"></i> Unirse a Google Meet
+                                </a>
+                            `;
+                        } else if (b.meet_status === 'pending') {
+                            meetContainer.hidden = false;
+                            meetContent.innerHTML = `
+                                <span class="badge badge-warning" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;">
+                                    <i class="fa-solid fa-clock"></i> Link pendiente (se generará y enviará por correo en unos momentos)
+                                </span>
+                            `;
+                        } else {
+                            meetContainer.hidden = true;
+                        }
+                    }
                 }
             } catch (err) {
                 console.error("Error al obtener detalles:", err);
